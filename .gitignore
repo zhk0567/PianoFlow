@@ -1,0 +1,77 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Local tool downloads
+.tools/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Third-party fetch scratch
+third_party/**/_fetch/
+third_party/onnxruntime/_fetch/
+
+# ORT download zip (keep extracted tree under third_party/onnxruntime/onnxruntime-*)
+*.ort.zip
+third_party/onnxruntime/**/*.zip
+
+# Editor / OS junk
+Thumbs.db
+desktop.ini
+
+# Secrets / local env
+.env
+.env.*
+
+# Node
+node_modules/
+
+# OMR intermediate work caches
+**/_omr_work/
+
+# Debug symbols (too large for GitHub; not needed at runtime)
+*.pdb

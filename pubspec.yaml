@@ -1,0 +1,36 @@
+name: piano_flow
+description: PianoFlow — interactive piano practice for Windows and Android.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^3.3.2
+  go_router: ^17.3.0
+  shared_preferences: ^2.5.5
+  audioplayers: ^6.8.1
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  google_fonts: ^6.2.1
+  record: ^7.1.1
+  flutter_onnxruntime: ^1.8.3
+  webview_windows: ^0.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/scores/
+    - assets/scores/musicxml/
+    - assets/models/
+    - assets/verovio/
+    - assets/audio/piano/

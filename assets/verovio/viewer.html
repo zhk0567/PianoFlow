@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PianoFlow Verovio</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #FFFBF5;
+      overflow: hidden;
+      height: 100%;
+      width: 100%;
+      font-family: system-ui, sans-serif;
+    }
+    #stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #FFFBF5;
+    }
+    #wrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      /* Clip only — scroll via #svg translate3d (subpixel, no scrollLeft snap). */
+      overflow: hidden;
+      background: #FFFBF5;
+    }
+    #svg {
+      display: block;
+      height: 100%;
+      width: max-content;
+      max-height: 100%;
+      will-change: transform;
+      transform: translate3d(0, 0, 0);
+      background: #FFFBF5;
+    }
+    /* Do NOT force nested svg to 100%x100% — that collapsed ink to empty cream
+       in WebView2. Explicit px sizing is applied in JS after render. */
+    #svg > svg {
+      display: inline-block;
+      vertical-align: top;
+      background: #FFFBF5;
+      overflow: visible;
+      flex: 0 0 auto;
+    }
+    #svg svg.definition-scale {
+      overflow: visible;
+    }
+    /* Backup if a part-name label still slips through engraving */
+    #svg g.label,
+    #svg g.labelAbbr {
+      display: none !important;
+    }
+    #svg g.mnum {
+      pointer-events: none;
+    }
+    #status {
+      position: absolute;
+      left: 8px;
+      top: 6px;
+      color: #666;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 6;
+    }
+    /* Viewport-fixed overlay (outside #wrap) — left is view X, not content X */
+    #playhead {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 8.75px;
+      height: 100%;
+      background: rgba(232, 119, 34, 0.55);
+      pointer-events: none;
+      z-index: 5;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading Verovio…</div>
+  <div id="stage">
+    <div id="wrap">
+      <div id="svg"></div>
+    </div>
+    <div id="playhead"></div>
+  </div>
+  <script src="verovio-toolkit-wasm.js"></script>
+  <script>
+    let toolkit = null;
+    let bpm = 100;
+    let ready = false;
+    let timemap = [];
+    /** Last async/sync load error string for Dart (pfScoreInfo.loadErr). */
+    let lastLoadErr = null;
+    /** Last MusicXML — resize re-engraves without Flutter re-pushing the score. */
+    let lastMusicXml = '';
+    /** Sorted {q,x} onset samples for continuous beat→X (content coords). */
+    let beatXPoints = [];
+    /** Playhead locked near 30% of viewport; score scrolls underneath. */
+    const ANCHOR = 0.30;
+    /** At beat≈0 / pre-roll, sit this many px before the first note (clef/key). */
+    const START_LEAD_PX = 36;
+    /**
+     * Keep in sync with PracticeConstants.playbackLeadInBeats.
+     * Negative transport beats ease the playhead from lead-in toward the first note.
+     */
+    const PLAYBACK_LEAD_IN_BEATS = 1.0;
+    const SEEK_BEAT_EPS = 0.35; // larger jump → snap scroll (seek / stall recovery)
+    /**
+     * Keep free-running while transport rate > 0 so WebView bridge stalls
+     * (dense passages, script coalesce) do not freeze the staff.
+     * Pause must send rate=0 from Dart — do not rely on a tiny window alone.
+     */
+    const MAX_EXTRAPOLATE_SEC = 0.85;
+    /** Soft catch-up only when paused (rate==0); play always hard-tracks. */
+    const SCROLL_CATCHUP = 0.65;
+    /** Hard-correct scroll if visual lag exceeds this (px) during play. */
+    const DRIFT_SNAP_PX = 3;
+    /** Cached leftmost note X — lead-in floor uses measure left when available. */
+    let firstNoteX = null;
+    let startLeadFloorX = 0;
+    /** Watchdog: detect scroll stuck while beats still advance. */
+    let watchBeats = 0;
+    let watchScrollX = 0;
+    let watchStallFrames = 0;
+
+    let targetContentX = 0;
+    let lastBeats = 0;
+    let displayBeats = 0;
+    let scrollX = 0; // fractional content offset (replaces scrollLeft)
+    let scrollRaf = null;
+    let forceSnap = false;
+    let beatsPerSec = 0;
+    let lastSyncTime = 0;
+    let liveUntil = 0; // keep rAF alive while extrapolating / catching up
+    /** Dart-authoritative transport rate (beats/sec); NaN → use EMA only. */
+    let dartRate = NaN;
+
+    window.pfReady = function () {
+      return !!(toolkit && typeof verovio !== 'undefined');
+    };
+
+    function logHost(msg) {
+      try { console.log('[PianoFlow]', msg); } catch (_) {}
+      try {
+        if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {
+          window.chrome.webview.postMessage(String(msg));
+        }
+      } catch (_) {}
+    }
+
+    function setStatus(t) {
+      const el = document.getElementById('status');
+      if (el) el.textContent = t || '';
+      if (t) logHost('status: ' + t);
+    }
+
+    /** Reset visual scroll before measuring note X in content space. */
+    function resetScrollTransform() {
+      scrollX = 0;
+      const host = document.getElementById('svg');
+      if (host) host.style.transform = 'translate3d(0, 0, 0)';
+      const wrap = document.getElementById('wrap');
+      if (wrap) wrap.scrollLeft = 0;
+    }
+
+    /** Content X (wrap space) — prefer notehead left edge (playhead sits on attack). */
+    function elementContentX(id) {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      const wrap = document.getElementById('wrap');
+      if (!wrap) return null;
+      const head = el.querySelector('.notehead') || el;
+      const box = head.getBoundingClientRect();
+      if (!(box.width > 0 || box.height > 0)) return null;
+      const wbox = wrap.getBoundingClientRect();
+      return scrollX + (box.left - wbox.left);
+    }
+
+    /** Leftmost engraved note — independent of timemap id resolution. */
+    function leftmostNoteContentX() {
+      const wrap = document.getElementById('wrap');
+      if (!wrap) return null;
+      const wbox = wrap.getBoundingClientRect();
+      const nodes = document.querySelectorAll('#svg g.note .notehead, #svg g.note');
+      let best = null;
+      for (let i = 0; i < nodes.length; i++) {
+        const box = nodes[i].getBoundingClientRect();
+        if (!(box.width > 0 || box.height > 0)) continue;
+        const x = scrollX + (box.left - wbox.left);
+        if (best == null || x < best) best = x;
+      }
+      return best;
+    }
+
+    /** First measure left barline area (fallback when no notes yet). */
+    function firstMeasureContentX() {
+      const wrap = document.getElementById('wrap');
+      const meas = document.querySelector('#svg g.measure');
+      if (!wrap || !meas) return null;
+      const box = meas.getBoundingClientRect();
+      const wbox = wrap.getBoundingClientRect();
+      if (!(box.width > 0 || box.height > 0)) return null;
+      return scrollX + (box.left - wbox.left);
+    }
+
+    /** Ensure beat 0 maps to the true start (not a late first-resolved onset). */
+    function seedStartBeatX() {
+      const startX = leftmostNoteContentX();
+      const measX = firstMeasureContentX();
+      firstNoteX = (startX != null && isFinite(startX)) ? startX : null;
+      startLeadFloorX = (measX != null && isFinite(measX)) ? Math.max(0, measX) : 0;
+      const fallback = startX != null ? startX : measX;
+      if (fallback == null || !isFinite(fallback)) return;
+      if (!beatXPoints.length) {
+        beatXPoints.push({ q: 0, x: fallback });
+        return;
+      }
+      if (beatXPoints[0].q > 1e-6) {
+        beatXPoints.unshift({ q: 0, x: fallback });
+        return;
+      }
+      // Timemap first hit too far right (wrong id / pre-layout) → snap to leftmost note.
+      if (beatXPoints[0].x > fallback + 24) {
+        beatXPoints[0].x = fallback;
+      } else {
+        beatXPoints[0].x = Math.min(beatXPoints[0].x, fallback);
+      }
+    }
+
+    /**
+     * Near / before beat 0, pull focus slightly before the first note so the
+     * playhead sits on clef/key lead-in and meets the note when it should sound.
+     * During negative pre-roll, ease from full lead-in toward the onset.
+     */
+    function focusContentX(beats, noteX) {
+      if (noteX == null || !isFinite(noteX)) return noteX;
+      if (!(START_LEAD_PX > 0)) return noteX;
+      const base = (firstNoteX != null && isFinite(firstNoteX)) ? firstNoteX : noteX;
+      if (beats < 0) {
+        const span = PLAYBACK_LEAD_IN_BEATS > 0 ? PLAYBACK_LEAD_IN_BEATS : 1;
+        const t = Math.max(0, Math.min(1, (beats + span) / span));
+        const led = base - START_LEAD_PX * (1 - t);
+        return Math.max(startLeadFloorX, led);
+      }
+      // Resting at start (paused): keep playhead in the lead-in pocket.
+      if (beats < 0.02) {
+        const led = base - START_LEAD_PX;
+        return Math.min(noteX, Math.max(startLeadFloorX, led));
+      }
+      return noteX;
+    }
+
+    /** Build onset polyline after SVG is in the DOM (transform/scroll at 0). */
+    function rebuildBeatXPoints() {
+      beatXPoints = [];
+      resetScrollTransform();
+      for (let i = 0; i < timemap.length; i++) {
+        const e = timemap[i];
+        if (typeof e.qstamp !== 'number') continue;
+        // Note onsets only — ignore measureOn/restOn; offs caused X to stick then jump.
+        const ids = e.on || [];
+        if (!ids.length) continue;
+        let x = null;
+        for (let j = 0; j < ids.length; j++) {
+          x = elementContentX(ids[j]);
+          if (x != null) break;
+        }
+        if (x == null) continue;
+        const last = beatXPoints.length ? beatXPoints[beatXPoints.length - 1] : null;
+        if (last && Math.abs(last.q - e.qstamp) < 1e-9) {
+          // Same qstamp: keep the leftmost onset (chords / staff pairs).
+          last.x = Math.min(last.x, x);
+          continue;
+        }
+        // Guard non-monotonic X (wrapped systems / stacked pages) — keep scroll
+        // advancing with musical time instead of jumping backward mid-piece.
+        if (last && x + 8 < last.x) {
+          x = last.x + Math.max(2, (e.qstamp - last.q) * 12);
+        }
+        beatXPoints.push({ q: e.qstamp, x: x });
+      }
+      seedStartBeatX();
+    }
+
+    /** Wait for WebView layout after SVG inject before measuring note X. */
+    function afterLayout(fn) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(fn);
+      });
+    }
+
+    /** Continuous content X for a beat position (quarter-notes / qstamp). */
+    function contentXAtBeats(beats) {
+      if (!beatXPoints.length) {
+        const svg = document.querySelector('#svg svg');
+        if (!svg || !timemap.length) return null;
+        const totalBeats = timemap[timemap.length - 1].qstamp || 0;
+        const w = svg.getBoundingClientRect().width;
+        if (totalBeats <= 0 || w <= 0) return null;
+        return (beats / totalBeats) * w;
+      }
+      if (beats <= beatXPoints[0].q + 1e-9) return beatXPoints[0].x;
+      const last = beatXPoints[beatXPoints.length - 1];
+      if (beats >= last.q) return last.x;
+      for (let i = 1; i < beatXPoints.length; i++) {
+        const a = beatXPoints[i - 1];
+        const b = beatXPoints[i];
+        if (beats <= b.q + 1e-9) {
+          const span = b.q - a.q;
+          const t = span > 1e-9 ? (beats - a.q) / span : 0;
+          return a.x + (b.x - a.x) * Math.max(0, Math.min(1, t));
+        }
+      }
+      return last.x;
+    }
+
+    function maxScrollX(wrap) {
+      const host = document.getElementById('svg');
+      if (!host) return Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+      // Prefer untransformed layout width (scrollWidth). Fallback to SVG rect
+      // so a stale transform cannot report maxS≈0 and clamp scroll forever.
+      let contentW = host.scrollWidth || 0;
+      const svg = host.querySelector('svg');
+      if (svg) {
+        const sw = svg.getBoundingClientRect().width;
+        if (sw > contentW) contentW = sw;
+      }
+      return Math.max(0, contentW - wrap.clientWidth);
+    }
+
+    /**
+     * Playhead is a viewport overlay (#stage). Convert content X → view X.
+     * Scroll targets (contentX - ANCHOR*width) so during playback the line sits
+     * near ANCHOR while the score slides. At beat≈0 / pre-roll, focusContentX
+     * keeps the first notes right of the playhead until the onset should sound.
+     */
+    function paintPlayhead(ph, contentX, sx) {
+      ph.style.display = 'block';
+      ph.style.height = '100%';
+      ph.style.left = (contentX - sx) + 'px';
+    }
+
+    function applyScrollTransform(sx) {
+      scrollX = sx;
+      const host = document.getElementById('svg');
+      if (host) {
+        host.style.transform = 'translate3d(' + (-sx) + 'px, 0, 0)';
+      }
+    }
+
+    /** True when Dart passed an explicit transport rate (beats/sec). */
+    function hasDartRate() {
+      return typeof dartRate === 'number' && Number.isFinite(dartRate) && dartRate >= 0;
+    }
+
+    /** Continuous display beats: fill JS↔Dart gaps while transport rate > 0. */
+    function currentDisplayBeats(now) {
+      if (!(beatsPerSec > 0) || !(lastSyncTime > 0)) return lastBeats;
+      const age = Math.max(0, (now - lastSyncTime) / 1000);
+      // Dart rate is authoritative — free-run until the next pfSetPosition beat fix.
+      const cap = hasDartRate() ? 86400 : MAX_EXTRAPOLATE_SEC;
+      const t = Math.min(age, cap);
+      // Allow negative pre-roll beats (do not clamp to 0).
+      return lastBeats + t * beatsPerSec;
+    }
+
+    function transportLive(now) {
+      if (!(beatsPerSec > 0) || !(lastSyncTime > 0)) return false;
+      if (hasDartRate()) return true;
+      return (now - lastSyncTime) < MAX_EXTRAPOLATE_SEC * 1000;
+    }
+
+    function shouldKeepScrollRaf(now, catchingUp) {
+      return catchingUp || transportLive(now) || now < liveUntil || beatsPerSec > 0;
+    }
+
+    function tickSmoothScroll(nowTs) {
+      scrollRaf = null;
+      const wrap = document.getElementById('wrap');
+      const ph = document.getElementById('playhead');
+      if (!wrap || !ph) return;
+
+      const now = (typeof nowTs === 'number') ? nowTs : performance.now();
+      displayBeats = currentDisplayBeats(now);
+      const noteX = contentXAtBeats(displayBeats);
+      if (noteX == null || !isFinite(noteX)) {
+        ph.style.display = 'none';
+        // Keep rAF alive during play so a transient empty map cannot freeze scroll.
+        if (shouldKeepScrollRaf(now, false)) {
+          scrollRaf = requestAnimationFrame(tickSmoothScroll);
+        }
+        return;
+      }
+      targetContentX = focusContentX(displayBeats, noteX);
+
+      const anchorX = wrap.clientWidth * ANCHOR;
+      const maxS = maxScrollX(wrap);
+      // Lead-in / resting at start: hard snap so we never ease-stuck before beat 0.
+      const atStart = displayBeats <= 0.02;
+      const targetScroll = Math.max(0, Math.min(maxS, targetContentX - anchorX));
+      const dist = targetScroll - scrollX;
+      const live = transportLive(now);
+      // Watchdog: beats advanced but scroll did not — force resync (bridge/rAF stall).
+      if (beatsPerSec > 0) {
+        const beatMoved = Math.abs(displayBeats - watchBeats) > 0.002;
+        const scrollStuck = Math.abs(scrollX - watchScrollX) < 0.02;
+        if (beatMoved && scrollStuck && Math.abs(dist) > 0.4) {
+          watchStallFrames++;
+          if (watchStallFrames >= 2) forceSnap = true;
+        } else if (!scrollStuck || Math.abs(dist) < 0.15) {
+          watchStallFrames = 0;
+        }
+        watchBeats = displayBeats;
+        watchScrollX = scrollX;
+      } else {
+        watchStallFrames = 0;
+      }
+      // Prefer lock-to-transport over smoothing: hard track whenever playing,
+      // seeking, at start, or drifted past DRIFT_SNAP_PX.
+      const hard = forceSnap || atStart || live || beatsPerSec > 0 ||
+        Math.abs(dist) > DRIFT_SNAP_PX ||
+        Math.abs(dist) > wrap.clientWidth * 0.35;
+
+      let next;
+      if (hard || Math.abs(dist) < 0.15) {
+        next = targetScroll;
+        forceSnap = false;
+      } else {
+        // Residual catch-up only after pause (rate already 0).
+        next = scrollX + dist * SCROLL_CATCHUP;
+        if (Math.abs(targetScroll - next) < 0.15) next = targetScroll;
+      }
+      applyScrollTransform(next);
+      paintPlayhead(ph, targetContentX, scrollX);
+
+      const catchingUp = Math.abs(scrollX - targetScroll) >= 0.15;
+      if (shouldKeepScrollRaf(now, catchingUp)) {
+        scrollRaf = requestAnimationFrame(tickSmoothScroll);
+      }
+    }
+
+    function startSmoothScroll(snap) {
+      if (snap) forceSnap = true;
+      const pad = beatsPerSec > 0
+        ? (hasDartRate() ? 60000 : MAX_EXTRAPOLATE_SEC * 1000 + 64)
+        : 120;
+      liveUntil = performance.now() + pad;
+      if (scrollRaf == null) {
+        scrollRaf = requestAnimationFrame(tickSmoothScroll);
+      }
+    }
+
+    /** Drive playhead + horizontal scroll from continuous beat X. */
+    function updatePlayhead(beats, snap) {
+      const wrap = document.getElementById('wrap');
+      const ph = document.getElementById('playhead');
+      if (!wrap || !ph) return;
+
+      displayBeats = beats;
+      const noteX = contentXAtBeats(beats);
+      if (noteX == null || !isFinite(noteX)) {
+        ph.style.display = 'none';
+        // Still arm rAF during play — map may appear on next frame after layout.
+        startSmoothScroll(!!snap);
+        return;
+      }
+      targetContentX = focusContentX(beats, noteX);
+      // Snap only when Dart asks (seek / load). Lead-in hard-tracks via rAF
+      // `atStart` / `live` — do not forceSnap on every rate-only play start.
+      startSmoothScroll(!!snap);
+    }
+
+    function countMeasures(musicXml) {
+      const m = musicXml.match(/<measure\b/gi);
+      return m ? m.length : 8;
+    }
+
+    /**
+     * Hide instrument / part names ("Piano") so Verovio does not reserve
+     * left margin for labels. Toolkit has no label:false option.
+     */
+    function stripPartLabels(musicXml) {
+      if (!musicXml) return musicXml;
+      function forcePrintNo(tag, xml) {
+        const re = new RegExp('<' + tag + '(\\s[^>]*)?>', 'gi');
+        return xml.replace(re, (open) => {
+          if (/print-object\s*=/i.test(open)) {
+            return open.replace(/print-object\s*=\s*["'][^"']*["']/i, 'print-object="no"');
+          }
+          return open.replace(new RegExp('<' + tag, 'i'), '<' + tag + ' print-object="no"');
+        });
+      }
+      let out = musicXml;
+      out = forcePrintNo('part-name', out);
+      out = forcePrintNo('part-abbreviation', out);
+      out = forcePrintNo('group-name', out);
+      out = forcePrintNo('group-abbreviation', out);
+      // Remove full <print>…</print> blocks (and self-closing). Only stripping the
+      // open tag leaves orphan </print> + system-layout and Verovio engraves empty.
+      out = out.replace(/<print\b[^>]*\/>/gi, '');
+      out = out.replace(/<print\b[^>]*>[\s\S]*?<\/print>/gi, '');
+      return out;
+    }
+
+    /**
+     * Verovio places .mnum at the left barline; shift to measure center.
+     * Hide measure ≤1 (pickup / first bar) — mnumInterval:1 otherwise shows them.
+     * Also hide mnum on the first measure node as a DOM-order fallback.
+     */
+    function polishMeasureNumbers(host) {
+      if (!host) return;
+      const measures = host.querySelectorAll('g.measure');
+      measures.forEach((meas, index) => {
+        const mnum = meas.querySelector('g.mnum');
+        if (!mnum) return;
+        const text = (mnum.textContent || '').replace(/\s+/g, '').trim();
+        const n = parseInt(text, 10);
+        const hideByNumber = Number.isFinite(n) && n <= 1;
+        if (hideByNumber || index === 0) {
+          mnum.style.display = 'none';
+          return;
+        }
+        try {
+          const mb = meas.getBBox();
+          const nb = mnum.getBBox();
+          if (!(mb.width > 0) || !(nb.width >= 0)) return;
+          const targetX = mb.x + mb.width / 2;
+          const currentCenterX = nb.x + nb.width / 2;
+          const dx = targetX - currentCenterX;
+          if (Math.abs(dx) < 0.5) return;
+          const prev = mnum.getAttribute('transform') || '';
+          mnum.setAttribute('transform', ('translate(' + dx + ',0) ' + prev).trim());
+        } catch (_) { /* getBBox can fail on detached/hidden */ }
+      });
+    }
+
+    /** Fit Verovio page metrics to the WebView box (units: 1/10 mm). */
+    function layoutOptions(options, musicXml) {
+      const wrap = document.getElementById('wrap');
+      const cssW = (options && options.cssWidth) || wrap.clientWidth || window.innerWidth || 800;
+      const cssH = (options && options.cssHeight) || wrap.clientHeight || window.innerHeight || 220;
+      const scale = (options && options.scale) || 60;
+      // Keep pageHeight large enough for a piano grand staff.
+      const pageHeight = Math.max(
+        450,
+        (options && options.pageHeight) || Math.floor(cssH * 100 / scale),
+      );
+      const measures = countMeasures(musicXml || '');
+      // Huge pageWidth (e.g. 30k+) can make Verovio emit an empty SVG in WASM.
+      const perMeasure = 140;
+      const rawWidth = Math.max(
+        Math.floor(cssW * 100 / scale),
+        Math.floor(measures * perMeasure + 120),
+      );
+      // Cap hard: huge continuous pageWidth can make Verovio WASM emit empty SVG.
+      const pageWidth = Math.min(8000, rawWidth);
+      return { scale, pageWidth, pageHeight, cssW, cssH, measures, rawWidth };
+    }
+
+    function applyToolkitOptions(lay, scale, pageHeight, pageWidth) {
+      toolkit.setOptions({
+        scale: scale,
+        pageWidth: pageWidth,
+        pageHeight: pageHeight,
+        adjustPageHeight: true,
+        adjustPageWidth: true,
+        breaks: 'none',
+        footer: 'none',
+        header: 'none',
+        svgViewBox: true,
+        // Top/left room for clefs + grand-staff brace (no JS viewBox crop).
+        pageMarginTop: 40,
+        pageMarginBottom: 40,
+        pageMarginLeft: 50,
+        pageMarginRight: 20,
+        spacingStaff: 14,
+        spacingSystem: 2,
+        spacingLinear: 0.40,
+        spacingNonLinear: 0.55,
+        unit: 9,
+        justifyVertically: false,
+        mnumInterval: 1,
+      });
+    }
+
+    /** Top-level page SVGs only — never nested svg.definition-scale. */
+    function rootPageSvgs(host) {
+      if (!host) return [];
+      return Array.from(host.children).filter(
+        (el) => el && el.tagName && el.tagName.toLowerCase() === 'svg',
+      );
+    }
+
+    /**
+     * Verovio nests MEI units in svg.definition-scale. Crop that viewport (or
+     * the page root if absent). Never rewrite both — dual viewBoxes caused the
+     * first-bar scale jump / staff misalignment.
+     */
+    function fitViewportSvg(pageSvg) {
+      if (!pageSvg) return null;
+      return pageSvg.querySelector('svg.definition-scale') || pageSvg;
+    }
+
+    /**
+     * Size page SVGs to Verovio's outer viewBox 1:1 (CSS px).
+     * With svgViewBox, outer viewBox units already embed the engraver `scale`,
+     * so fixed CSS=viewBox keeps notehead / staff spacing identical across
+     * scores. Never stretch to lane height — that made short scores look bigger.
+     * Shorter scores: vertical center + cream padding. Taller: #wrap clips.
+     */
+    function sizeEngravingFixedScale(host) {
+      if (!host) return;
+      rootPageSvgs(host).forEach((pageSvg) => {
+        try {
+          let vbW = 0;
+          let vbH = 0;
+          try {
+            const vb = pageSvg.viewBox && pageSvg.viewBox.baseVal;
+            if (vb && vb.width > 0 && vb.height > 0) {
+              vbW = vb.width;
+              vbH = vb.height;
+            }
+          } catch (_) { /* ignore */ }
+          if (!(vbW > 0 && vbH > 0)) {
+            try {
+              const b = pageSvg.getBBox();
+              vbW = b.width;
+              vbH = b.height;
+            } catch (_) { /* ignore */ }
+          }
+          // 1 CSS px per outer viewBox unit (= Verovio scale mapping).
+          const w = vbW > 0 ? Math.max(120, Math.round(vbW)) : 800;
+          const h = vbH > 0 ? Math.max(80, Math.round(vbH)) : 220;
+
+          pageSvg.removeAttribute('height');
+          pageSvg.removeAttribute('width');
+          pageSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          pageSvg.style.height = h + 'px';
+          pageSvg.style.width = w + 'px';
+          pageSvg.style.maxHeight = 'none';
+          pageSvg.style.display = 'inline-block';
+          pageSvg.style.flex = '0 0 auto';
+          pageSvg.style.background = '#FFFBF5';
+          pageSvg.style.verticalAlign = 'middle';
+          pageSvg.style.overflow = 'visible';
+        } catch (_) { /* ignore */ }
+      });
+    }
+
+    function renderSvgHost() {
+      const pageCount = toolkit.getPageCount();
+      let html = '';
+      for (let p = 1; p <= Math.max(1, pageCount); p++) {
+        html += toolkit.renderToSVG(p, {});
+      }
+      const host = document.getElementById('svg');
+      host.innerHTML = html;
+      // Multi-page must be a horizontal strip — vertical stack breaks beat→X scroll.
+      host.style.display = 'flex';
+      host.style.flexDirection = 'row';
+      host.style.flexWrap = 'nowrap';
+      // Center vertically: short scores get padding; tall scores clip via #wrap.
+      host.style.alignItems = 'center';
+      polishMeasureNumbers(host);
+      sizeEngravingFixedScale(host);
+      const notes = host.querySelectorAll('g.note').length;
+      if (!notes) {
+        setStatus('谱面渲染为空（无音符）');
+      } else {
+        setStatus('');
+      }
+    }
+
+    /** Dart probes this after pfLoad — detect blank staff and force reload. */
+    window.pfScoreInfo = function () {
+      try {
+        const host = document.getElementById('svg');
+        if (!host) {
+          return JSON.stringify({
+            pages: 0, notes: 0, width: 0, height: 0, ready: !!ready,
+            err: 'no-host', loadErr: lastLoadErr,
+          });
+        }
+        const page = host.querySelector('svg');
+        // Verovio 4/5 use g.note; also count noteheads as fallback.
+        const notes = host.querySelectorAll('g.note').length;
+        const heads = host.querySelectorAll('.notehead, g.notehead').length;
+        let w = 0;
+        let h = 0;
+        if (page) {
+          const r = page.getBoundingClientRect();
+          w = r.width;
+          h = r.height;
+        }
+        const info = {
+          pages: rootPageSvgs(host).length,
+          notes: Math.max(notes, heads),
+          noteGroups: notes,
+          heads: heads,
+          width: w,
+          height: h,
+          ready: !!ready,
+          htmlLen: (host.innerHTML || '').length,
+        };
+        if (lastLoadErr) info.loadErr = lastLoadErr;
+        return JSON.stringify(info);
+      } catch (e) {
+        return JSON.stringify({
+          pages: 0, notes: 0, width: 0, height: 0, ready: !!ready,
+          err: String(e), loadErr: lastLoadErr,
+        });
+      }
+    };
+
+    /**
+     * Assemble MusicXML from Dart-pushed chunks (WebView2 cannot take ~400KB
+     * inline in one executeScript; file XHR from file:// is also unreliable).
+     * Usage: pfLoadBegin(); pfLoadChunk("..."); ...; pfLoadEnd(options);
+     */
+    window.pfLoadBegin = function () {
+      window.__pfXmlParts = [];
+      return true;
+    };
+    window.pfLoadChunk = function (part) {
+      if (!window.__pfXmlParts) window.__pfXmlParts = [];
+      window.__pfXmlParts.push(String(part || ''));
+      return window.__pfXmlParts.length;
+    };
+    window.pfLoadEnd = function (options) {
+      const parts = window.__pfXmlParts || [];
+      window.__pfXmlParts = [];
+      const xml = parts.join('');
+      const meta = {
+        parts: parts.length,
+        xmlLen: xml.length,
+        head: xml.slice(0, 48),
+        ok: false,
+      };
+      if (xml.length < 32) {
+        meta.err = 'empty-chunks';
+        window.__pfLastLoadMeta = JSON.stringify(meta);
+        setStatus('谱面分块为空');
+        logHost('pfLoadEnd empty parts=' + parts.length);
+        return false;
+      }
+      const ok = !!pfLoad(xml, options);
+      meta.ok = ok;
+      try {
+        meta.pageCount = toolkit ? toolkit.getPageCount() : 0;
+      } catch (_) {
+        meta.pageCount = -1;
+      }
+      window.__pfLastLoadMeta = JSON.stringify(meta);
+      logHost('pfLoadEnd ' + window.__pfLastLoadMeta);
+      return ok;
+    };
+
+    /**
+     * Preferred: async fetch MusicXML from localhost HTTP, then engrave.
+     * Returns "scheduled" immediately; Dart polls pfScoreInfo for notes/loadErr.
+     */
+    window.pfLoadFromUrlAsync = function (url, options) {
+      lastLoadErr = null;
+      if (!toolkit) {
+        lastLoadErr = 'not-ready';
+        setStatus('Verovio not ready');
+        logHost('pfLoadFromUrlAsync not-ready');
+        return false;
+      }
+      setStatus('Loading score…');
+      logHost('pfLoadFromUrlAsync ' + url);
+      (async function () {
+        try {
+          const resp = await fetch(url, { cache: 'no-store' });
+          if (!resp.ok) {
+            lastLoadErr = 'HTTP ' + resp.status;
+            setStatus('谱面加载失败 ' + lastLoadErr);
+            logHost('pfLoadFromUrlAsync fetch fail ' + lastLoadErr);
+            return;
+          }
+          const text = await resp.text();
+          if (!text || text.length < 32) {
+            lastLoadErr = 'empty-xml len=' + (text ? text.length : 0);
+            setStatus('谱面文件过短');
+            logHost('pfLoadFromUrlAsync ' + lastLoadErr);
+            return;
+          }
+          logHost('pfLoadFromUrlAsync fetched xmlLen=' + text.length);
+          const ok = !!pfLoad(text, options);
+          if (!ok) {
+            lastLoadErr = lastLoadErr || 'engrave-empty';
+            logHost('pfLoadFromUrlAsync engrave empty');
+          } else {
+            lastLoadErr = null;
+            logHost('pfLoadFromUrlAsync OK');
+          }
+        } catch (e) {
+          lastLoadErr = String(e);
+          setStatus('谱面异步加载异常: ' + e);
+          logHost('pfLoadFromUrlAsync exception ' + e);
+        }
+      })();
+      return 'scheduled';
+    };
+
+    /**
+     * Sync XHR fallback (works on http://127.0.0.1; may fail under file://).
+     */
+    window.pfLoadFromUrl = function (url, options) {
+      lastLoadErr = null;
+      if (!toolkit) {
+        lastLoadErr = 'not-ready';
+        setStatus('Verovio not ready');
+        return false;
+      }
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, false);
+        xhr.send(null);
+        const okHttp = xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300);
+        if (!okHttp) {
+          lastLoadErr = 'HTTP ' + xhr.status;
+          setStatus('谱面文件加载失败 HTTP ' + xhr.status);
+          return false;
+        }
+        const text = xhr.responseText || '';
+        if (text.length < 32) {
+          lastLoadErr = 'empty-xml len=' + text.length;
+          setStatus('谱面文件过短');
+          return false;
+        }
+        const ok = !!pfLoad(text, options);
+        if (!ok) lastLoadErr = lastLoadErr || 'engrave-empty';
+        return ok;
+      } catch (e) {
+        lastLoadErr = String(e);
+        setStatus('谱面文件加载异常: ' + e);
+        return false;
+      }
+    };
+
+    window.pfLoad = function (musicXml, options) {
+      if (!toolkit) {
+        lastLoadErr = 'not-ready';
+        setStatus('Verovio not ready');
+        return false;
+      }
+      try {
+        bpm = (options && options.bpm) || 100;
+        lastMusicXml = stripPartLabels(musicXml || '');
+        if (!lastMusicXml || lastMusicXml.length < 32) {
+          lastLoadErr = 'MusicXML empty';
+          setStatus('MusicXML 为空');
+          return false;
+        }
+        lastLoadErr = null;
+        logHost('pfLoad xmlLen=' + lastMusicXml.length);
+
+        function engrave(mode) {
+          const lay = layoutOptions(options || {}, lastMusicXml);
+          let scale = (options && options.scale) || lay.scale;
+          let pageHeight = (options && options.pageHeight) || lay.pageHeight;
+          let pageWidth = lay.pageWidth;
+          if (mode === 'safe') {
+            // Recovery: keep breaks:none (horizontal scroll). Auto breaks stack
+            // systems vertically and make beat→X non-monotonic → staff "卡住/变慢".
+            // Keep the same engraver scale so note size stays consistent.
+            pageWidth = Math.min(6000, Math.max(1200, pageWidth));
+            pageHeight = Math.max(500, pageHeight);
+            applyToolkitOptions(lay, scale, pageHeight, pageWidth);
+            logHost('engrave SAFE pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale);
+          } else if (mode === 'narrow') {
+            // Last-resort recovery: denser strip; may drop scale (note size changes).
+            pageWidth = Math.min(8000, Math.max(1600, Math.floor(lay.measures * 90 + 120)));
+            pageHeight = Math.max(500, pageHeight);
+            scale = Math.min(scale, 45);
+            applyToolkitOptions(lay, scale, pageHeight, pageWidth);
+            logHost('engrave NARROW pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale);
+          } else {
+            applyToolkitOptions(lay, scale, pageHeight, pageWidth);
+            logHost('engrave NORM pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' measures=' + lay.measures + ' rawWidth=' + lay.rawWidth);
+          }
+          const loaded = toolkit.loadData(lastMusicXml);
+          if (loaded === false) {
+            logHost('loadData returned false');
+            return false;
+          }
+          try {
+            timemap = toolkit.renderToTimemap({ includeRests: true, includeMeasures: true }) || [];
+            timemap.sort((a, b) => (a.qstamp || 0) - (b.qstamp || 0));
+          } catch (e) {
+            timemap = [];
+          }
+          renderSvgHost();
+          const host = document.getElementById('svg');
+          const n = host ? host.querySelectorAll('g.note, .notehead').length : 0;
+          logHost('engrave notes=' + n + ' htmlLen=' + (host ? host.innerHTML.length : 0) + ' pages=' + (toolkit.getPageCount ? toolkit.getPageCount() : '?'));
+          return n > 0;
+        }
+
+        let ok = engrave('norm');
+        if (!ok) {
+          logHost('retry engrave with safe options');
+          ok = engrave('safe');
+        }
+        if (!ok) {
+          logHost('retry engrave with narrow+auto');
+          ok = engrave('narrow');
+        }
+        if (!ok) {
+          lastLoadErr = 'engrave-empty';
+        }
+
+        if (scrollRaf != null) {
+          cancelAnimationFrame(scrollRaf);
+          scrollRaf = null;
+        }
+        resetScrollTransform();
+        beatXPoints = [];
+        targetContentX = 0;
+        lastBeats = 0;
+        displayBeats = 0;
+        beatsPerSec = 0;
+        dartRate = NaN;
+        lastSyncTime = 0;
+        forceSnap = true;
+        ready = true;
+        afterLayout(() => {
+          // Size first, then measure — sizing after rebuildBeatXPoints invalidates X.
+          sizeEngravingFixedScale(document.getElementById('svg'));
+          rebuildBeatXPoints();
+          updatePlayhead(lastBeats, true);
+        });
+        return ok;
+      } catch (e) {
+        ready = false;
+        lastLoadErr = String(e);
+        setStatus('pfLoad 异常: ' + e);
+        logHost('pfLoad exception ' + e);
+        return false;
+      }
+    };
+
+    /**
+     * Re-engrave for a new viewport size without reloading MusicXML from Flutter.
+     * Prefer redoLayout; fall back to loadData(lastMusicXml).
+     */
+    window.pfResize = function (options) {
+      if (!toolkit || !ready || !lastMusicXml) return false;
+      const lay = layoutOptions(options || {}, lastMusicXml);
+      const scale = (options && options.scale) || lay.scale;
+      const pageHeight = (options && options.pageHeight) || lay.pageHeight;
+      const pageWidth = lay.pageWidth;
+      const wrap = document.getElementById('wrap');
+      const keepBeats = lastBeats;
+
+      applyToolkitOptions(lay, scale, pageHeight, pageWidth);
+      try {
+        if (typeof toolkit.redoLayout === 'function') {
+          toolkit.redoLayout();
+        } else {
+          toolkit.loadData(lastMusicXml);
+        }
+      } catch (e) {
+        try {
+          toolkit.loadData(lastMusicXml);
+        } catch (e2) {
+          return false;
+        }
+      }
+
+      renderSvgHost();
+      afterLayout(() => {
+        sizeEngravingFixedScale(document.getElementById('svg'));
+        rebuildBeatXPoints();
+        updatePlayhead(keepBeats, true);
+      });
+      return true;
+    };
+
+    /**
+     * @param beats quarter-note position from piece start (matches Dart positionBeats)
+     * @param snap  if true, jump scroll immediately (load / seek / pause)
+     * @param rate  optional beats/sec from Dart transport (0 = paused). Prefer over EMA.
+     */
+    window.pfSetPosition = function (beats, snap, rate) {
+      if (!ready || !toolkit) return;
+      const raw = Number(beats);
+      // Allow negative pre-roll (lead-in); NaN → 0.
+      let b = Number.isFinite(raw) ? raw : 0;
+      const now = performance.now();
+      const jump = Math.abs(b - lastBeats);
+      const seekSnap = !!snap || jump > SEEK_BEAT_EPS;
+
+      if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0) {
+        dartRate = rate;
+        beatsPerSec = rate;
+      } else if (seekSnap) {
+        // Seek without an explicit rate: freeze extrapolation until Dart resumes.
+        dartRate = NaN;
+        beatsPerSec = 0;
+      } else if (hasDartRate()) {
+        beatsPerSec = dartRate;
+      } else if (lastSyncTime > 0) {
+        // EMA only when Dart never supplied a rate — never decay toward 0 on dq≈0
+        // (that path caused progressive "越来越慢" after bridge coalescing).
+        const dt = (now - lastSyncTime) / 1000;
+        const dq = b - lastBeats;
+        if (dt > 0.004 && dt < 0.35 && dq > 1e-4) {
+          const est = dq / dt;
+          beatsPerSec = beatsPerSec > 0 ? beatsPerSec * 0.5 + est * 0.5 : est;
+        }
+      }
+
+      // Stale WebView bridge deliveries arrive behind the free-running playhead.
+      // Rewinding lastBeats every coalesced push makes scroll look "越来越慢".
+      if (!seekSnap && beatsPerSec > 0 && lastSyncTime > 0) {
+        const predicted = currentDisplayBeats(now);
+        const staleSlack = Math.max(0.1, beatsPerSec * 0.15); // ~150ms
+        if (b + staleSlack < predicted) {
+          lastBeats = predicted;
+          lastSyncTime = now;
+          startSmoothScroll(false);
+          return;
+        }
+      }
+
+      lastBeats = b;
+      lastSyncTime = now;
+      // Playhead only — no note fill/stroke highlight (timemap still drives beat→X).
+      // Hard-correct on any meaningful jump so stalls cannot leave scroll behind.
+      updatePlayhead(b, seekSnap || jump > 0.12);
+    };
+
+    function onVisibilityResume() {
+      if (document.hidden) return;
+      if (beatsPerSec > 0 || Math.abs(scrollX - targetContentX) > 0.5) {
+        startSmoothScroll(true);
+      }
+    }
+
+    function boot() {
+      if (typeof verovio === 'undefined') {
+        setStatus('Missing verovio-toolkit-wasm.js — run scripts/download-verovio.ps1');
+        return;
+      }
+      document.addEventListener('visibilitychange', onVisibilityResume);
+      window.addEventListener('focus', onVisibilityResume);
+      verovio.module.onRuntimeInitialized = function () {
+        toolkit = new verovio.toolkit();
+        setStatus('Verovio ready');
+        if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {
+          window.chrome.webview.postMessage(JSON.stringify({ type: 'ready' }));
+        }
+      };
+    }
+    boot();
+  </script>
+</body>
+</html>

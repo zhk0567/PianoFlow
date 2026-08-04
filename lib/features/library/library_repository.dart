@@ -4,20 +4,37 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/models/song.dart';
+import '../../shared/piano_flow_log.dart';
+import '../../shared/score_kind_policy.dart';
 
 class LibraryRepository {
   Future<List<SongSummary>> loadCatalog() async {
-    final raw = await rootBundle.loadString('assets/scores/catalog.json');
-    final map = jsonDecode(raw) as Map<String, dynamic>;
-    final list = map['songs'] as List<dynamic>;
-    return list
-        .map((e) => SongSummary.fromJson(e as Map<String, dynamic>))
-        .toList();
+    try {
+      final raw = await rootBundle.loadString('assets/scores/catalog.json');
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      final list = map['songs'] as List<dynamic>;
+      final songs = list
+          .map((e) => SongSummary.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final violations = ScoreKindPolicy.catalogViolations(songs);
+      for (final v in violations) {
+        pianoFlowLog('Library', 'scoreKind policy: $v');
+      }
+      return songs;
+    } catch (e, st) {
+      pianoFlowLog('Library', 'catalog load failed: $e\n$st');
+      rethrow;
+    }
   }
 
   Future<SongScore> loadScore(String assetPath) async {
-    final raw = await rootBundle.loadString(assetPath);
-    return SongScore.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    try {
+      final raw = await rootBundle.loadString(assetPath);
+      return SongScore.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (e, st) {
+      pianoFlowLog('Library', 'score load failed ($assetPath): $e\n$st');
+      rethrow;
+    }
   }
 }
 

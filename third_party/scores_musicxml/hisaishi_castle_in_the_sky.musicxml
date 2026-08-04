@@ -1,14 +1,13 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0.3 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<?xml version='1.0' encoding='UTF-8'?>
 <score-partwise version="4.0.3">
   <identification>
     <encoding>
       <software>Audiveris 5.11.0</software>
-      <supports type="yes" element="print" attribute="new-system" value="yes"></supports>
-      <supports type="yes" element="print" attribute="new-page" value="yes"></supports>
-      <supports type="yes" element="accidental"></supports>
-      <supports type="yes" element="beam"></supports>
-      <supports type="yes" element="stem"></supports>
+      <supports type="yes" element="print" attribute="new-system" value="yes" />
+      <supports type="yes" element="print" attribute="new-page" value="yes" />
+      <supports type="yes" element="accidental" />
+      <supports type="yes" element="beam" />
+      <supports type="yes" element="stem" />
       <software>ProxyMusic 4.0.3</software>
       <encoding-date>2026-07-30</encoding-date>
     </encoding>
@@ -34,7 +33,7 @@
         <bottom-margin>80</bottom-margin>
       </page-margins>
     </page-layout>
-    <lyric-font font-family="Sans Serif" font-size="10"></lyric-font>
+    <lyric-font font-family="Sans Serif" font-size="10" />
   </defaults>
   <part-list>
     <score-part id="P1">
@@ -50,10 +49,17 @@
       </midi-instrument>
     </score-part>
   </part-list>
-  <!--= = = = = = = = = = = = = = = = = = = = = = = = = = = = =-->
   <part id="P1">
-    <!--=======================================================-->
     <measure number="0" implicit="yes" width="145">
+      <direction placement="above">
+        <direction-type>
+          <metronome>
+            <beat-unit>quarter</beat-unit>
+            <per-minute>80</per-minute>
+          </metronome>
+        </direction-type>
+        <sound tempo="80" />
+      </direction>
       <print>
         <system-layout>
           <system-margins>
@@ -68,6 +74,9 @@
         <measure-numbering>system</measure-numbering>
       </print>
       <attributes>
+        <key>
+          <fifths>0</fifths>
+        </key>
         <divisions>6</divisions>
         <time>
           <beats>4</beats>
@@ -82,16 +91,16 @@
           <sign>F</sign>
           <line>4</line>
         </clef>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="78">
         <pitch>
@@ -131,7 +140,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="1" width="212">
       <note default-x="12">
         <pitch>
@@ -141,7 +149,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-49">down</stem>
         <staff>1</staff>
       </note>
@@ -160,7 +168,7 @@
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="111">
@@ -179,7 +187,7 @@
         <stem default-y="-49">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="161">
@@ -199,15 +207,15 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="11">
         <pitch>
-          <step>A</step>
+          <step>F</step>
           <octave>3</octave>
         </pitch>
         <duration>24</duration>
@@ -216,7 +224,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="2" width="159">
       <note default-x="11">
         <pitch>
@@ -226,18 +233,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="108">
         <pitch>
@@ -255,7 +262,7 @@
       </backup>
       <note default-x="11">
         <pitch>
-          <step>G</step>
+          <step>C</step>
           <octave>3</octave>
         </pitch>
         <duration>24</duration>
@@ -264,7 +271,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="3" width="212">
       <note default-x="11">
         <pitch>
@@ -274,7 +280,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="9">up</stem>
         <staff>1</staff>
       </note>
@@ -293,7 +299,7 @@
         <stem default-y="4">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="110">
@@ -312,7 +318,7 @@
         <stem default-y="9">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="161">
@@ -331,7 +337,7 @@
       </backup>
       <note default-x="10">
         <pitch>
-          <step>F</step>
+          <step>G</step>
           <octave>3</octave>
         </pitch>
         <duration>24</duration>
@@ -340,7 +346,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="4" width="159">
       <note default-x="11">
         <pitch>
@@ -350,18 +355,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="4">up</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="108">
         <pitch>
@@ -380,16 +385,16 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="11">
         <pitch>
-          <step>E</step>
-          <octave>3</octave>
+          <step>A</step>
+          <octave>2</octave>
         </pitch>
         <duration>24</duration>
         <voice>5</voice>
@@ -397,7 +402,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="5" width="212">
       <note default-x="12">
         <pitch>
@@ -407,18 +411,18 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="1">up</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="76">
         <pitch>
@@ -435,7 +439,7 @@
         <stem default-y="-6">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="110">
@@ -454,7 +458,7 @@
         <stem default-y="1">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="161">
@@ -473,7 +477,7 @@
       </backup>
       <note default-x="10">
         <pitch>
-          <step>D</step>
+          <step>C</step>
           <octave>3</octave>
         </pitch>
         <duration>24</duration>
@@ -482,7 +486,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="6" width="202">
       <print new-system="yes">
         <system-layout>
@@ -497,16 +500,16 @@
         </staff-layout>
       </print>
       <attributes>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="51">
         <pitch>
@@ -516,7 +519,7 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-6">up</stem>
         <staff>1</staff>
       </note>
@@ -536,8 +539,8 @@
       </backup>
       <note default-x="51">
         <pitch>
-          <step>C</step>
-          <octave>3</octave>
+          <step>G</step>
+          <octave>2</octave>
         </pitch>
         <duration>24</duration>
         <voice>5</voice>
@@ -545,7 +548,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="7" width="214">
       <note default-x="12">
         <pitch>
@@ -555,7 +557,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
       </note>
@@ -576,7 +578,7 @@
         <stem default-y="1">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="112">
@@ -596,7 +598,7 @@
         <stem default-y="1">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="163">
@@ -624,7 +626,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="8" width="179">
       <note default-x="12">
         <pitch>
@@ -634,18 +635,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="111">
         <pitch>
@@ -677,11 +678,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -694,7 +695,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="9" width="214">
       <note default-x="12">
         <pitch>
@@ -704,7 +704,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-49">down</stem>
         <staff>1</staff>
       </note>
@@ -723,7 +723,7 @@
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="112">
@@ -742,7 +742,7 @@
         <stem default-y="-49">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="163">
@@ -762,11 +762,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="11">
         <pitch>
@@ -779,7 +779,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="10" width="162">
       <note default-x="12">
         <pitch>
@@ -789,7 +788,7 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
@@ -823,7 +822,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="11" width="215">
       <note default-x="12">
         <pitch>
@@ -833,7 +831,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="9">up</stem>
         <staff>1</staff>
       </note>
@@ -855,7 +853,7 @@
           <articulations>
             <breath-mark default-x="85" default-y="29" placement="above">comma</breath-mark>
           </articulations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="112">
@@ -874,7 +872,7 @@
         <stem default-y="9">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="164">
@@ -902,7 +900,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="12" width="188">
       <print new-system="yes">
         <system-layout>
@@ -917,7 +914,7 @@
         </staff-layout>
       </print>
       <attributes>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <note default-x="51">
         <pitch>
@@ -927,7 +924,7 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="4">up</stem>
         <staff>1</staff>
       </note>
@@ -956,16 +953,15 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="13" width="215">
       <direction placement="above">
         <direction-type>
           <dynamics default-y="25" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -996,14 +992,14 @@
           <octave>4</octave>
         </pitch>
         <duration>3</duration>
-        <tie type="start"></tie>
+        <tie type="start" />
         <voice>1</voice>
         <type>eighth</type>
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <beam number="1">end</beam>
         <notations>
-          <tied type="start" orientation="over"></tied>
+          <tied type="start" orientation="over" />
         </notations>
       </note>
       <note default-x="121">
@@ -1012,13 +1008,13 @@
           <octave>4</octave>
         </pitch>
         <duration>6</duration>
-        <tie type="stop"></tie>
+        <tie type="stop" />
         <voice>1</voice>
         <type>quarter</type>
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
-          <tied type="stop"></tied>
+          <tied type="stop" />
         </notations>
       </note>
       <note default-x="168">
@@ -1046,7 +1042,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="14" width="192">
       <note default-x="12">
         <pitch>
@@ -1077,14 +1072,14 @@
           <octave>5</octave>
         </pitch>
         <duration>3</duration>
-        <tie type="start"></tie>
+        <tie type="start" />
         <voice>1</voice>
         <type>eighth</type>
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <beam number="1">end</beam>
         <notations>
-          <tied type="start" orientation="over"></tied>
+          <tied type="start" orientation="over" />
         </notations>
       </note>
       <note default-x="121">
@@ -1093,13 +1088,13 @@
           <octave>5</octave>
         </pitch>
         <duration>12</duration>
-        <tie type="stop"></tie>
+        <tie type="stop" />
         <voice>1</voice>
         <type>half</type>
         <stem default-y="-50">down</stem>
         <staff>1</staff>
         <notations>
-          <tied type="stop"></tied>
+          <tied type="stop" />
         </notations>
       </note>
       <backup>
@@ -1108,11 +1103,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="11">
         <pitch>
@@ -1125,7 +1120,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="15" width="231">
       <note default-x="12">
         <pitch>
@@ -1143,7 +1137,7 @@
         <staff>1</staff>
         <beam number="1">begin</beam>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="43">
@@ -1178,7 +1172,7 @@
         <staff>1</staff>
         <beam number="1">continue</beam>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="106">
@@ -1207,11 +1201,11 @@
       <direction placement="above">
         <direction-type>
           <dynamics default-y="25" relative-x="0">
-            <p/>
+            <p />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="56"></sound>
+        <sound dynamics="56" />
       </direction>
       <note default-x="184">
         <pitch>
@@ -1240,7 +1234,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="16" width="164">
       <note default-x="12">
         <pitch>
@@ -1250,18 +1243,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="9">up</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="25" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="102">
         <pitch>
@@ -1301,7 +1294,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="17" width="197">
       <note default-x="12">
         <pitch>
@@ -1311,7 +1303,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-39">down</stem>
         <staff>1</staff>
       </note>
@@ -1362,7 +1354,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="18" width="213">
       <print new-system="yes">
         <system-layout>
@@ -1377,7 +1368,7 @@
         </staff-layout>
       </print>
       <attributes>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <note default-x="51">
         <pitch>
@@ -1387,18 +1378,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-45">down</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="147">
         <pitch>
@@ -1415,11 +1406,11 @@
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="180">
         <pitch>
@@ -1447,7 +1438,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="19" width="208">
       <note default-x="12">
         <pitch>
@@ -1457,7 +1447,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-50">down</stem>
         <staff>1</staff>
       </note>
@@ -1476,7 +1466,7 @@
         <stem default-y="-52">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="109">
@@ -1495,7 +1485,7 @@
         <stem default-y="-50">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="158">
@@ -1523,7 +1513,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="20" width="126">
       <note default-x="12">
         <pitch>
@@ -1541,11 +1530,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-55" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -1558,16 +1547,15 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="21" width="244">
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -1637,7 +1625,7 @@
         <staff>1</staff>
         <beam number="1">end</beam>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="194">
@@ -1656,7 +1644,7 @@
         <stem default-y="-45">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <backup>
@@ -1676,11 +1664,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-55" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="128">
         <pitch>
@@ -1694,7 +1682,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="22" width="184">
       <note default-x="12">
         <pitch>
@@ -1704,18 +1691,18 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-50">down</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="75">
         <pitch>
@@ -1731,11 +1718,11 @@
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="109">
         <pitch>
@@ -1762,7 +1749,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="23" width="211">
       <note default-x="12">
         <pitch>
@@ -1779,7 +1765,7 @@
         <stem default-y="-34">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="62">
@@ -1812,17 +1798,17 @@
         <stem default-y="-45">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="161">
         <pitch>
@@ -1839,7 +1825,7 @@
         <stem default-y="-50">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <backup>
@@ -1856,7 +1842,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="24" width="253">
       <print new-system="yes">
         <system-layout>
@@ -1871,7 +1856,7 @@
         </staff-layout>
       </print>
       <attributes>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <note default-x="51">
         <pitch>
@@ -1913,11 +1898,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-86" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="116">
         <pitch>
@@ -1955,7 +1940,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="25" width="158">
       <note default-x="12">
         <pitch>
@@ -2005,7 +1989,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="26" width="214">
       <note default-x="12">
         <pitch>
@@ -2034,11 +2017,11 @@
       <direction placement="above">
         <direction-type>
           <dynamics default-y="31" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="77">
         <pitch>
@@ -2054,11 +2037,11 @@
       <direction placement="above">
         <direction-type>
           <dynamics default-y="31" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="150">
         <pitch>
@@ -2075,11 +2058,11 @@
       <direction placement="above">
         <direction-type>
           <dynamics default-y="31" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="182">
         <pitch>
@@ -2107,7 +2090,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="27" width="222">
       <note default-x="12">
         <pitch>
@@ -2125,17 +2107,17 @@
         <stem default-y="-44">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="31" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="60">
         <pitch>
@@ -2153,7 +2135,7 @@
         <staff>1</staff>
         <beam number="1">begin</beam>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="92">
@@ -2172,7 +2154,7 @@
         <staff>1</staff>
         <beam number="1">end</beam>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="125">
@@ -2191,7 +2173,7 @@
         <stem default-y="-44">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="173">
@@ -2219,7 +2201,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="28" width="182">
       <note default-x="11">
         <pitch>
@@ -2229,7 +2210,7 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-41">down</stem>
         <staff>1</staff>
       </note>
@@ -2250,11 +2231,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-86" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -2279,7 +2260,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="29" width="158">
       <note default-x="11">
         <pitch>
@@ -2329,7 +2309,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="30" width="251">
       <print new-page="yes">
         <system-layout>
@@ -2346,7 +2325,7 @@
       </print>
       <attributes>
         <divisions>6</divisions>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <note default-x="51">
         <pitch>
@@ -2375,11 +2354,11 @@
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="114">
         <pitch>
@@ -2430,7 +2409,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="31" width="218">
       <note default-x="12">
         <pitch>
@@ -2503,16 +2481,15 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="32" width="167">
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -2522,18 +2499,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="10">up</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="103">
         <pitch>
@@ -2573,7 +2550,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="33" width="199">
       <note default-x="12">
         <pitch>
@@ -2583,7 +2559,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-50">down</stem>
         <staff>1</staff>
       </note>
@@ -2602,7 +2578,7 @@
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="104">
@@ -2621,7 +2597,7 @@
         <stem default-y="-50">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="153">
@@ -2649,7 +2625,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="34" width="151">
       <note default-x="12">
         <pitch>
@@ -2659,18 +2634,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="28" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="104">
         <pitch>
@@ -2697,7 +2672,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="35" width="200">
       <note default-x="12">
         <pitch>
@@ -2707,7 +2681,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="10">up</stem>
         <staff>1</staff>
       </note>
@@ -2726,7 +2700,7 @@
         <stem default-y="4">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="104">
@@ -2745,7 +2719,7 @@
         <stem default-y="10">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="152">
@@ -2778,7 +2752,6 @@
         </notations>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="36" width="202">
       <print new-system="yes">
         <system-layout>
@@ -2793,7 +2766,7 @@
         </staff-layout>
       </print>
       <attributes>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <note default-x="51">
         <pitch>
@@ -2803,18 +2776,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="4">up</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="27" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="150">
         <pitch>
@@ -2833,11 +2806,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="51">
         <pitch>
@@ -2850,7 +2823,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="37" width="214">
       <note default-x="12">
         <pitch>
@@ -2860,18 +2832,18 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="1">up</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="27" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="77">
         <pitch>
@@ -2888,7 +2860,7 @@
         <stem default-y="-6">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="112">
@@ -2907,7 +2879,7 @@
         <stem default-y="1">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="163">
@@ -2935,16 +2907,15 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="38" width="162">
       <direction placement="above">
         <direction-type>
           <dynamics default-y="27" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -2954,7 +2925,7 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-6">up</stem>
         <staff>1</staff>
       </note>
@@ -2983,7 +2954,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="39" width="215">
       <note default-x="12">
         <pitch>
@@ -2993,7 +2963,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
       </note>
@@ -3014,7 +2984,7 @@
         <stem default-y="1">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="112">
@@ -3034,7 +3004,7 @@
         <stem default-y="1">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="163">
@@ -3062,7 +3032,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="40" width="178">
       <note default-x="11">
         <pitch>
@@ -3072,18 +3041,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="27" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="110">
         <pitch>
@@ -3123,7 +3092,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="41" width="215">
       <note default-x="12">
         <pitch>
@@ -3133,7 +3101,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="-49">down</stem>
         <staff>1</staff>
       </note>
@@ -3152,7 +3120,7 @@
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="112">
@@ -3171,7 +3139,7 @@
         <stem default-y="-49">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="164">
@@ -3191,11 +3159,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="11">
         <pitch>
@@ -3208,7 +3176,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="42" width="190">
       <print new-system="yes">
         <system-layout>
@@ -3223,7 +3190,7 @@
         </staff-layout>
       </print>
       <attributes>
-        <staff-details print-object="yes"></staff-details>
+        <staff-details print-object="yes" />
       </attributes>
       <note default-x="52">
         <pitch>
@@ -3233,18 +3200,18 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="-53">down</stem>
         <staff>1</staff>
       </note>
       <direction placement="above">
         <direction-type>
           <dynamics default-y="15" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="143">
         <pitch>
@@ -3271,7 +3238,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="43" width="199">
       <note default-x="12">
         <pitch>
@@ -3281,7 +3247,7 @@
         <duration>9</duration>
         <voice>1</voice>
         <type>quarter</type>
-        <dot/>
+        <dot />
         <stem default-y="9">up</stem>
         <staff>1</staff>
       </note>
@@ -3300,7 +3266,7 @@
         <stem default-y="4">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="104">
@@ -3319,7 +3285,7 @@
         <stem default-y="9">up</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="152">
@@ -3347,7 +3313,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="44" width="151">
       <note default-x="12">
         <pitch>
@@ -3357,7 +3322,7 @@
         <duration>18</duration>
         <voice>1</voice>
         <type>half</type>
-        <dot/>
+        <dot />
         <stem default-y="4">up</stem>
         <staff>1</staff>
       </note>
@@ -3386,16 +3351,15 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="45" width="218">
       <direction placement="above">
         <direction-type>
           <dynamics default-y="15" relative-x="1">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>1</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="12">
         <pitch>
@@ -3426,14 +3390,14 @@
           <octave>4</octave>
         </pitch>
         <duration>3</duration>
-        <tie type="start"></tie>
+        <tie type="start" />
         <voice>1</voice>
         <type>eighth</type>
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <beam number="1">end</beam>
         <notations>
-          <tied type="start" orientation="over"></tied>
+          <tied type="start" orientation="over" />
         </notations>
       </note>
       <note default-x="123">
@@ -3442,13 +3406,13 @@
           <octave>4</octave>
         </pitch>
         <duration>6</duration>
-        <tie type="stop"></tie>
+        <tie type="stop" />
         <voice>1</voice>
         <type>quarter</type>
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
-          <tied type="stop"></tied>
+          <tied type="stop" />
         </notations>
       </note>
       <note default-x="171">
@@ -3476,7 +3440,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="46" width="194">
       <note default-x="12">
         <pitch>
@@ -3507,14 +3470,14 @@
           <octave>5</octave>
         </pitch>
         <duration>3</duration>
-        <tie type="start"></tie>
+        <tie type="start" />
         <voice>1</voice>
         <type>eighth</type>
         <stem default-y="-51">down</stem>
         <staff>1</staff>
         <beam number="1">end</beam>
         <notations>
-          <tied type="start" orientation="over"></tied>
+          <tied type="start" orientation="over" />
         </notations>
       </note>
       <note default-x="123">
@@ -3523,13 +3486,13 @@
           <octave>5</octave>
         </pitch>
         <duration>12</duration>
-        <tie type="stop"></tie>
+        <tie type="stop" />
         <voice>1</voice>
         <type>half</type>
         <stem default-y="-49">down</stem>
         <staff>1</staff>
         <notations>
-          <tied type="stop"></tied>
+          <tied type="stop" />
         </notations>
       </note>
       <backup>
@@ -3538,11 +3501,11 @@
       <direction placement="below">
         <direction-type>
           <dynamics default-y="-51" relative-x="2">
-            <f/>
+            <f />
           </dynamics>
         </direction-type>
         <staff>2</staff>
-        <sound dynamics="100"></sound>
+        <sound dynamics="100" />
       </direction>
       <note default-x="11">
         <pitch>
@@ -3555,7 +3518,6 @@
         <staff>2</staff>
       </note>
     </measure>
-    <!--=======================================================-->
     <measure number="47" width="234">
       <note default-x="12">
         <pitch>
@@ -3573,7 +3535,7 @@
         <staff>1</staff>
         <beam number="1">begin</beam>
         <notations>
-          <tuplet type="start" number="1" placement="above"></tuplet>
+          <tuplet type="start" number="1" placement="above" />
         </notations>
       </note>
       <note default-x="44">
@@ -3608,7 +3570,7 @@
         <staff>1</staff>
         <beam number="1">continue</beam>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="107">
@@ -3627,7 +3589,7 @@
         <staff>1</staff>
         <beam number="1">end</beam>
         <notations>
-          <tuplet type="stop" number="1"></tuplet>
+          <tuplet type="stop" number="1" />
         </notations>
       </note>
       <note default-x="139">
@@ -3646,7 +3608,7 @@
         <stem default-y="-53">down</stem>
         <staff>1</staff>
         <notations>
-          <tuplet type="stop" number="2"></tuplet>
+          <tuplet type="stop" number="2" />
         </notations>
       </note>
       <note default-x="187">

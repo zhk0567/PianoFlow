@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:webview_windows/webview_windows.dart';
 
 import '../../../shared/models/song.dart';
+import '../../../shared/piano_flow_log.dart';
 import '../verovio_runtime.dart';
+import '../verovio_transport_sync.dart';
 
 /// Verovio-engraved staff (MusicXML). Falls back to generated MusicXML from [SongScore].
 ///
@@ -40,9 +42,10 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   bool _bound = false;
   bool _pushing = false;
   bool _disposed = false;
+  bool _switching = false;
   String? _error;
-  Size _viewport = const Size(800, 288);
-  Size _heldSize = const Size(800, 288);
+  Size _viewport = const Size(800, 340);
+  Size _heldSize = const Size(800, 340);
   Size? _pendingViewport;
   Timer? _resizeDebounce;
   Timer? _posThrottle;
@@ -53,15 +56,16 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   bool _posGateOpen = true;
   Future<String>? _xmlFuture;
   int? _scheduledConstraintHash;
+  _PendingScorePush? _pendingScorePush;
+  /// Set when resize arrives during [_pushing]; flushed after the busy op ends.
+  bool _pendingResize = false;
 
   static const _resizeSlop = 16.0;
   static const _resizeDebounceMs = 450;
-  /// Viewer free-runs on Dart rate; sparse hard-corrects avoid WebView2 bridge pile-up
-  /// (dense executeScript was the main cause of staff lag / "越来越慢").
-  static const _posThrottleMs = 100;
-  /// Slow tempos can move < [_posMinDelta] per engine tick — heartbeat resyncs beats.
-  static const _posMinDelta = 0.01;
-  static const _playHeartbeatMs = 400;
+  /// Shared clock with waterfall/audio: push positionBeats often enough that the
+  /// viewer only eases ≤~120ms (see viewer MAX_EXTRAPOLATE_SEC), never free-runs alone.
+  static const _posThrottleMs = 50;
+  static const _playHeartbeatMs = 80;
 
   double get _transportRate =>
       widget.isPlaying ? widget.beatsPerSec.clamp(0.0, 40.0) : 0.0;
@@ -137,50 +141,91 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
           snap: true,
           beatsPerSec: _transportRate,
         );
+      } else {
+        if (mounted) setState(() => _switching = true);
+        await _runtime.beginScoreSwitch(reason: 'bind ${widget.score.id}');
       }
       // Always force-load: cached blank SVG must not short-circuit paint.
       await _pushScore(musicXml: xml, force: true);
     } catch (e) {
       if (_disposed || !mounted) return;
-      // ignore: avoid_print
-      print('[PianoFlow/Verovio] staff lane bind failed: $e');
-      debugPrint('[PianoFlow/Verovio] staff lane bind failed: $e');
-      setState(() => _error = 'WebView2 / Verovio 初始化失败：$e');
+      pianoFlowLog('Verovio', 'staff lane bind failed: $e');
+      setState(() => _error = '五线谱引擎初始化失败（详情见控制台 [PianoFlow/Verovio]）');
     }
   }
 
   Future<void> _pushScore({String? musicXml, bool force = false}) async {
-    if (!_runtime.isToolkitReady || _disposed || _pushing) return;
-    _pushing = true;
-    try {
-      await _runtime.pushScore(
-        score: widget.score,
-        hand: widget.hand,
-        viewport: _viewport,
+    if (!_runtime.isToolkitReady || _disposed) return;
+    if (_pushing) {
+      // Never drop a song/hand switch — keep the latest request.
+      _pendingScorePush = _PendingScorePush(
         musicXml: musicXml,
         force: force,
+        score: widget.score,
+        hand: widget.hand,
       );
-      if (_disposed) return;
-      await _runtime.pushPosition(
-        widget.positionBeats,
-        snap: true,
-        beatsPerSec: _transportRate,
-      );
+      return;
+    }
+    _pushing = true;
+    try {
+      do {
+        final pending = _pendingScorePush;
+        _pendingScorePush = null;
+        final score = pending?.score ?? widget.score;
+        final hand = pending?.hand ?? widget.hand;
+        final xml = pending?.musicXml ?? musicXml;
+        final doForce = pending?.force ?? force;
+        await _runtime.pushScore(
+          score: score,
+          hand: hand,
+          viewport: _viewport,
+          musicXml: xml,
+          force: doForce,
+        );
+        if (_disposed) return;
+        await _runtime.pushPosition(
+          widget.positionBeats,
+          snap: true,
+          beatsPerSec: _transportRate,
+        );
+        if (mounted) {
+          setState(() {
+            _switching = false;
+            _error = null;
+          });
+        }
+      } while (_pendingScorePush != null && !_disposed);
     } catch (e, st) {
-      // ignore: avoid_print
-      print('[PianoFlow/Verovio] 加载乐谱失败: $e');
-      // ignore: avoid_print
-      print('[PianoFlow/Verovio] $st');
-      debugPrint('[PianoFlow/Verovio] 加载乐谱失败: $e\n$st');
-      if (mounted) setState(() => _error = '加载乐谱失败：$e');
+      pianoFlowLog('Verovio', '加载乐谱失败: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _switching = false;
+          _error = '加载乐谱失败（详情见控制台 [PianoFlow/Verovio]）';
+        });
+      }
     } finally {
       _pushing = false;
+      if (_pendingScorePush != null && !_disposed) {
+        unawaited(_pushScore(
+          musicXml: _pendingScorePush!.musicXml,
+          force: _pendingScorePush!.force,
+        ));
+      } else if (_pendingResize && !_disposed) {
+        _pendingResize = false;
+        unawaited(_pushResize());
+      }
     }
   }
 
   Future<void> _pushResize() async {
-    if (!_runtime.isToolkitReady || _disposed || _pushing) return;
+    if (!_runtime.isToolkitReady || _disposed) return;
+    if (VerovioTransportSync.shouldDeferResize(pushing: _pushing)) {
+      _pendingResize = true;
+      pianoFlowLogVerbose('Verovio', 'resize deferred (push in flight)');
+      return;
+    }
     _pushing = true;
+    _pendingResize = false;
     try {
       await _runtime.pushResize(_viewport);
       if (_disposed) return;
@@ -189,11 +234,24 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
         snap: true,
         beatsPerSec: _transportRate,
       );
-    } catch (_) {
+    } catch (e, st) {
       // Viewer without pfResize (stale cache) — full push as fallback.
+      pianoFlowLog(
+        'Verovio',
+        '${VerovioTransportSync.resizeFallbackLog(e)}\n$st',
+      );
       await _pushScore(force: true);
     } finally {
       _pushing = false;
+      if (_pendingScorePush != null && !_disposed) {
+        unawaited(_pushScore(
+          musicXml: _pendingScorePush!.musicXml,
+          force: _pendingScorePush!.force,
+        ));
+      } else if (_pendingResize && !_disposed) {
+        _pendingResize = false;
+        unawaited(_pushResize());
+      }
     }
   }
 
@@ -243,8 +301,21 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.score.id != widget.score.id ||
         oldWidget.hand != widget.hand) {
+      _posThrottle?.cancel();
+      _posThrottle = null;
+      _pendingPosBeats = null;
+      _pendingPosRate = null;
+      _pendingPosSnap = false;
+      _posGateOpen = true;
       _xmlFuture = _runtime.resolveMusicXml(widget.score, widget.hand);
+      setState(() {
+        _switching = true;
+        _error = null;
+      });
       unawaited(() async {
+        await _runtime.beginScoreSwitch(
+          reason: '${oldWidget.score.id}->${widget.score.id}',
+        );
         final xml = await _xmlFuture!;
         if (!_disposed && mounted) {
           await _pushScore(musicXml: xml, force: true);
@@ -253,21 +324,31 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       return;
     }
 
-    final posDelta =
-        (oldWidget.positionBeats - widget.positionBeats).abs();
+    final posDelta = VerovioTransportSync.positionDelta(
+      oldWidget.positionBeats,
+      widget.positionBeats,
+    );
     final playChanged = oldWidget.isPlaying != widget.isPlaying;
-    final rateDelta =
-        (oldWidget.beatsPerSec - widget.beatsPerSec).abs();
+    final rateDelta = VerovioTransportSync.rateDelta(
+      oldWidget.beatsPerSec,
+      widget.beatsPerSec,
+    );
 
     // Pause/resume must push even when positionBeats is unchanged — otherwise
     // the viewer keeps extrapolating (or stays frozen) after transport stops.
-    if (!playChanged && posDelta <= _posMinDelta && rateDelta <= 0.01) return;
+    if (VerovioTransportSync.shouldSkipPush(
+      posDelta: posDelta,
+      playChanged: playChanged,
+      rateDelta: rateDelta,
+    )) {
+      return;
+    }
 
     _syncPlayHeartbeat();
 
     // Snap only on real seeks / large jumps — not on play/pause alone.
     // Rate-only updates must ease so start does not flash scroll.
-    final seek = posDelta > 0.35;
+    final seek = VerovioTransportSync.shouldSnapSeek(posDelta);
     _schedulePosition(
       widget.positionBeats,
       snap: seek,
@@ -351,9 +432,9 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       );
     }
 
-    // Spinner only while WASM cold-starts. Warm toolkit → show WebView immediately
-    // (cached SVG or cream page) without a long blank spinner.
-    final showSpinner = !_runtime.isToolkitReady && !_bound;
+    // Spinner while WASM cold-starts or song switch clears the previous SVG.
+    final showSpinner =
+        (!_runtime.isToolkitReady && !_bound) || _switching;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
@@ -397,4 +478,18 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       ),
     );
   }
+}
+
+class _PendingScorePush {
+  const _PendingScorePush({
+    required this.score,
+    required this.hand,
+    this.musicXml,
+    this.force = false,
+  });
+
+  final SongScore score;
+  final Hand hand;
+  final String? musicXml;
+  final bool force;
 }

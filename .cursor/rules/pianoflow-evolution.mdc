@@ -1,0 +1,40 @@
+---
+description: PianoFlow 无限进化北极星——谱面准确性优先、接近 Flowkey 体验、命令行可见错误、安全进化循环
+alwaysApply: true
+---
+
+# PianoFlow 无限进化
+
+冲突时优先级：**谱面准确性 > 识别/跟弹体验 ≈ Flowkey > 可观测性 > 其它功能**。
+
+## 谱面准确性（最高）
+
+- 正式曲（`scoreKind: formal`）必须是已校对 / 教材级 MusicXML；**禁止**把未校对 OMR 草稿标成正式精确谱。
+- PDF 为唯一源时：走 **OMR → 人工校对 → MusicXML 入库**；未校对入库只能标 `omrDraft`（UI：「OMR草稿」）。
+- 自动识谱不可能 100%；目标是持续缩小与 PDF/标准谱差距，并诚实标注质量档。
+- **正式谱禁止 MIDI→MusicXML** 冒充精确谱。
+
+## 体验（接近 Flowkey）
+
+- 练习页：瀑布 + 88 键 + 五线谱跟弹一体；跟弹稳、谱可读、节奏不拖。
+- 五线谱：不空谱、音符大小全局一致、游标不越来越慢、谱区高度可读。
+- 打开练习页 / App **不幽灵出声**（设备预热须静音零 PCM，勿用可听 sample 暖机）。
+- UI 文案：简体中文。开发命令：Windows PowerShell。
+
+## 错误可观测
+
+- 失败与关键告警必须在命令行可见，前缀 `[PianoFlow/模块]`（`print` + `debugPrint`），不要只留 UI `statusHint`。
+
+## 进化循环（每轮）
+
+1. 对照北极星找**当前最大可修差距**（读代码/docs，以证据为准）
+2. 只改这一处（或紧密相关的最小集）→ 本地验证（`flutter analyze` / 相关测试/脚本）
+3. 追加 `docs/进化日志.md`（时间、改动、剩余差距）
+4. **禁止**本轮 `git commit` / `push` / `amend`（除非用户另有明确指令）
+
+## 禁止的危险操作
+
+- force push、改 git config、跳过 hooks、提交密钥/凭证
+- 删除用户数据或不可恢复的大范围删文件
+- 长时间挂起 `flutter run` GUI 等待
+- 把 OMR 草稿标成 `formal` / 「正式谱」

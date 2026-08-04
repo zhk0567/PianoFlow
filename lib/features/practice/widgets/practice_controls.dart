@@ -49,6 +49,7 @@ class PracticeControls extends StatelessWidget {
             children: [
               IconButton.filled(
                 onPressed: onPlay,
+                tooltip: snap.isPlaying ? '暂停' : '播放',
                 style: IconButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.black,
@@ -115,9 +116,21 @@ class PracticeControls extends StatelessWidget {
               SegmentedButton<Hand>(
                 style: segmentStyle,
                 segments: const [
-                  ButtonSegment(value: Hand.left, label: Text('左')),
-                  ButtonSegment(value: Hand.right, label: Text('右')),
-                  ButtonSegment(value: Hand.both, label: Text('双')),
+                  ButtonSegment(
+                    value: Hand.left,
+                    label: Text('左'),
+                    tooltip: '只练左手',
+                  ),
+                  ButtonSegment(
+                    value: Hand.right,
+                    label: Text('右'),
+                    tooltip: '只练右手',
+                  ),
+                  ButtonSegment(
+                    value: Hand.both,
+                    label: Text('双'),
+                    tooltip: '双手',
+                  ),
                 ],
                 selected: {s.hand},
                 onSelectionChanged: (v) =>

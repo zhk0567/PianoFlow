@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../shared/piano_flow_log.dart';
+
 class SongPracticeStats {
   const SongPracticeStats({
     this.sessions = 0,
@@ -82,27 +84,36 @@ class PracticeStatsController extends Notifier<PracticeStatsState> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    if (raw == null) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw == null) {
+        state = const PracticeStatsState(ready: true);
+        return;
+      }
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      final bySong = <String, SongPracticeStats>{};
+      for (final e in map.entries) {
+        bySong[e.key] =
+            SongPracticeStats.fromJson(e.value as Map<String, dynamic>);
+      }
+      state = PracticeStatsState(bySong: bySong, ready: true);
+    } catch (e, st) {
+      pianoFlowLog('Practice', 'stats load failed: $e\n$st');
       state = const PracticeStatsState(ready: true);
-      return;
     }
-    final map = jsonDecode(raw) as Map<String, dynamic>;
-    final bySong = <String, SongPracticeStats>{};
-    for (final e in map.entries) {
-      bySong[e.key] =
-          SongPracticeStats.fromJson(e.value as Map<String, dynamic>);
-    }
-    state = PracticeStatsState(bySong: bySong, ready: true);
   }
 
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    final map = {
-      for (final e in state.bySong.entries) e.key: e.value.toJson(),
-    };
-    await prefs.setString(_key, jsonEncode(map));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final map = {
+        for (final e in state.bySong.entries) e.key: e.value.toJson(),
+      };
+      await prefs.setString(_key, jsonEncode(map));
+    } catch (e, st) {
+      pianoFlowLog('Practice', 'stats persist failed: $e\n$st');
+    }
   }
 
   Future<void> recordSession({

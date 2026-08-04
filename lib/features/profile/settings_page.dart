@@ -25,7 +25,7 @@ class SettingsPage extends ConsumerWidget {
               subtitle: Text(
                 '互动练琴 App · Windows / Android\n'
                 '跟弹请用麦克风弹真琴（屏幕琴键仅高亮，不可点击发声）\n'
-                '曲谱为公有领域占位内容',
+                '曲库含正式校对谱与 OMR 草稿；草稿未逐音校对，勿当教材',
               ),
             ),
           ),

@@ -4,10 +4,10 @@ part of 'score_audio_player.dart';
 
 /// Zero-PCM one-shot for audio-device warmup (never audible).
 Uint8List _renderSilentWav({double duration = 0.05}) {
-  final n = math.max(1, (ScoreAudioPlayer._sampleRate * duration).round());
-  final data = ByteData(44 + n * 2);
-  _writeWavHeader(data, n);
-  return data.buffer.asUint8List();
+  return SilentWarmWav.render(
+    sampleRate: ScoreAudioPlayer._sampleRate,
+    durationSeconds: duration,
+  );
 }
 
 Uint8List _renderClickWav({required bool accent}) {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/models/song.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../keyboard_geometry.dart';
+import '../practice_constants.dart';
 
 class FallingNotesLane extends StatelessWidget {
   const FallingNotesLane({
@@ -28,8 +29,11 @@ class FallingNotesLane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Round only the top — bottom meets the keyboard hit line flush (Flowkey).
     return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadii.md),
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(AppRadii.md),
+      ),
       child: ColoredBox(
         color: AppColors.surface,
         child: CustomPaint(
@@ -73,15 +77,16 @@ class _FallingNotesPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final hitY = size.height - 3.0;
+    // Hit line at the lane bottom so onsets meet the keyboard top edge.
+    final hitY = size.height - PracticeConstants.fallingHitLineInset;
 
-    // Soft vertical key guides
+    // Soft vertical key guides — align with white-key seams on the piano.
     final guidePaint = Paint()
       ..color = AppColors.border.withValues(alpha: 0.28)
       ..strokeWidth = 1;
     for (var i = 1; i < geometry.whiteKeyCount; i++) {
       final x = geometry.whiteKeyLeft(i);
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), guidePaint);
+      canvas.drawLine(Offset(x, 0), Offset(x, hitY), guidePaint);
     }
 
     if (loopEnabled) {
@@ -106,11 +111,12 @@ class _FallingNotesPainter extends CustomPainter {
       if (cx == null) continue;
 
       final barH = (n.duration * pixelsPerBeat).clamp(14.0, size.height * 2);
+      // Onset (note start) sits on the hit line when positionBeats == n.start.
       final bottom = hitY - (n.start - positionBeats) * pixelsPerBeat;
       final top = bottom - barH;
       if (bottom < -8 || top > size.height + 8) continue;
 
-      final barW = geometry.noteBarWidth(n.midi) * 0.92;
+      final barW = geometry.noteBarWidth(n.midi);
       final rect = Rect.fromCenter(
         center: Offset(cx, (top + bottom) / 2),
         width: barW,
@@ -119,8 +125,9 @@ class _FallingNotesPainter extends CustomPainter {
       final radius = Radius.circular((barW * 0.45).clamp(3.0, 14.0));
       final rrect = RRect.fromRectAndRadius(rect, radius);
 
-      final waiting =
-          waitingFor.contains(n.midi) && (n.start - positionBeats).abs() < 0.08;
+      final waiting = waitingFor.contains(n.midi) &&
+          (n.start - positionBeats) <= PracticeConstants.waitEarlyHitBeats &&
+          (n.start - positionBeats) >= -0.12;
       final base = n.hand == Hand.left ? AppColors.leftHand : AppColors.rightHand;
       final c0 = waiting ? AppColors.accent : base;
       final c1 = Color.lerp(c0, Colors.white, 0.22)!;
@@ -163,7 +170,7 @@ class _FallingNotesPainter extends CustomPainter {
       );
     }
 
-    // Hit line with soft glow
+    // Hit line with soft glow — flush with keyboard.
     canvas.drawLine(
       Offset(0, hitY),
       Offset(size.width, hitY),

@@ -3,7 +3,7 @@ REM ASCII-only + CRLF required. LF-only makes cmd strip the first char of each l
 cd /d "%~dp0"
 title PianoFlow Console
 echo PianoFlow console launcher
-echo Default: flutter run (Dart logs including [PianoFlow/Verovio]). Modes: run ^| auto ^| exe ^| build
+echo Default: flutter run (Dart logs [PianoFlow/...). Modes: run ^| auto ^| exe ^| build
 echo.
 REM Default MODE=run so Verovio/Dart logs always show.
 set MODE=%~1

@@ -2,13 +2,21 @@ import '../../shared/models/song.dart';
 
 /// Shared practice-page constants (avoid scattered magic numbers).
 abstract final class PracticeConstants {
-  /// Speaker guide → mic feedback suppress window.
+  /// Speaker guide → mic feedback suppress window (full self-play / loud demo).
   /// Samples ring ~1s+ after the 12× gain boost; 700ms was far too short.
   static const echoSuppress = Duration(milliseconds: 1700);
 
+  /// Soft practice guide cue → mic bleed window (shorter so user can re-hit
+  /// the same pitch after a quiet gap; see [GuideRetriggerGate]).
+  static const echoSuppressGuide = Duration(milliseconds: 480);
+
+  /// Pitch-frame quiet streak after guide before [GuideRetriggerGate] opens
+  /// (~40ms hop × 2 ≈ 80ms). One empty frame is often estimator flicker.
+  static const guideQuietFramesNeeded = 2;
+
   /// Soft cue level for guide tones while the mic is live (practice mode).
   /// Auto-play still uses full level (mic is off).
-  static const guideVolumeWithMic = 0.32;
+  static const guideVolumeWithMic = 0.28;
 
   /// Practice engine ticker (~60 Hz).
   static const tickPeriod = Duration(milliseconds: 16);
@@ -89,30 +97,36 @@ abstract final class PracticeConstants {
 
   /// Compact layout breakpoint (keyboard height).
   static const compactScreenHeight = 700.0;
-  static const keyboardHCompact = 118.0;
-  static const keyboardHComfort = 140.0;
+  static const keyboardHCompact = 110.0;
+  static const keyboardHComfort = 128.0;
 
   /// Vertical flex split in the practice stage (falling notes vs staff).
   /// Staff gets the larger share so grand-staff notation stays Flowkey-readable;
   /// waterfall keeps a floor via [fallingMinHeight*] so notes still approach.
-  static const fallingNotesFlex = 3;
+  static const fallingNotesFlex = 2;
   static const staffFlex = 5;
 
-  /// Minimum staff lane height (px). Desktop comfort targets a readable grand staff;
-  /// compact still avoids the old “thin cream strip” look.
-  static const staffMinHeightCompact = 168.0;
-  static const staffMinHeightComfort = 288.0;
+  /// Minimum staff lane height (px). Must fit Verovio grand staff at [verovioScale]
+  /// (~316–340 CSS px); shorter lanes + vertical centering clipped the clef
+  /// under the keyboard (looked like occlusion).
+  static const staffMinHeightCompact = 200.0;
+  static const staffMinHeightComfort = 340.0;
 
   /// Soft cap so ultra-tall windows still leave room for the waterfall.
-  static const staffMaxHeightCompact = 220.0;
-  static const staffMaxHeightComfort = 380.0;
+  static const staffMaxHeightCompact = 260.0;
+  static const staffMaxHeightComfort = 440.0;
 
   /// Minimum falling-notes lane height (px) so the waterfall is not crushed.
-  static const fallingMinHeightCompact = 88.0;
-  static const fallingMinHeightComfort = 128.0;
+  static const fallingMinHeightCompact = 80.0;
+  static const fallingMinHeightComfort = 110.0;
 
   /// Gaps between falling / keyboard / staff in the stage column.
+  /// Falling↔keyboard is 0 so the hit line meets the key tops (Flowkey).
   static const stageLaneGap = 4.0;
+  static const stageFallingKeyboardGap = 0.0;
+
+  /// Hit line sits this many px above the falling-lane bottom (≈ half stroke).
+  static const fallingHitLineInset = 1.0;
 
   /// Split usable stage height (excluding keyboard + gaps) between lanes.
   static ({double falling, double staff}) splitStageLanes({
@@ -129,16 +143,35 @@ abstract final class PracticeConstants {
     final totalFlex = fallingNotesFlex + staffFlex;
     var staffH = usable * staffFlex / totalFlex;
 
-    // When there is room, enforce a readable staff floor without starving waterfall.
+    // Prefer a readable staff floor when there is room.
     if (usable >= minStaff + minFalling) {
       final upper = (usable - minFalling).clamp(minStaff, maxStaff);
       staffH = staffH.clamp(minStaff, upper);
+    } else {
+      // Cramped window: still keep most height for the grand staff so the bass
+      // staff is not almost entirely clipped ("一边遮挡完了").
+      final staffFloor = (usable * 0.62).clamp(minFalling, usable - minFalling);
+      staffH = staffH.clamp(staffFloor, usable - minFalling * 0.5);
     }
     return (falling: usable - staffH, staff: staffH);
   }
 
-  /// Falling notes vertical scale.
+  /// Falling notes vertical scale (fallback when lane height unknown).
   static const pixelsPerBeat = 80.0;
+
+  /// How many beats of waterfall should fit above the hit line.
+  static const fallingLookAheadBeats = 3.25;
+
+  static const pixelsPerBeatMin = 52.0;
+  static const pixelsPerBeatMax = 110.0;
+
+  /// Scale px/beat so compact/short lanes still show approach distance.
+  static double pixelsPerBeatForHeight(double fallingHeight) {
+    final usable =
+        (fallingHeight - fallingHitLineInset).clamp(1.0, double.infinity);
+    final ppb = usable / fallingLookAheadBeats;
+    return ppb.clamp(pixelsPerBeatMin, pixelsPerBeatMax);
+  }
 
   /// Standard 88-key layout: A0..C8 (MIDI 21–108).
   static const startMidi = 21;
@@ -149,7 +182,7 @@ abstract final class PracticeConstants {
   /// Verovio engraver scale (percent). Outer SVG viewBox units map 1:1 to CSS
   /// px in the viewer — do not stretch-to-lane. Tuned so a piano grand staff
   /// is ~300–340 CSS px tall and fits [staffMinHeightComfort]–[staffMaxHeightComfort]
-  /// with padding (taller scores clip via the WebView wrap).
+  /// when top-aligned (taller scores clip at the bottom via the WebView wrap).
   static const verovioScale = 60;
 
   /// Pre-roll before the first note when starting/seeking near beat 0.
@@ -166,4 +199,20 @@ abstract final class PracticeConstants {
     final lead = playbackLeadInBeats;
     return lead > 0 ? -lead : 0.0;
   }
+
+  // —— Wait-mode (跟弹) timing — Flowkey-style ————————————————
+
+  /// Accept correct pitches this many beats *before* the onset while notes
+  /// are still falling toward the hit line (early hit window).
+  static const waitEarlyHitBeats = 0.45;
+
+  /// Freeze playhead when within this many beats of the chord onset.
+  static const waitFreezeSlackBeats = 0.02;
+
+  /// Notes whose onsets are within this window count as one chord.
+  static const waitChordClusterBeats = 0.02;
+
+  /// After a correct chord: nudge past the onset by this amount so transport
+  /// free-advances through gaps (do **not** teleport to the next note start).
+  static const waitAdvanceEpsilonBeats = 0.04;
 }

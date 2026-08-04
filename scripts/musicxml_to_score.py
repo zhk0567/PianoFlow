@@ -30,11 +30,13 @@ MIDI_MIN, MIDI_MAX = 21, 108
 STEP_PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 
 # Default catalog metadata when --update-catalog and id is known.
+# Note: several keys below are *presets not currently in catalog.json*
+# (bach_anh*, burg_op100_2, clementi_op36_1). --all uses catalog ids only.
 CATALOG_META: dict[str, dict] = {
     "bach_anh114": {
         "title": "G大调小步舞曲（BWV Anh.114）",
         "artist": "巴赫",
-        "genre": "古典",
+        "genre": "Classical",
         "difficulty": 2,
         "description": "《安娜·玛格达勒娜笔记本》正式教材谱，MusicXML 导入。",
         "scoreKind": "formal",
@@ -42,7 +44,7 @@ CATALOG_META: dict[str, dict] = {
     "bach_anh115": {
         "title": "G小调小步舞曲（BWV Anh.115）",
         "artist": "巴赫",
-        "genre": "古典",
+        "genre": "Classical",
         "difficulty": 2,
         "description": "《安娜·玛格达勒娜笔记本》正式教材谱，MusicXML 导入。",
         "scoreKind": "formal",
@@ -50,7 +52,7 @@ CATALOG_META: dict[str, dict] = {
     "bach_anh126": {
         "title": "穆塞特（BWV Anh.126）",
         "artist": "巴赫",
-        "genre": "古典",
+        "genre": "Classical",
         "difficulty": 2,
         "description": "《安娜·玛格达勒娜笔记本》穆塞特，MusicXML 导入。",
         "scoreKind": "formal",
@@ -58,7 +60,7 @@ CATALOG_META: dict[str, dict] = {
     "burg_op100_2": {
         "title": "阿拉伯风格曲（Op.100 No.2）",
         "artist": "布格缪勒",
-        "genre": "古典",
+        "genre": "Classical",
         "difficulty": 3,
         "description": "《练习曲25首》Op.100 No.2，MusicXML 导入。",
         "scoreKind": "formal",
@@ -66,7 +68,7 @@ CATALOG_META: dict[str, dict] = {
     "clementi_op36_1": {
         "title": "小奏鸣曲 Op.36 No.1（第一乐章）",
         "artist": "克莱门蒂",
-        "genre": "古典",
+        "genre": "Classical",
         "difficulty": 3,
         "description": "Op.36 No.1 第一乐章，MusicXML 导入。",
         "scoreKind": "formal",
@@ -103,6 +105,18 @@ CATALOG_META: dict[str, dict] = {
 }
 
 BATCH_IDS = list(CATALOG_META.keys())
+
+
+def catalog_score_ids(catalog_path: Path = CATALOG) -> list[str]:
+    """Ids from catalog.json (source of truth for --all). Falls back to BATCH_IDS."""
+    if not catalog_path.is_file():
+        return list(BATCH_IDS)
+    data = json.loads(catalog_path.read_text(encoding="utf-8"))
+    ids = [str(s["id"]) for s in (data.get("songs") or []) if s.get("id")]
+    # Stable order; keep BATCH_IDS first for known formal presets when present.
+    preferred = [i for i in BATCH_IDS if i in ids]
+    rest = sorted(i for i in ids if i not in preferred)
+    return preferred + rest
 
 
 def local(tag: str) -> str:
@@ -371,6 +385,7 @@ def parse_musicxml(root: ET.Element) -> dict:
     return {
         "title": title,
         "bpm": bpm,
+        "tempoFromXml": bool(direction_tempo),
         "timeNum": time_num,
         "timeDen": time_den,
         "keySignature": key_sig,
@@ -415,9 +430,28 @@ def resolve_catalog_meta(
     *,
     parsed: dict,
     overrides: dict | None,
+    existing: dict | None = None,
 ) -> dict | None:
-    """Merge CATALOG_META + CLI overrides. Returns None if cannot form an entry."""
-    base = dict(CATALOG_META.get(score_id, {}))
+    """Merge existing catalog → CATALOG_META → CLI overrides.
+
+    Existing catalog wins over CATALOG_META defaults so re-running convert on
+    OMR drafts does not rewrite scoreKind to simplified / wipe descriptions.
+    """
+    base: dict = {}
+    if existing:
+        for k in (
+            "title",
+            "artist",
+            "genre",
+            "difficulty",
+            "description",
+            "scoreKind",
+            "bpm",
+        ):
+            if existing.get(k) is not None and existing.get(k) != "":
+                base[k] = existing[k]
+    for k, v in CATALOG_META.get(score_id, {}).items():
+        base.setdefault(k, v)
     ov = overrides or {}
     for k, v in ov.items():
         if v is not None and v != "":
@@ -425,19 +459,25 @@ def resolve_catalog_meta(
     title = base.get("title") or parsed.get("title") or score_id
     artist = base.get("artist") or "Unknown"
     if score_id not in CATALOG_META and not ov.get("title") and not base.get("title"):
-        # Allow import with parsed title; warn loudly.
         print(
             f"[catalog] no preset meta for {score_id}; "
             f"using title={title!r} artist={artist!r} (pass --title/--artist to customize)"
         )
+    kind = base.get("scoreKind") or "simplified"
+    kind_zh = {
+        "formal": "正式谱",
+        "omrDraft": "OMR草稿",
+        "simplified": "简编谱",
+    }.get(kind, kind)
+    default_desc = f"MusicXML 导入（{kind_zh}；{score_id}）。"
     return {
         "title": title,
         "artist": artist,
         "genre": base.get("genre") or "Classical",
         "difficulty": int(base.get("difficulty") or 3),
-        "description": base.get("description")
-        or f"Formal MusicXML import ({score_id}).",
-        "scoreKind": base.get("scoreKind") or "formal",
+        "description": base.get("description") or default_desc,
+        "scoreKind": kind,
+        "bpm": base.get("bpm"),
     }
 
 
@@ -458,6 +498,47 @@ def write_score(score_id: str, parsed: dict, title_override: str | None = None) 
     return out
 
 
+def _existing_catalog_entry(score_id: str) -> dict | None:
+    if not CATALOG.exists():
+        return None
+    data = json.loads(CATALOG.read_text(encoding="utf-8"))
+    for s in data.get("songs") or []:
+        if s.get("id") == score_id:
+            return s
+    return None
+
+
+def _apply_preserved_bpm(score_id: str, parsed: dict) -> None:
+    """Keep hand-tuned BPM when MusicXML has no <sound tempo> (common for OMR)."""
+    if parsed.get("tempoFromXml"):
+        return
+    existing = _existing_catalog_entry(score_id)
+    if not existing or existing.get("bpm") is None:
+        json_path = OUT_DIR / f"{score_id}.json"
+        if json_path.is_file():
+            try:
+                prev = json.loads(json_path.read_text(encoding="utf-8"))
+                if prev.get("bpm") is not None:
+                    old = int(prev["bpm"])
+                    if old != int(parsed["bpm"]):
+                        print(
+                            f"[{score_id}] preserving json bpm={old} "
+                            f"(MusicXML had no tempo; parser default={parsed['bpm']})"
+                        )
+                        parsed["bpm"] = old
+                return
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                return
+        return
+    old = int(existing["bpm"])
+    if old != int(parsed["bpm"]):
+        print(
+            f"[{score_id}] preserving catalog bpm={old} "
+            f"(MusicXML had no tempo; parser default={parsed['bpm']})"
+        )
+        parsed["bpm"] = old
+
+
 def update_catalog(
     score_id: str,
     parsed: dict,
@@ -465,19 +546,40 @@ def update_catalog(
     *,
     meta_overrides: dict | None = None,
 ) -> None:
-    meta = resolve_catalog_meta(score_id, parsed=parsed, overrides=meta_overrides)
+    existing = _existing_catalog_entry(score_id)
+    meta = resolve_catalog_meta(
+        score_id,
+        parsed=parsed,
+        overrides=meta_overrides,
+        existing=existing,
+    )
     if meta is None:
         print(f"[catalog] skip auto-update for {score_id}")
         return
     if not CATALOG.exists():
         raise FileNotFoundError(CATALOG)
 
+    kind = meta.get("scoreKind", "formal")
+    try:
+        from catalog_score_kind_guard import refuse_formal_import  # noqa: WPS433
+
+        refuse = refuse_formal_import(
+            source=json_path,
+            score_kind=str(kind),
+            score_id=score_id,
+        )
+        if refuse:
+            raise SystemExit(f"[catalog] {refuse}")
+    except ImportError:
+        pass
+
     data = json.loads(CATALOG.read_text(encoding="utf-8"))
     songs = data.get("songs", [])
     duration_beats = 0.0
     for n in parsed["notes"]:
         duration_beats = max(duration_beats, n["start"] + n["duration"])
-    duration_hint = max(8, int(round(duration_beats * 60 / max(parsed["bpm"], 1))))
+    bpm = int(parsed["bpm"])
+    duration_hint = max(8, int(round(duration_beats * 60 / max(bpm, 1))))
 
     entry = {
         "id": score_id,
@@ -485,11 +587,11 @@ def update_catalog(
         "artist": meta["artist"],
         "genre": meta["genre"],
         "difficulty": meta["difficulty"],
-        "bpm": parsed["bpm"],
+        "bpm": bpm,
         "asset": f"assets/scores/{score_id}.json",
         "description": meta["description"],
         "durationHint": duration_hint,
-        "scoreKind": meta.get("scoreKind", "formal"),
+        "scoreKind": kind,
     }
 
     replaced = False
@@ -502,7 +604,7 @@ def update_catalog(
         songs.append(entry)
     data["songs"] = songs
     CATALOG.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"[catalog] {'updated' if replaced else 'added'} {score_id}")
+    print(f"[catalog] {'updated' if replaced else 'added'} {score_id} scoreKind={kind}")
 
 
 def convert_one(
@@ -523,6 +625,7 @@ def convert_one(
     if not parsed["notes"]:
         print(f"[{score_id}] ERROR: no notes parsed", file=sys.stderr)
         return 1
+    _apply_preserved_bpm(score_id, parsed)
     title_ov = (meta_overrides or {}).get("title")
     out = write_score(score_id, parsed, title_override=title_ov)
     print(
@@ -546,7 +649,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="MusicXML → PianoFlow score JSON")
     ap.add_argument("--id", help="Score id (e.g. pachelbel_canon_d)")
     ap.add_argument("--input", type=Path, help="Explicit MusicXML/MXL path")
-    ap.add_argument("--all", action="store_true", help="Convert all batch ids")
+    ap.add_argument(
+        "--all",
+        action="store_true",
+        help="Convert every id in assets/scores/catalog.json (not only CATALOG_META)",
+    )
     ap.add_argument(
         "--update-catalog",
         action="store_true",
@@ -554,14 +661,23 @@ def main() -> int:
     )
     ap.add_argument("--title", help="Catalog title override")
     ap.add_argument("--artist", help="Catalog artist override")
-    ap.add_argument("--genre", help="Catalog genre override")
-    ap.add_argument("--difficulty", type=int, help="Catalog difficulty 1-5")
+    ap.add_argument(
+        "--genre",
+        choices=("Classical", "Anime", "Pop", "Game"),
+        help="Catalog genre override (UI maps to 古典/动画/流行/游戏)",
+    )
+    ap.add_argument(
+        "--difficulty",
+        type=int,
+        choices=(1, 2, 3, 4, 5),
+        help="Catalog difficulty 1-5 (5=极难)",
+    )
     ap.add_argument("--description", help="Catalog description override")
     ap.add_argument(
         "--score-kind",
         dest="score_kind",
-        choices=("formal", "simplified"),
-        help="Catalog scoreKind (default formal for new imports)",
+        choices=("formal", "simplified", "omrDraft"),
+        help="Catalog scoreKind (use omrDraft for unproofread PDF→OMR imports)",
     )
     ap.add_argument(
         "--no-sync-assets",
@@ -571,7 +687,8 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.all:
-        ids = BATCH_IDS
+        ids = catalog_score_ids()
+        print(f"[batch] --all catalog ids={len(ids)}")
     elif args.id:
         ids = [args.id]
     else:

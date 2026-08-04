@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/models/song.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ui_bits.dart';
+import '../library/library_catalog_filter.dart';
 import '../library/library_repository.dart';
 import '../library/song_card.dart';
 import '../practice/verovio_runtime.dart';
@@ -24,6 +25,8 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
   int? _difficulty;
   /// null = 全部风格
   String? _genre;
+  /// null = 全部谱种
+  ScoreKind? _scoreKind;
 
   @override
   void initState() {
@@ -34,15 +37,13 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
   }
 
   List<SongSummary> _filter(List<SongSummary> songs) {
-    final q = _query.toLowerCase();
-    return songs.where((s) {
-      if (_difficulty != null && s.difficulty != _difficulty) return false;
-      if (_genre != null && s.genre != _genre) return false;
-      if (q.isEmpty) return true;
-      return s.title.toLowerCase().contains(q) ||
-          s.artist.toLowerCase().contains(q) ||
-          s.genre.toLowerCase().contains(q);
-    }).toList();
+    return LibraryCatalogFilter.apply(
+      songs,
+      query: _query,
+      difficulty: _difficulty,
+      genre: _genre,
+      scoreKind: _scoreKind,
+    );
   }
 
   @override
@@ -53,7 +54,10 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
     return catalog.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(
-        child: Text('$e', style: AppTheme.body(color: AppColors.textSecondary)),
+        child: Text(
+          '曲库加载失败（详情见控制台 [PianoFlow/Library]）',
+          style: AppTheme.body(color: AppColors.textSecondary),
+        ),
       ),
       data: (songs) {
         final genres = songs.map((s) => s.genre).toSet().toList()..sort();
@@ -75,7 +79,7 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
                     Text('曲库', style: AppTheme.display(fontSize: wide ? 40 : 32)),
                     const SizedBox(height: 6),
                     Text(
-                      '挑一张，直接开练',
+                      '按谱种、难度或风格挑一张，直接开练',
                       style: AppTheme.body(
                         fontSize: 14,
                         color: AppColors.textSecondary,
@@ -85,7 +89,7 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
                     TextField(
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.search_rounded),
-                        hintText: '搜索曲名、作曲家或风格',
+                        hintText: '搜索曲名、作曲家、风格或谱种',
                         filled: true,
                         fillColor: AppColors.surface,
                       ),
@@ -93,12 +97,25 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
                     ),
                     const SizedBox(height: 16),
                     _FilterStrip(
+                      songs: songs,
+                      scoreKind: _scoreKind,
                       difficulty: _difficulty,
                       genre: _genre,
                       genres: genres,
+                      onScoreKind: (v) => setState(() => _scoreKind = v),
                       onDifficulty: (v) => setState(() => _difficulty = v),
                       onGenre: (v) => setState(() => _genre = v),
                     ),
+                    if (_scoreKind == ScoreKind.omrDraft) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        SongSummary.omrHonestyNotice,
+                        style: AppTheme.body(
+                          fontSize: 12,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     Text(
                       filtered.isEmpty
@@ -131,29 +148,42 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
 
 class _FilterStrip extends StatelessWidget {
   const _FilterStrip({
+    required this.songs,
+    required this.scoreKind,
     required this.difficulty,
     required this.genre,
     required this.genres,
+    required this.onScoreKind,
     required this.onDifficulty,
     required this.onGenre,
   });
 
+  final List<SongSummary> songs;
+  final ScoreKind? scoreKind;
   final int? difficulty;
   final String? genre;
   final List<String> genres;
+  final ValueChanged<ScoreKind?> onScoreKind;
   final ValueChanged<int?> onDifficulty;
   final ValueChanged<String?> onGenre;
 
-  static const _diffLabels = <(int?, String)>[
-    (null, '全部难度'),
-    (1, '入门'),
-    (2, '初级'),
-    (3, '中级'),
-    (4, '高级'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final kindChips = LibraryCatalogFilter.scoreKindChipsFor(songs);
+    final diffChips = LibraryCatalogFilter.difficultyChipsFor(songs);
+    // Drop selection if that kind/difficulty vanished from the catalog.
+    if (scoreKind != null &&
+        !kindChips.any((c) => c.$1 == scoreKind)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        onScoreKind(null);
+      });
+    }
+    if (difficulty != null &&
+        !diffChips.any((c) => c.$1 == difficulty)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        onDifficulty(null);
+      });
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -162,7 +192,24 @@ class _FilterStrip extends StatelessWidget {
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
-              for (final (value, label) in _diffLabels) ...[
+              for (final (value, label) in kindChips) ...[
+                _ShelfChip(
+                  label: label,
+                  selected: scoreKind == value,
+                  onTap: () => onScoreKind(value),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 36,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final (value, label) in diffChips) ...[
                 _ShelfChip(
                   label: label,
                   selected: difficulty == value,
@@ -188,7 +235,7 @@ class _FilterStrip extends StatelessWidget {
                 const SizedBox(width: 8),
                 for (final g in genres) ...[
                   _ShelfChip(
-                    label: g,
+                    label: LibraryCatalogFilter.genreLabelZh(g),
                     selected: genre == g,
                     onTap: () => onGenre(g),
                   ),

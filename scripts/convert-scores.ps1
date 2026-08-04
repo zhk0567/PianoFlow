@@ -1,4 +1,5 @@
 # Convert MusicXML in third_party/scores_musicxml → assets/scores/*.json
+# Ids come from assets/scores/catalog.json (no hardcoded list).
 # Usage:
 #   Set-Location F:\commercial\Piano
 #   .\scripts\convert-scores.ps1
@@ -32,26 +33,17 @@ if (-not $py) {
 $Src = Join-Path $RepoRoot "third_party\scores_musicxml"
 New-Item -ItemType Directory -Force -Path $Src | Out-Null
 
-$ids = @(
-  "fur_elise_woo59",
-  "pachelbel_canon_d",
-  # Needs third_party MusicXML from build_megalovania.py (PDF-matched; never MIDI).
-  "toby_fox_megalovania",
-  # OMR drafts from user PDFs (Audiveris); not proofread — practice-ready only.
-  "radwimps_suzume",
-  "ru_yuan",
-  "christina_perri_a_thousand_years",
-  "haruhikage",
-  "rimsky_flight_of_the_bumblebee",
-  "beethoven_moonlight_sonata",
-  "jay_chou_qing_tian",
-  "clayderman_reve_damour",
-  "sawano_call_of_silence",
-  "xiang_yun_duan",
-  "hisaishi_castle_in_the_sky",
-  "jue_bie_shu"
-)
-if ($Id) { $ids = @($Id) }
+if ($Id) {
+  $ids = @($Id)
+} else {
+  $ids = @(
+    & $py -c "import json; from pathlib import Path; d=json.loads(Path('assets/scores/catalog.json').read_text(encoding='utf-8')); print('\n'.join(s['id'] for s in d.get('songs') or [] if s.get('id')))"
+  )
+  if ($ids.Count -eq 0) {
+    Write-Error "No song ids in assets/scores/catalog.json"
+  }
+  Write-Host ("Catalog ids: {0}" -f $ids.Count)
+}
 
 $missing = @()
 foreach ($sid in $ids) {
@@ -71,12 +63,30 @@ if ($missing.Count -gt 0) {
   Write-Host ""
 }
 
-$argsList = @(".\scripts\musicxml_to_score.py", "--update-catalog")
+$failed = 0
 if ($Id) {
-  $argsList += @("--id", $Id)
+  & $py ".\scripts\musicxml_to_score.py" "--update-catalog" "--id" $Id
+  if ($LASTEXITCODE -ne 0) { $failed = 1 }
 } else {
-  $argsList += "--all"
+  foreach ($sid in $ids) {
+    if ($missing -contains $sid) {
+      Write-Host "Skip missing MusicXML: $sid" -ForegroundColor Yellow
+      continue
+    }
+    Write-Host "---- convert $sid ----" -ForegroundColor Cyan
+    & $py ".\scripts\musicxml_to_score.py" "--update-catalog" "--id" $sid
+    if ($LASTEXITCODE -ne 0) { $failed = 1 }
+  }
 }
 
-& $py @argsList
+if ($failed -ne 0) { exit $failed }
+
+Write-Host "Running catalog scoreKind guard..."
+& $py ".\scripts\catalog_score_kind_guard.py"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "Running catalog integrity guard..."
+& $py ".\scripts\catalog_integrity_guard.py"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "Running score_kind_policy JSON↔Dart check..."
+& $py ".\scripts\score_kind_policy_sync.py" "--check"
 exit $LASTEXITCODE

@@ -70,8 +70,33 @@ Set-Location F:\commercial\Piano
 2. 同步 → `assets\scores\musicxml\{id}.musicxml`
 3. 生成 → `assets\scores\{id}.json`
 4. 更新 → `assets\scores\catalog.json`
+5. 跑护栏：`catalog_score_kind_guard.py` + `catalog_integrity_guard.py`（失败则导入中止）
 
 然后 **完全重启 App** 即可看到新曲。
+
+---
+
+## 入库护栏（每次导入 / 批量转换后必过）
+
+```powershell
+Set-Location F:\commercial\Piano
+
+# scoreKind：OMR provenance 不得标 formal
+python .\scripts\catalog_score_kind_guard.py
+
+# catalog ↔ JSON bpm/id、asset 与 packaged MusicXML 必须存在
+# （含 packaged ↔ third_party MusicXML sha256 一致）
+python .\scripts\catalog_integrity_guard.py
+
+# score_kind_policy.json ↔ Dart omrProvenanceIds 不得漂移
+python .\scripts\score_kind_policy_sync.py --check
+```
+
+`convert-scores.ps1` / `import-score.ps1` / `omr-finish-import.ps1` 末尾会自动跑上述三项。
+`convert-scores.ps1`（无 `-Id`）从 `catalog.json` 读全部 id 并逐首转换；缺 MusicXML 的跳过并提示。  
+`python .\scripts\musicxml_to_score.py --all` 同样以 catalog 为准（含 OMR）。  
+catalog `genre` 请用英文码：`Classical` / `Anime` / `Pop` / `Game`（UI 显示古典/动画/流行/游戏；护栏拒绝未知码）。  
+重跑 `musicxml_to_score.py --update-catalog` 时：已有 catalog 的 `scoreKind`/描述会保留；MusicXML **无** `<sound tempo>` 时会保留已有 BPM（避免 OMR 默认 100 覆盖手调速度）。
 
 ---
 
@@ -96,7 +121,18 @@ Set-Location F:\commercial\Piano
 3. **在记谱软件中对照 PDF 改到满意**
 4. 再执行 A 档 `import-score.ps1`
 
-未校对的 OMR 结果 **不要**标为 formal 上架。
+未校对的 OMR 结果 **不要**标为 `formal` 上架。若需先入库练手，catalog 标 `scoreKind: omrDraft`（UI：「OMR草稿」），校对通过后再改为 `formal`。
+
+**审计（不升 formal）：**
+
+```powershell
+python .\scripts\omr_audit_score.py --id hisaishi_castle_in_the_sky
+python .\scripts\omr_audit_score.py --all-omr
+# CI / 导入门禁：JSON ≠ MusicXML 重解析则 exit 1（仍不会升 formal）
+python .\scripts\omr_audit_score.py --all-omr --fail-on-drift
+```
+
+报告写在 `docs\omr_audit\`。脚本**永远不会**把曲目标成 formal。`omr-finish-import.ps1` 也固定导入为 `omrDraft`，并带 `--fail-on-drift`。
 
 ---
 
@@ -107,6 +143,7 @@ Set-Location F:\commercial\Piano
 - [ ] **8vb / `clef-octave-change`：** MusicXML `<pitch>` 必须是**发声音高**（concert）。Verovio 用 octave-change 只负责把符头移到记谱位置；`musicxml_to_score.py` **不再**对 JSON 套用 octave-change。否则会出现「谱面看起来是 X、音频/琴键是 X±12」。
 - [ ] `catalog.json` 有条目，`scoreKind: formal`
 - [ ] `assets/scores/musicxml/` 与 `third_party/scores_musicxml/` 同 id 对齐
+- [ ] `python .\scripts\catalog_score_kind_guard.py`、`catalog_integrity_guard.py`、`score_kind_policy_sync.py --check` 均为 OK
 - [ ] App 完全重启后能打开；自动播放时橙色播放线下的符头与听到的键/下落条一致
 
 更多路径约定见 `docs\曲谱来源.md`。

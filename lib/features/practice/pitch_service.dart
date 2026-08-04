@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
 
+import '../../shared/piano_flow_log.dart';
 import 'basic_pitch.dart';
 import 'pitch_yin.dart';
 import 'swift_f0.dart';
@@ -48,14 +48,15 @@ class PitchService {
   PitchService();
 
   static const sampleRate = 44100;
-  /// ~0.4s capture — padded to Basic Pitch's 2s input (zeros on the left).
-  /// Old 2.0s window made first recognition feel unusable.
-  static const _window = 17640;
-  /// ~50ms hop for snappier updates.
-  static const _hop = 2205;
+  /// ~0.32s capture — padded to Basic Pitch's 2s input (zeros on the left).
+  /// Shorter than 0.4s to cut end-to-end wait latency; still enough for BP.
+  static const _window = 14112;
+  /// ~40ms hop for snappier updates.
+  static const _hop = 1764;
 
   static const rmsGate = 0.005;
-  static const _lockFrames = 2;
+  /// 1 frame lock: with ~40ms hops, 2-frame lock added ~80ms+ before noteOn.
+  static const _lockFrames = 1;
   static const _releaseFrames = 2;
 
   final _recorder = AudioRecorder();
@@ -70,6 +71,8 @@ class PitchService {
   SwiftF0Estimator? _swift;
   PitchEngineKind _engine = PitchEngineKind.yin;
   bool _inferBusy = false;
+  /// When infer is busy, keep only the newest PCM window (drop stale hops).
+  Uint8List? _latestWhileBusy;
 
   final Map<int, int> _hitCount = {};
   final Map<int, int> _missCount = {};
@@ -80,6 +83,7 @@ class PitchService {
   bool _running = false;
   String? lastError;
   int _chunkCount = 0;
+  int _droppedStale = 0;
 
   Stream<int> get noteOnStream => _noteController.stream;
   Stream<PitchFrame> get frameStream => _frameController.stream;
@@ -97,6 +101,8 @@ class PitchService {
     _locked = {};
     _emitted.clear();
     _inferBusy = false;
+    _latestWhileBusy = null;
+    _droppedStale = 0;
 
     await _initEngine();
 
@@ -104,6 +110,7 @@ class PitchService {
       final ok = await _recorder.hasPermission();
       if (!ok) {
         lastError = '没有麦克风权限，请在系统设置中允许 PianoFlow 使用麦克风。';
+        pianoFlowLog('Pitch', lastError!);
         return;
       }
 
@@ -119,18 +126,18 @@ class PitchService {
       _sub = stream.listen(
         _onPcm,
         onError: (Object e) {
-          lastError = e.toString();
-          debugPrint('Pitch stream error: $e');
+          pianoFlowLog('Pitch', 'stream error: $e');
+          lastError = '麦克风异常（详情见控制台 [PianoFlow/Pitch]）';
         },
         onDone: () {
-          debugPrint('Pitch stream done');
+          pianoFlowLog('Pitch', 'stream done');
           _running = false;
         },
       );
     } catch (e) {
-      lastError = e.toString();
+      pianoFlowLog('Pitch', 'start failed: $e');
+      lastError = '麦克风启动失败（详情见控制台 [PianoFlow/Pitch]）';
       _running = false;
-      debugPrint('Pitch start failed: $e');
     }
   }
 
@@ -145,11 +152,12 @@ class PitchService {
       if (await basicPitchAssetExists()) {
         _basic = await BasicPitchEstimator.create();
         _engine = PitchEngineKind.basicPitch;
-        debugPrint('Pitch engine: Basic Pitch (polyphonic)');
+        pianoFlowLog('Pitch', 'engine: Basic Pitch (polyphonic)');
         return;
       }
-    } catch (e) {
-      debugPrint('Basic Pitch init failed: $e');
+      pianoFlowLog('Pitch', 'Basic Pitch skipped (asset absent)');
+    } catch (e, st) {
+      pianoFlowLog('Pitch', 'Basic Pitch init failed: $e\n$st');
       _basic = null;
     }
 
@@ -157,15 +165,16 @@ class PitchService {
       if (await swiftF0AssetExists()) {
         _swift = await SwiftF0Estimator.create();
         _engine = PitchEngineKind.swiftf0;
-        debugPrint('Pitch engine: SwiftF0 (monophonic fallback)');
+        pianoFlowLog('Pitch', 'engine: SwiftF0 (monophonic fallback)');
         return;
       }
-    } catch (e) {
-      debugPrint('SwiftF0 init failed: $e');
+      pianoFlowLog('Pitch', 'SwiftF0 skipped (asset absent)');
+    } catch (e, st) {
+      pianoFlowLog('Pitch', 'SwiftF0 init failed: $e\n$st');
       _swift = null;
     }
 
-    debugPrint('Pitch engine: YIN fallback');
+    pianoFlowLog('Pitch', 'engine: YIN fallback');
     _engine = PitchEngineKind.yin;
   }
 
@@ -178,13 +187,25 @@ class PitchService {
       if (await _recorder.isRecording()) {
         await _recorder.stop();
       }
-    } catch (_) {}
+    } catch (e) {
+      pianoFlowLog('Pitch', 'recorder stop on shutdown: $e');
+    }
     _running = false;
     _hitCount.clear();
     _missCount.clear();
     _locked = {};
     _emitted.clear();
     _inferBusy = false;
+    _latestWhileBusy = null;
+  }
+
+  /// Allow [midis] to re-fire on [noteOnStream] after guide echo / suppress.
+  void clearEmitted([Iterable<int>? midis]) {
+    if (midis == null) {
+      _emitted.clear();
+      return;
+    }
+    _emitted.removeAll(midis);
   }
 
   void dispose() {
@@ -216,9 +237,26 @@ class PitchService {
   }
 
   Future<void> _analyze(Uint8List pcm16) async {
-    if (_inferBusy) return;
+    if (_inferBusy) {
+      if (_latestWhileBusy != null) _droppedStale++;
+      _latestWhileBusy = pcm16;
+      return;
+    }
     _inferBusy = true;
     _chunkCount++;
+    try {
+      await _analyzeBody(pcm16);
+    } finally {
+      _inferBusy = false;
+      final next = _latestWhileBusy;
+      _latestWhileBusy = null;
+      if (next != null) {
+        unawaited(_analyze(next));
+      }
+    }
+  }
+
+  Future<void> _analyzeBody(Uint8List pcm16) async {
     try {
       final samples = pcm16ToFloat(pcm16);
       final level = measureLevel(samples);
@@ -285,16 +323,19 @@ class PitchService {
       for (final m in locked) {
         if (_emitted.add(m)) {
           _noteController.add(m);
-          debugPrint(
-            'Pitch[${_engine.name}] +${YinPitch.midiLabel(m)} '
+          pianoFlowLogVerbose(
+            'Pitch',
+            '+${YinPitch.midiLabel(m)} '
+            'engine=${_engine.name} '
             'set=${locked.map(YinPitch.midiLabel).join(",")} '
-            'chunks=$_chunkCount',
+            'chunks=$_chunkCount'
+            '${_droppedStale > 0 ? " staleDrop=$_droppedStale" : ""}',
           );
         }
       }
       _emitted.removeWhere((m) => !locked.contains(m));
-    } finally {
-      _inferBusy = false;
+    } catch (e, st) {
+      pianoFlowLog('Pitch', 'analyze failed: $e\n$st');
     }
   }
 

@@ -104,10 +104,12 @@ class HomeRecentList extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '${s.difficultyLabel} · ${s.bpm} BPM',
+                                s.homeRecentMetaLine,
                                 style: AppTheme.body(
                                   fontSize: 13,
-                                  color: AppColors.textSecondary,
+                                  color: s.isOmrDraft
+                                      ? AppColors.accent
+                                      : AppColors.textSecondary,
                                 ),
                               ),
                             ],
@@ -218,10 +220,12 @@ class _HomeTodaySongState extends State<HomeTodaySong>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '${song.artist} · ${song.difficultyLabel} · ${song.bpm} BPM',
+                        song.homeTodayMetaLine,
                         style: AppTheme.body(
                           fontSize: 14,
-                          color: AppColors.textSecondary,
+                          color: song.isOmrDraft
+                              ? AppColors.accent
+                              : AppColors.textSecondary,
                         ),
                       ),
                     ],

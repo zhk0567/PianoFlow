@@ -1,9 +1,10 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 
+import '../../shared/piano_flow_log.dart';
 import 'pitch_yin.dart';
 
 /// Linear resample mono float samples [fromSr] → [toSr].
@@ -44,6 +45,7 @@ class SwiftF0Estimator {
   static Future<SwiftF0Estimator> create({
     double confidenceThreshold = 0.88,
   }) async {
+    pianoFlowLog('Pitch', 'loading SwiftF0 ONNX ($assetPath)…');
     final ort = OnnxRuntime();
     final session = await ort.createSessionFromAsset(assetPath);
     return SwiftF0Estimator._(
@@ -55,7 +57,11 @@ class SwiftF0Estimator {
   Future<void> dispose() async {
     if (_closed) return;
     _closed = true;
-    await _session.close();
+    try {
+      await _session.close();
+    } catch (e) {
+      pianoFlowLog('Pitch', 'SwiftF0 session close failed: $e');
+    }
   }
 
   /// Run on 16 kHz mono floats in [-1, 1]. Returns last strong voiced frame.
@@ -77,7 +83,14 @@ class SwiftF0Estimator {
 
       final pitchVal = outputs['pitch_hz'];
       final confVal = outputs['confidence'];
-      if (pitchVal == null || confVal == null) return null;
+      if (pitchVal == null || confVal == null) {
+        pianoFlowLog(
+          'Pitch',
+          'SwiftF0 outputs missing '
+          '(pitch_hz=${pitchVal != null}, confidence=${confVal != null})',
+        );
+        return null;
+      }
 
       final pitchList = await pitchVal.asList();
       final confList = await confVal.asList();
@@ -104,7 +117,7 @@ class SwiftF0Estimator {
       if (bestHz == null) return null;
       return PitchEstimate(hz: bestHz, clarity: bestConf);
     } catch (e, st) {
-      debugPrint('SwiftF0 infer failed: $e\n$st');
+      pianoFlowLog('Pitch', 'SwiftF0 infer failed: $e\n$st');
       return null;
     } finally {
       await input?.dispose();
@@ -144,7 +157,11 @@ Future<bool> swiftF0AssetExists() async {
   try {
     await rootBundle.load(SwiftF0Estimator.assetPath);
     return true;
-  } catch (_) {
+  } catch (e) {
+    pianoFlowLog(
+      'Pitch',
+      'SwiftF0 asset missing (${SwiftF0Estimator.assetPath}): $e',
+    );
     return false;
   }
 }

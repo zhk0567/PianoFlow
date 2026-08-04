@@ -71,9 +71,11 @@ class RecordAlbumCard extends ConsumerWidget {
                 child: Opacity(
                   opacity: 0.14,
                   child: Icon(
-                    song.scoreKind == ScoreKind.formal
-                        ? Icons.menu_book_rounded
-                        : Icons.album_rounded,
+                    switch (song.scoreKind) {
+                      ScoreKind.formal => Icons.menu_book_rounded,
+                      ScoreKind.omrDraft => Icons.document_scanner_rounded,
+                      ScoreKind.simplified => Icons.album_rounded,
+                    },
                     size: 140,
                     color: hue,
                   ),
@@ -139,12 +141,14 @@ class RecordAlbumCard extends ConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         '${song.artist} · ${song.bpm} BPM'
-                        '${song.isSimplifiedScore ? '' : ' · 正式谱'}',
+                        ' · ${song.scoreKindLabelDetail}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTheme.body(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: song.isOmrDraft
+                              ? AppColors.accent
+                              : AppColors.textSecondary,
                         ),
                       ),
                     ],

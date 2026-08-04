@@ -121,6 +121,32 @@ void main() {
       expect(KeyboardGeometry.midiOctave(60), 4);
       expect(KeyboardGeometry.midiOctave(21), 0);
     });
+
+    test('falling bars share key centers for A0–C8 sample midis', () {
+      // Parent may be fractional; geo floors — centers must still match keys.
+      final geo = KeyboardGeometry.stable(
+        width: 1280.7,
+        startMidi: PracticeConstants.startMidi,
+        whiteKeyCount: PracticeConstants.whiteKeyCount,
+      );
+      expect(geo.width, 1280);
+      for (final midi in [21, 60, 61, 64, 108]) {
+        expect(geo.centersAlign(midi), isTrue, reason: 'midi $midi');
+      }
+      var sum = 0.0;
+      for (var i = 0; i < geo.whiteKeyCount; i++) {
+        sum += geo.whiteKeyWidth(i);
+      }
+      expect(sum, geo.width);
+    });
+
+    test('pixelsPerBeatForHeight keeps look-ahead in compact lanes', () {
+      final compact = PracticeConstants.pixelsPerBeatForHeight(88);
+      expect(compact, greaterThanOrEqualTo(PracticeConstants.pixelsPerBeatMin));
+      expect(compact, lessThanOrEqualTo(PracticeConstants.pixelsPerBeatMax));
+      final tall = PracticeConstants.pixelsPerBeatForHeight(260);
+      expect(tall, greaterThanOrEqualTo(compact));
+    });
   });
 
   group('Staff step mapping', () {

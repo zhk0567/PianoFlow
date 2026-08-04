@@ -1,7 +1,10 @@
 import '../../../shared/models/song.dart';
 
-/// Build a simple MusicXML partwise string from [SongScore] for Verovio.
-/// Used when no authored MusicXML asset exists.
+/// Build MusicXML from [SongScore] for Verovio practice engraving.
+///
+/// This is the practice-page source of truth so staff, waterfall, and guide
+/// audio share the same note onsets. Packaged MusicXML assets are for import /
+/// audit only — they are not loaded into the practice WebView.
 ///
 /// Always emits a non-empty `<type>` (and `<dot/>` when needed). Verovio only
 /// calls SetDur when type is present; duration alone → stemless noteheads.

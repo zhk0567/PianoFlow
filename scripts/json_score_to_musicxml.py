@@ -32,6 +32,29 @@ FORMAL_IDS = {
     "toby_fox_megalovania",
 }
 
+
+def protected_score_ids() -> set[str]:
+    """Ids whose MusicXML must not be replaced by JSON→simplified XML.
+
+    Prefer catalog.json scoreKind formal|omrDraft; fall back to FORMAL_IDS.
+    """
+    catalog = JSON_DIR / "catalog.json"
+    if catalog.is_file():
+        try:
+            data = json.loads(catalog.read_text(encoding="utf-8"))
+            out = {
+                str(s["id"])
+                for s in (data.get("songs") or [])
+                if s.get("id")
+                and s.get("scoreKind") in ("formal", "omrDraft")
+            }
+            if out:
+                return out
+        except (OSError, json.JSONDecodeError, TypeError):
+            pass
+    return set(FORMAL_IDS)
+
+
 STEPS = ["C", "C", "D", "D", "E", "F", "F", "G", "G", "A", "A", "B"]
 ALTERS = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]
 
@@ -330,7 +353,19 @@ def fill_empty_types_in_xml(text: str) -> tuple[str, int]:
 def repair_formal_types() -> int:
     """Fill empty <type> in formal MusicXML without regenerating from JSON."""
     repaired = 0
-    for sid in sorted(FORMAL_IDS):
+    catalog = JSON_DIR / "catalog.json"
+    formal_ids = set(FORMAL_IDS)
+    if catalog.is_file():
+        try:
+            data = json.loads(catalog.read_text(encoding="utf-8"))
+            formal_ids = {
+                str(s["id"])
+                for s in (data.get("songs") or [])
+                if s.get("id") and s.get("scoreKind") == "formal"
+            } or formal_ids
+        except (OSError, json.JSONDecodeError, TypeError):
+            pass
+    for sid in sorted(formal_ids):
         for base in (ASSET_XML, SRC_XML):
             path = base / f"{sid}.musicxml"
             if not path.exists():
@@ -354,7 +389,7 @@ def main() -> int:
         "--skip-formal",
         action="store_true",
         default=True,
-        help="Never overwrite formal textbook ids (default on)",
+        help="Never overwrite formal/omrDraft MusicXML from JSON (default on)",
     )
     ap.add_argument("--no-skip-formal", action="store_false", dest="skip_formal")
     ap.add_argument(
@@ -374,20 +409,25 @@ def main() -> int:
             return 0
 
     json_files = sorted(JSON_DIR.glob("*.json"))
-    json_files = [p for p in json_files if p.name != "catalog.json"]
+    json_files = [
+        p
+        for p in json_files
+        if p.name not in ("catalog.json", "score_kind_policy.json")
+    ]
     if args.id:
         json_files = [p for p in json_files if p.stem == args.id]
         if not json_files:
             print(f"No JSON for id={args.id}")
             return 1
 
+    protected = protected_score_ids()
     written = 0
     skipped = 0
     for path in json_files:
         sid = path.stem
-        # Formal ids are never overwritten from JSON when skip_formal is on.
-        if args.skip_formal and sid in FORMAL_IDS:
-            print(f"skip formal {sid}")
+        # Formal + OMR drafts: never replace engraved/OMR MusicXML with JSON simplified.
+        if args.skip_formal and sid in protected:
+            print(f"skip protected {sid}")
             skipped += 1
             continue
         if has_musicxml(sid) and not args.force:
@@ -403,7 +443,7 @@ def main() -> int:
         print(f"wrote {sid}.musicxml")
         written += 1
 
-    print(f"done: wrote={written} skipped={skipped}")
+    print(f"done: wrote={written} skipped={skipped} protected={len(protected)}")
     return 0
 
 

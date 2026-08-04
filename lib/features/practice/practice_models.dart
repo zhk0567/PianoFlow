@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../shared/models/song.dart';
 import 'practice_constants.dart';
+import 'practice_wait_logic.dart';
 
 /// 练习页模式：[wait] 跟弹练习；[autoPlay] 自动示范，不跟弹等待。
 enum PracticeMode { wait, autoPlay }
@@ -26,7 +27,7 @@ class PracticeSettings {
     this.loopEnabled = false,
     this.loopStart = 0.0,
     this.loopEnd = 4.0,
-    this.guideAudio = false,
+    this.guideAudio = true,
     this.metronome = false,
   });
 
@@ -96,6 +97,35 @@ class PracticeSnapshot {
 
   double get durationBeats => score.durationBeats;
   List<ScoreNote> get filteredNotes => score.notesForHand(settings.hand);
+
+  /// Nominal transport rate (quarter-notes / sec) from BPM × speed.
+  double get nominalBeatsPerSec => score.bpm * settings.speed / 60.0;
+
+  /// True when wait-mode is holding at a chord onset (waterfall frozen).
+  bool get isWaitFrozenAtOnset {
+    if (!settings.mode.isPractice) return false;
+    if (waitingFor.isEmpty) return false;
+    final chordStart = PracticeWaitLogic.chordStartForExpected(
+      notes: filteredNotes,
+      expected: waitingFor,
+      pos: positionBeats,
+    );
+    if (chordStart == null) return false;
+    return PracticeWaitLogic.shouldFreezeAt(
+      pos: positionBeats,
+      chordStart: chordStart,
+    );
+  }
+
+  /// Ease rate between Dart [positionBeats] ticks (not a second clock).
+  /// Auto-play: nominal while playing. Wait-mode: same, but **0** at onset freeze
+  /// so staff cannot ease ahead of the hit line.
+  double get staffBeatsPerSec {
+    if (!isPlaying) return 0;
+    if (settings.mode.isAutoPlay) return nominalBeatsPerSec;
+    if (isWaitFrozenAtOnset) return 0;
+    return nominalBeatsPerSec;
+  }
 
   /// Active + waiting MIDI keys mapped to their score hand (for keyboard colors).
   Map<int, Hand> get highlightByHand {

@@ -69,7 +69,7 @@ Write-Host "Cleanup..." -ForegroundColor Cyan
 Stop-PianoFlow | Out-Null
 Write-Host ("Ready in {0:N1}s" -f $sw.Elapsed.TotalSeconds) -ForegroundColor DarkGray
 Write-Host "----------------------------------------"
-Write-Host "Close the app or Ctrl+C to stop. Look for [PianoFlow/Verovio] logs." -ForegroundColor DarkGray
+Write-Host "Close the app or Ctrl+C to stop. Search console for [PianoFlow/ (Pitch/Audio/Practice/Library/Verovio/...)." -ForegroundColor DarkGray
 Write-Host "----------------------------------------"
 
 try {

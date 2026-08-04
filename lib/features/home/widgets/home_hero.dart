@@ -111,10 +111,23 @@ class _HomeHeroState extends State<HomeHero>
                 if (hasContinue) ...[
                   const SizedBox(height: 14),
                   Text(
-                    '${widget.continueSong!.artist} · ${widget.continueSong!.difficultyLabel}',
+                    widget.continueSong!.homeHeroMetaLine,
                     style: AppTheme.body(
                       fontSize: 13,
-                      color: AppColors.textMuted,
+                      color: widget.continueSong!.isOmrDraft
+                          ? AppColors.accent
+                          : AppColors.textMuted,
+                    ),
+                  ),
+                ] else if (widget.beginnerSong != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    widget.beginnerSong!.homeHeroMetaLine,
+                    style: AppTheme.body(
+                      fontSize: 13,
+                      color: widget.beginnerSong!.isOmrDraft
+                          ? AppColors.accent
+                          : AppColors.textMuted,
                     ),
                   ),
                 ],

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../shared/piano_flow_log.dart';
+
 class UserLibraryStore {
   static const _favKey = 'fav_song_ids';
   static const _recentKey = 'recent_song_ids';
@@ -77,19 +79,32 @@ class UserLibraryController extends Notifier<UserLibraryState> {
   }
 
   Future<void> _reload() async {
-    final fav = await _store.favorites();
-    final recent = await _store.recent();
-    state = UserLibraryState(favorites: fav, recent: recent, ready: true);
+    try {
+      final fav = await _store.favorites();
+      final recent = await _store.recent();
+      state = UserLibraryState(favorites: fav, recent: recent, ready: true);
+    } catch (e, st) {
+      pianoFlowLog('Library', 'user library reload failed: $e\n$st');
+      state = const UserLibraryState(ready: true);
+    }
   }
 
   Future<void> toggleFavorite(String id) async {
-    await _store.toggleFavorite(id);
-    await _reload();
+    try {
+      await _store.toggleFavorite(id);
+      await _reload();
+    } catch (e, st) {
+      pianoFlowLog('Library', 'toggleFavorite failed ($id): $e\n$st');
+    }
   }
 
   Future<void> touchRecent(String id) async {
-    await _store.touchRecent(id);
-    await _reload();
+    try {
+      await _store.touchRecent(id);
+      await _reload();
+    } catch (e, st) {
+      pianoFlowLog('Library', 'touchRecent failed ($id): $e\n$st');
+    }
   }
 
   bool isFavorite(String id) => state.favorites.contains(id);

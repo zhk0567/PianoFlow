@@ -130,6 +130,19 @@ class KeyboardGeometry {
     return whiteKeyLeft(i) + whiteKeyWidth(i) / 2;
   }
 
+  /// True when [midi]'s bar center matches the piano key center (Flowkey X-align).
+  bool centersAlign(int midi, {double epsilon = 0.01}) {
+    final c = midiToCenterX(midi);
+    if (c == null) return false;
+    if (isBlack(midi)) {
+      final left = blackKeyLeft(midi)!;
+      return (c - (left + blackWidth / 2)).abs() <= epsilon;
+    }
+    final i = whiteMidis.indexOf(midi);
+    final expected = whiteKeyLeft(i) + whiteKeyWidth(i) / 2;
+    return (c - expected).abs() <= epsilon;
+  }
+
   /// Left edge of a black key, matching [PianoKeyboard] placement.
   double? blackKeyLeft(int midi) {
     if (!isBlack(midi) || !containsMidi(midi)) return null;

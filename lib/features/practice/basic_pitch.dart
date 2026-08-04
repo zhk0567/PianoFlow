@@ -1,9 +1,10 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 
+import '../../shared/piano_flow_log.dart';
 import 'swift_f0.dart' show resampleLinear;
 
 /// Spotify Basic Pitch (ONNX) — polyphonic notes with harmonic suppression.
@@ -38,6 +39,7 @@ class BasicPitchEstimator {
     double frameThresh = 0.42,
     double relativeThresh = 0.62,
   }) async {
+    pianoFlowLog('Pitch', 'loading Basic Pitch ONNX ($assetPath)…');
     final ort = OnnxRuntime();
     final session = await ort.createSessionFromAsset(assetPath);
     return BasicPitchEstimator._(
@@ -50,7 +52,11 @@ class BasicPitchEstimator {
   Future<void> dispose() async {
     if (_closed) return;
     _closed = true;
-    await _session.close();
+    try {
+      await _session.close();
+    } catch (e) {
+      pianoFlowLog('Pitch', 'BasicPitch session close failed: $e');
+    }
   }
 
   /// Active MIDI notes in [minMidi, maxMidi] from 22.05 kHz mono audio.
@@ -82,17 +88,20 @@ class BasicPitchEstimator {
       input = await OrtValue.fromList(window, [1, audioNSamples, 1]);
       outputs = await _session.run({_inputName: input});
       final noteVal = outputs[_noteOut];
-      if (noteVal == null) return {};
+      if (noteVal == null) {
+        pianoFlowLog('Pitch', 'BasicPitch output "$_noteOut" missing');
+        return {};
+      }
 
       final raw = await noteVal.asList();
       final frames = _asFrameBins(raw);
       if (frames.isEmpty) return {};
 
-      // Short tail — emphasize the newest frames after left-padding.
-      final scores = _tailMeanScores(frames, tail: 12);
+      // Short tail — emphasize newest frames (less lag from left-pad silence).
+      final scores = _tailMeanScores(frames, tail: 6);
       return _selectNotes(scores);
     } catch (e, st) {
-      debugPrint('BasicPitch infer failed: $e\n$st');
+      pianoFlowLog('Pitch', 'BasicPitch infer failed: $e\n$st');
       return {};
     } finally {
       await input?.dispose();
@@ -206,7 +215,11 @@ Future<bool> basicPitchAssetExists() async {
   try {
     await rootBundle.load(BasicPitchEstimator.assetPath);
     return true;
-  } catch (_) {
+  } catch (e) {
+    pianoFlowLog(
+      'Pitch',
+      'Basic Pitch asset missing (${BasicPitchEstimator.assetPath}): $e',
+    );
     return false;
   }
 }

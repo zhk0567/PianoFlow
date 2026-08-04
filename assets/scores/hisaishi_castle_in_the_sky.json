@@ -1,7 +1,7 @@
 {
   "id": "hisaishi_castle_in_the_sky",
   "title": "天空之城",
-  "bpm": 84,
+  "bpm": 80,
   "timeSignature": {
     "num": 4,
     "den": 4
@@ -21,7 +21,7 @@
       "hand": "right"
     },
     {
-      "midi": 57,
+      "midi": 53,
       "start": 1.0,
       "duration": 4.0,
       "hand": "left"
@@ -51,7 +51,7 @@
       "hand": "right"
     },
     {
-      "midi": 55,
+      "midi": 48,
       "start": 5.0,
       "duration": 4.0,
       "hand": "left"
@@ -69,7 +69,7 @@
       "hand": "right"
     },
     {
-      "midi": 53,
+      "midi": 55,
       "start": 9.0,
       "duration": 4.0,
       "hand": "left"
@@ -99,7 +99,7 @@
       "hand": "right"
     },
     {
-      "midi": 52,
+      "midi": 45,
       "start": 13.0,
       "duration": 4.0,
       "hand": "left"
@@ -117,7 +117,7 @@
       "hand": "right"
     },
     {
-      "midi": 50,
+      "midi": 48,
       "start": 17.0,
       "duration": 4.0,
       "hand": "left"
@@ -147,7 +147,7 @@
       "hand": "right"
     },
     {
-      "midi": 48,
+      "midi": 43,
       "start": 21.0,
       "duration": 4.0,
       "hand": "left"

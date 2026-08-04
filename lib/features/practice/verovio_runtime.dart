@@ -2,21 +2,45 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:webview_windows/webview_windows.dart';
 
 import '../../shared/models/song.dart';
+import '../../shared/piano_flow_log.dart';
 import 'practice_constants.dart';
 import 'staff/score_to_musicxml.dart';
+import 'verovio_transport_sync.dart';
 
-void _verovioLog(String message) {
-  // ignore: avoid_print
-  print('[PianoFlow/Verovio] $message');
-  debugPrint('[PianoFlow/Verovio] $message');
+void _verovioLog(String message) => pianoFlowLog('Verovio', message);
+
+void _verovioLogVerbose(String message) =>
+    pianoFlowLogVerbose('Verovio', message);
+
+/// Bridge only failures / empty-staff / exceptions — not engrave OK chatter.
+bool _jsMessageWorthLogging(String raw) {
+  final s = raw.toLowerCase();
+  if (s.isEmpty) return false;
+  if (s.contains('"type":"ready"') || s.contains("'type':'ready'")) {
+    return false;
+  }
+  const keys = [
+    'fail',
+    'error',
+    'exception',
+    'empty',
+    'false',
+    '失败',
+    '为空',
+    '缺少',
+  ];
+  for (final k in keys) {
+    if (s.contains(k)) return true;
+  }
+  return false;
 }
+
 
 /// Process-wide Verovio WebView2 + WASM runtime.
 ///
@@ -34,6 +58,10 @@ class VerovioRuntime {
   String? lastScoreKey;
   Size? lastViewport;
   bool scoreLoaded = false;
+
+  /// Bumps on every full score load / switch so stale HTTP polls cannot commit.
+  int _loadEpoch = 0;
+  int get loadEpoch => _loadEpoch;
 
   double? _queuedBeats;
   bool _queuedSnap = false;
@@ -79,7 +107,34 @@ class VerovioRuntime {
     lastScoreKey = null;
     lastViewport = null;
     _loadedViewerStamp = null;
+    _loadEpoch++;
+    _resetPositionTracking();
     await ensureReady();
+  }
+
+  void _resetPositionTracking() {
+    _lastPushedBeats = double.nan;
+    _lastPushedRate = double.nan;
+    _queuedBeats = null;
+    _queuedSnap = false;
+    _queuedRate = null;
+  }
+
+  /// Call before loading a different song so the old SVG/playhead cannot linger.
+  Future<void> beginScoreSwitch({String? reason}) async {
+    _loadEpoch++;
+    scoreLoaded = false;
+    lastScoreKey = null;
+    _resetPositionTracking();
+      _verovioLogVerbose('beginScoreSwitch epoch=$_loadEpoch ${reason ?? ""}');
+    if (!_toolkitReady) return;
+    try {
+      await controller.executeScript(
+        'typeof pfClearScore==="function"&&pfClearScore();',
+      );
+    } catch (e) {
+      _verovioLog('pfClearScore skipped: $e');
+    }
   }
 
   Future<void> _ensureHttpServer(String dir) async {
@@ -87,7 +142,7 @@ class VerovioRuntime {
     final root = p.normalize(dir);
     _httpServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _httpPort = _httpServer!.port;
-    _verovioLog('HTTP server on http://127.0.0.1:$_httpPort/ root=$root');
+    _verovioLogVerbose('HTTP server on http://127.0.0.1:$_httpPort/ root=$root');
     unawaited(() async {
       await for (final req in _httpServer!) {
         try {
@@ -129,7 +184,9 @@ class VerovioRuntime {
           try {
             req.response.statusCode = 500;
             await req.response.close();
-          } catch (_) {}
+          } catch (closeErr) {
+            _verovioLog('HTTP response close after 500 failed: $closeErr');
+          }
         }
       }
     }());
@@ -143,7 +200,12 @@ class VerovioRuntime {
     }
 
     _webMessageSub ??= controller.webMessage.listen(
-      (msg) => _verovioLog('JS: $msg'),
+      (msg) {
+        final s = msg?.toString() ?? '';
+        if (_jsMessageWorthLogging(s)) {
+          _verovioLog('JS: $s');
+        }
+      },
       onError: (Object e) => _verovioLog('JS webMessage error: $e'),
     );
 
@@ -157,7 +219,7 @@ class VerovioRuntime {
     if (needReload) {
       final url =
           'http://127.0.0.1:$_httpPort/viewer.html?v=${Uri.encodeQueryComponent(stamp)}';
-      _verovioLog('Loading viewer $url');
+      _verovioLogVerbose('Loading viewer $url');
       await controller.loadUrl(url);
       _toolkitReady = false;
       scoreLoaded = false;
@@ -171,10 +233,14 @@ class VerovioRuntime {
         final ready = await controller.executeScript('window.pfReady()');
         if (ready == true || ready == 'true') {
           _toolkitReady = true;
-          _verovioLog('toolkit ready');
+          _verovioLogVerbose('toolkit ready');
           return;
         }
-      } catch (_) {}
+      } catch (e) {
+        if (i == 0 || i % 20 == 19) {
+          _verovioLog('pfReady poll #$i: $e');
+        }
+      }
     }
     throw StateError(
       'Verovio 未就绪。请确认 assets/verovio/verovio-toolkit-wasm.js 完整（见 docs/五线谱.md）',
@@ -193,14 +259,15 @@ class VerovioRuntime {
     try {
       wasmAsset =
           await rootBundle.load('assets/verovio/verovio-toolkit-wasm.js');
-    } catch (_) {
+    } catch (e) {
+      _verovioLog('missing verovio-toolkit-wasm.js: $e');
       throw StateError(
         '缺少 assets/verovio/verovio-toolkit-wasm.js，请运行 scripts/download-verovio.ps1',
       );
     }
 
-    // v36: fixed note size — SVG CSS = viewBox 1:1, no fit-height stretch.
-    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v36';
+    // v48: practice staff = SongScore JSON (same clock as audio/waterfall).
+    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v48';
     final marker = File('${dir.path}${Platform.pathSeparator}.asset_stamp');
     final htmlOut = File('${dir.path}${Platform.pathSeparator}viewer.html');
     final wasmOut = File(
@@ -237,7 +304,10 @@ class VerovioRuntime {
   static String scoreKey(SongScore score, Hand hand) =>
       '${score.id}|${hand.name}';
 
-  static Map<String, dynamic> layoutOpts(Size viewport, {int? bpm}) {
+  static Map<String, dynamic> layoutOpts(
+    Size viewport, {
+    int? bpm,
+  }) {
     const scale = PracticeConstants.verovioScale;
     // pageHeight is a Verovio layout ceiling (adjustPageHeight shrinks to content).
     // Note CSS size comes from engraver [scale], not from stretching to [h].
@@ -265,22 +335,16 @@ class VerovioRuntime {
     return resolveMusicXml(score, hand);
   }
 
+  /// Practice staff always engraves from [SongScore] (same notes/beats as
+  /// waterfall + guide audio). Packaged MusicXML may expand repeats differently
+  /// and must not drive the playhead clock.
   Future<String> _loadMusicXml(SongScore score, Hand hand) async {
-    final id = score.id;
-    final candidates = [
-      'assets/scores/musicxml/$id.musicxml',
-      'assets/scores/musicxml/$id.xml',
-    ];
-    for (final path in candidates) {
-      try {
-        return await rootBundle.loadString(path);
-      } catch (_) {}
-    }
-    final tp = File('third_party/scores_musicxml/$id.musicxml');
-    if (await tp.exists()) {
-      return tp.readAsString();
-    }
-    return songScoreToMusicXml(score, hand: hand);
+    final xml = songScoreToMusicXml(score, hand: hand);
+    _verovioLogVerbose(
+      'musicXml hand=${hand.name} from SongScore notes='
+      '${score.notesForHand(hand).length}',
+    );
+    return xml;
   }
 
   Future<void> pushScore({
@@ -303,29 +367,57 @@ class VerovioRuntime {
       return;
     }
 
+    final epoch = ++_loadEpoch;
+    var ownedEpoch = epoch;
+    // Mark unloaded immediately so pushPosition cannot steer the previous piece.
+    scoreLoaded = false;
+    lastScoreKey = null;
+    _resetPositionTracking();
+
     final xml = musicXml ?? await resolveMusicXml(score, hand);
-    final opts = jsonEncode(layoutOpts(viewport, bpm: score.bpm));
-    _verovioLog(
-      'pushScore id=${score.id} xmlChars=${xml.length} '
+    if (ownedEpoch != _loadEpoch) {
+      _verovioLog('pushScore aborted (stale after resolve) epoch=$ownedEpoch');
+      return;
+    }
+    final opts = jsonEncode(
+      layoutOpts(
+        viewport,
+        bpm: score.bpm,
+      ),
+    );
+    _verovioLogVerbose(
+      'pushScore id=${score.id} epoch=$ownedEpoch xmlChars=${xml.length} '
       'viewport=${viewport.width.toStringAsFixed(0)}x${viewport.height.toStringAsFixed(0)}',
     );
 
-    await _loadScoreXml(xml, opts);
+    await _loadScoreXml(xml, opts, epoch: ownedEpoch);
+    if (ownedEpoch != _loadEpoch) {
+      _verovioLog('pushScore aborted (stale after load) epoch=$ownedEpoch');
+      return;
+    }
 
     var info = await _scoreInfo();
-    _verovioLog('after load info=$info');
+    _verovioLogVerbose('after load info=$info');
     if (!_infoHasNotes(info)) {
       await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (ownedEpoch != _loadEpoch) return;
       info = await _scoreInfo();
       _verovioLog('retry info=$info');
     }
     if (!_infoHasNotes(info)) {
       _verovioLog('reloadViewer + retry');
       await reloadViewer();
-      await _loadScoreXml(xml, opts);
+      ownedEpoch = _loadEpoch;
+      await _loadScoreXml(xml, opts, epoch: ownedEpoch);
+      if (ownedEpoch != _loadEpoch) return;
       await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (ownedEpoch != _loadEpoch) return;
       info = await _scoreInfo();
       _verovioLog('after reload info=$info');
+    }
+    if (ownedEpoch != _loadEpoch) {
+      _verovioLog('pushScore skip commit stale epoch=$ownedEpoch');
+      return;
     }
     if (!_infoHasNotes(info)) {
       final detail = info == null ? 'no-info' : jsonEncode(info);
@@ -333,7 +425,9 @@ class VerovioRuntime {
       throw StateError('五线谱渲染为空（$detail）');
     }
 
-    _verovioLog('pushScore OK notes=${info?['notes']} htmlLen=${info?['htmlLen']}');
+    _verovioLogVerbose(
+      'pushScore OK notes=${info?['notes']} htmlLen=${info?['htmlLen']}',
+    );
     scoreLoaded = true;
     lastScoreKey = key;
     lastViewport = viewport;
@@ -356,7 +450,9 @@ class VerovioRuntime {
     if (p.equals(r, f)) return true;
     try {
       if (p.isWithin(r, f)) return true;
-    } catch (_) {}
+    } catch (e) {
+      _verovioLog('path isWithin failed root=$r full=$f: $e');
+    }
     // Fallback when isWithin is picky about separators / drive letters.
     final rs = r.replaceAll('/', '\\').toLowerCase();
     final fs = f.replaceAll('/', '\\').toLowerCase();
@@ -365,7 +461,11 @@ class VerovioRuntime {
     return fs.startsWith(prefix);
   }
 
-  Future<void> _loadScoreXml(String xml, String optsJson) async {
+  Future<void> _loadScoreXml(
+    String xml,
+    String optsJson, {
+    required int epoch,
+  }) async {
     final dir = _viewerDir;
     final port = _httpPort;
     if (dir == null || port == null) {
@@ -373,9 +473,12 @@ class VerovioRuntime {
     }
     final file = File(p.join(dir, 'current_score.musicxml'));
     await file.writeAsString(xml, flush: true);
+    if (epoch != _loadEpoch) return;
     final url =
         'http://127.0.0.1:$port/current_score.musicxml?t=${DateTime.now().millisecondsSinceEpoch}';
-    _verovioLog('pfLoadFromUrl $url bytes=${xml.length}');
+    _verovioLogVerbose(
+      'pfLoadFromUrl $url bytes=${xml.length} epoch=$epoch',
+    );
 
     // Async fetch path (preferred over sync XHR). Never let a missing JS
     // helper abort before the sync fallback.
@@ -383,17 +486,21 @@ class VerovioRuntime {
       final result = await controller.executeScript(
         'pfLoadFromUrlAsync(${jsonEncode(url)}, $optsJson)',
       );
-      _verovioLog('pfLoadFromUrlAsync scheduled result=$result');
+      _verovioLogVerbose('pfLoadFromUrlAsync scheduled result=$result');
     } catch (e) {
       _verovioLog('pfLoadFromUrlAsync exception: $e');
     }
 
     // Poll until ready/notes or timeout (~8s).
     for (var i = 0; i < 40; i++) {
+      if (epoch != _loadEpoch) {
+        _verovioLog('load poll aborted stale epoch=$epoch');
+        return;
+      }
       await Future<void>.delayed(const Duration(milliseconds: 200));
       final info = await _scoreInfo();
       if (_infoHasNotes(info)) {
-        _verovioLog('load OK via HTTP poll #$i info=$info');
+        _verovioLogVerbose('load OK via HTTP poll #$i info=$info');
         return;
       }
       if (info != null && info['loadErr'] != null) {
@@ -402,12 +509,14 @@ class VerovioRuntime {
       }
     }
 
+    if (epoch != _loadEpoch) return;
+
     // Sync fallback.
     try {
       final sync = await controller.executeScript(
         'pfLoadFromUrl(${jsonEncode(url)}, $optsJson);',
       );
-      _verovioLog('pfLoadFromUrl sync result=$sync');
+      _verovioLogVerbose('pfLoadFromUrl sync result=$sync');
     } catch (e) {
       _verovioLog('sync load exception: $e');
     }
@@ -441,8 +550,13 @@ class VerovioRuntime {
       return;
     }
     final opts = jsonEncode(layoutOpts(viewport));
-    await controller.executeScript('pfResize($opts);');
-    lastViewport = viewport;
+    try {
+      await controller.executeScript('pfResize($opts);');
+      lastViewport = viewport;
+    } catch (e) {
+      _verovioLog('pfResize script failed: $e');
+      rethrow;
+    }
   }
 
   Future<void> pushPosition(
@@ -479,7 +593,15 @@ class VerovioRuntime {
             'pfSetPosition($b, ${s ? 'true' : 'false'}$rateArg);',
           );
           delivered = true;
-        } catch (_) {}
+        } catch (e) {
+          _verovioLog(
+            VerovioTransportSync.positionPushFailedLog(
+              beats: b,
+              snap: s,
+              error: e,
+            ),
+          );
+        }
         if (delivered) {
           _lastPushedBeats = b;
           if (r != null) _lastPushedRate = r;

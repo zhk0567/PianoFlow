@@ -1,10 +1,11 @@
-# PianoFlow — one-command formal score import (accurate + fast).
+# PianoFlow — MusicXML 入库（一键转换 + catalog）。
 # Prefer MusicXML/MXL/MSCZ that matches the reference PDF. Do NOT use MIDI.
+# -ScoreKind: formal | simplified | omrDraft（OMR 必须 omrDraft，禁止冒充 formal）
 #
 # Usage:
 #   Set-Location F:\commercial\Piano
 #   .\scripts\import-score.ps1 -Id fur_elise_woo59 -Source .\path\score.musicxml -Title "Fur Elise" -Artist "Beethoven"
-#   .\scripts\import-score.ps1 -Id my_piece -Source C:\scores\a.mscz -Title "..." -Artist "..." -Pdf C:\scores\a.pdf
+#   .\scripts\import-score.ps1 -Id my_piece -Source C:\scores\a.mscz -Title "..." -Artist "..." -Pdf C:\scores\a.pdf -ScoreKind omrDraft
 
 param(
   [Parameter(Mandatory = $true)]
@@ -15,10 +16,12 @@ param(
 
   [string]$Title = "",
   [string]$Artist = "",
+  [ValidateSet("Classical", "Anime", "Pop", "Game")]
   [string]$Genre = "Classical",
+  [ValidateRange(1, 5)]
   [int]$Difficulty = 3,
   [string]$Description = "",
-  [ValidateSet("formal", "simplified")]
+  [ValidateSet("formal", "simplified", "omrDraft")]
   [string]$ScoreKind = "formal",
   [string]$Pdf = ""
 )
@@ -44,6 +47,26 @@ if ($allowed -notcontains $ext) {
 # PDF alone is never a structured score source.
 if ($ext -eq ".pdf") {
   Write-Error "PDF cannot be imported as notation. See docs\曲谱导入SOP.md — need MusicXML/MSCZ matching the PDF."
+}
+
+# Hard gate: never import OMR workpaths / known OMR ids as formal.
+$pyGuard = $null
+foreach ($c in @("python", "py")) {
+  try {
+    $v = & $c --version 2>&1
+    if ($LASTEXITCODE -eq 0 -or "$v" -match "Python") { $pyGuard = $c; break }
+  } catch {}
+}
+if (-not $pyGuard) { Write-Error "Python not found." }
+$py = $pyGuard
+& $py @(
+  ".\scripts\catalog_score_kind_guard.py",
+  "--check-source", "$srcPath",
+  "--score-kind", $ScoreKind,
+  "--id", $Id
+)
+if ($LASTEXITCODE -ne 0) {
+  Write-Error "scoreKind guard refused this import. Use -ScoreKind omrDraft for OMR drafts."
 }
 
 function Find-MuseScoreExe {
@@ -101,15 +124,6 @@ Docs: docs\曲谱导入SOP.md
     Write-Host "Archived PDF:" $pdfDest
   }
 
-  $py = $null
-  foreach ($c in @("python", "py")) {
-    try {
-      $v = & $c --version 2>&1
-      if ($LASTEXITCODE -eq 0 -or "$v" -match "Python") { $py = $c; break }
-    } catch {}
-  }
-  if (-not $py) { Write-Error "Python not found." }
-
   $argsList = @(
     ".\scripts\musicxml_to_score.py",
     "--id", $Id,
@@ -123,20 +137,47 @@ Docs: docs\曲谱导入SOP.md
   if ($Artist) { $argsList += @("--artist", $Artist) }
   if ($Description) { $argsList += @("--description", $Description) }
   elseif ($Pdf -or $Title) {
-    $argsList += @("--description", "Formal MusicXML import for $Id. See docs/曲谱导入SOP.md.")
+    $kindZh = switch ($ScoreKind) {
+      "formal" { "正式谱" }
+      "omrDraft" { "OMR草稿" }
+      "simplified" { "简编谱" }
+      default { $ScoreKind }
+    }
+    $argsList += @(
+      "--description",
+      "MusicXML 导入（$kindZh；$Id）。见 docs/曲谱导入SOP.md。"
+    )
   }
 
   Write-Host "Converting..."
   & $py @argsList
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-  # Keep convert-scores.ps1 batch list in sync for known formal ids (append comment only if missing).
+  if ($ScoreKind -eq "omrDraft") {
+    Write-Host "Registering OMR provenance id in score_kind_policy..."
+    & $py ".\scripts\score_kind_policy_sync.py" --add-id $Id
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  }
+
+  Write-Host "Running catalog scoreKind guard..."
+  & $py ".\scripts\catalog_score_kind_guard.py"
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  Write-Host "Running catalog integrity guard..."
+  & $py ".\scripts\catalog_integrity_guard.py"
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  Write-Host "Running score_kind_policy JSON↔Dart check..."
+  & $py ".\scripts\score_kind_policy_sync.py" "--check"
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   Write-Host ""
-  Write-Host "OK: $Id imported."
+  Write-Host "OK: $Id imported as scoreKind=$ScoreKind."
   Write-Host "  third_party\scores_musicxml\$Id.musicxml"
   Write-Host "  assets\scores\musicxml\$Id.musicxml"
   Write-Host "  assets\scores\$Id.json"
   Write-Host "  catalog updated"
+  if ($ScoreKind -eq "omrDraft") {
+    Write-Host "  score_kind_policy.json + Dart omrProvenanceIds updated"
+  }
   Write-Host "Fully restart the app to load the new score."
   Write-Host "SOP: docs\曲谱导入SOP.md"
 }

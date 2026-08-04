@@ -9,7 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../shared/models/song.dart';
+import '../../shared/piano_flow_log.dart';
 import 'practice_constants.dart';
+import 'practice_loop_logic.dart';
+import 'silent_warm_wav.dart';
 
 part 'score_audio_synth.dart';
 
@@ -140,8 +143,24 @@ class ScoreAudioPlayer {
         _clickFiles[accent ? 1 : 0] = file.path;
       }
       final silentFile = File('${toneDir.path}/silent_warm.wav');
+      if (await silentFile.exists()) {
+        final existing = await silentFile.readAsBytes();
+        if (!SilentWarmWav.isZeroPcm16Mono(existing)) {
+          pianoFlowLog(
+            'Audio',
+            'cached silent_warm.wav not zero-PCM — rewriting',
+          );
+          await silentFile.delete();
+        }
+      }
       if (!await silentFile.exists()) {
-        await silentFile.writeAsBytes(_renderSilentWav(), flush: true);
+        final silentBytes = _renderSilentWav();
+        // Refuse to cache a warm buffer that could ghost-note on open.
+        if (!SilentWarmWav.isZeroPcm16Mono(silentBytes)) {
+          pianoFlowLog('Audio', 'silent warm WAV is not zero-PCM — abort init');
+          throw StateError('silent warm WAV must be zero-PCM');
+        }
+        await silentFile.writeAsBytes(silentBytes, flush: true);
       }
       _silentWarmFile = silentFile.path;
 
@@ -165,7 +184,7 @@ class ScoreAudioPlayer {
       _ready = true;
     } catch (e, st) {
       _readyFuture = null;
-      debugPrint('ScoreAudioPlayer init failed: $e\n$st');
+      pianoFlowLog('Audio', 'ScoreAudioPlayer init failed: $e\n$st');
       rethrow;
     }
   }
@@ -190,11 +209,15 @@ class ScoreAudioPlayer {
       await warm.resume();
       await Future<void>.delayed(const Duration(milliseconds: 30));
       await warm.stop();
-    } catch (_) {
+    } catch (e) {
+      // Warm failures are non-fatal; still surface so console can diagnose silence.
+      pianoFlowLog('Audio', 'device warm skipped or failed: $e');
     } finally {
       try {
         await warm?.dispose();
-      } catch (_) {}
+      } catch (e) {
+        pianoFlowLog('Audio', 'warm player dispose failed: $e');
+      }
     }
   }
 
@@ -292,9 +315,14 @@ class ScoreAudioPlayer {
   }
 
   /// Align metro beat index to practice [positionBeats] so visual/audio share phase.
+  ///
+  /// When the metronome is already running (seek / loop wrap), also restart the
+  /// click timer so accents stay locked to the new playhead — not the old phase.
   void alignMetronomeToPosition(double positionBeats) {
-    final beat = positionBeats.isFinite ? positionBeats.floor() : 0;
-    _metroBeat = beat < 0 ? 0 : beat;
+    _metroBeat = PracticeLoopLogic.metronomeBeatIndexForPosition(positionBeats);
+    if (_metronome && (_playing || _transportPlaying)) {
+      _restartMetronome(preserveBeat: true);
+    }
   }
 
   /// When true, metronome may run even if score autoplay [_playing] is false.
@@ -442,7 +470,8 @@ class ScoreAudioPlayer {
       // the very first note after transport start.
       try {
         await player.seek(Duration.zero);
-      } catch (_) {
+      } catch (e) {
+        pianoFlowLog('Audio', 'tone seek failed, fallback stop: $e');
         await player.stop();
         if (epoch != _voiceEpoch) return;
       }
@@ -452,10 +481,12 @@ class ScoreAudioPlayer {
       if (epoch != _voiceEpoch) {
         try {
           await player.stop();
-        } catch (_) {}
+        } catch (e) {
+          pianoFlowLog('Audio', 'tone stop after cancel failed: $e');
+        }
       }
     } catch (e) {
-      debugPrint('tone play failed: $e');
+      pianoFlowLog('Audio', 'tone play failed: $e');
     }
   }
 
@@ -534,14 +565,22 @@ class ScoreAudioPlayer {
 
   Future<void> _stopAllPlayers() async {
     final players = [..._notePlayers.values, ..._clickPlayers.values];
+    var fail = 0;
+    Object? lastErr;
     await Future.wait([
       for (final p in players)
         Future(() async {
           try {
             await p.stop();
-          } catch (_) {}
+          } catch (e) {
+            fail++;
+            lastErr = e;
+          }
         }),
     ]);
+    if (fail > 0) {
+      pianoFlowLog('Audio', 'stopAllPlayers: $fail failed (last: $lastErr)');
+    }
   }
 
   Future<void> dispose() async {
@@ -549,8 +588,21 @@ class ScoreAudioPlayer {
     await _position.close();
     await _playingCtrl.close();
     await _metroTicks.close();
+    var disposeFail = 0;
+    Object? lastDisposeErr;
     for (final p in [..._notePlayers.values, ..._clickPlayers.values]) {
-      await p.dispose();
+      try {
+        await p.dispose();
+      } catch (e) {
+        disposeFail++;
+        lastDisposeErr = e;
+      }
+    }
+    if (disposeFail > 0) {
+      pianoFlowLog(
+        'Audio',
+        'player dispose: $disposeFail failed (last: $lastDisposeErr)',
+      );
     }
     _notePlayers.clear();
     _clickPlayers.clear();

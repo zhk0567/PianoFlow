@@ -42,11 +42,11 @@
       "artist": "Joe Hisaishi",
       "genre": "Anime",
       "difficulty": 3,
-      "bpm": 84,
+      "bpm": 80,
       "asset": "assets/scores/hisaishi_castle_in_the_sky.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/hisaishi_castle_in_the_sky.pdf. Not MIDI. Local practice only.",
-      "durationHint": 135,
-      "scoreKind": "formal"
+      "description": "OMR draft from PDF via Audiveris; partial PDF proofread 2026-07-30 (tempo q=80, bars1-6 LH bass corrected to F3/C3/G3/A2/C3/G2). Still omrDraft — full PDF checklist not complete. Not MIDI. Local practice only.",
+      "durationHint": 142,
+      "scoreKind": "omrDraft"
     },
     {
       "id": "radwimps_suzume",
@@ -58,7 +58,7 @@
       "asset": "assets/scores/radwimps_suzume.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/radwimps_suzume.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 78,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "ru_yuan",
@@ -70,7 +70,7 @@
       "asset": "assets/scores/ru_yuan.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/ru_yuan.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 111,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "christina_perri_a_thousand_years",
@@ -82,7 +82,7 @@
       "asset": "assets/scores/christina_perri_a_thousand_years.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/christina_perri_a_thousand_years.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 247,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "haruhikage",
@@ -94,7 +94,7 @@
       "asset": "assets/scores/haruhikage.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/haruhikage.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 126,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "rimsky_flight_of_the_bumblebee",
@@ -106,7 +106,7 @@
       "asset": "assets/scores/rimsky_flight_of_the_bumblebee.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/rimsky_flight_of_the_bumblebee.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 78,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "beethoven_moonlight_sonata",
@@ -118,7 +118,7 @@
       "asset": "assets/scores/beethoven_moonlight_sonata.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/beethoven_moonlight_sonata.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 441,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "jay_chou_qing_tian",
@@ -130,7 +130,7 @@
       "asset": "assets/scores/jay_chou_qing_tian.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/jay_chou_qing_tian.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 240,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "clayderman_reve_damour",
@@ -142,7 +142,7 @@
       "asset": "assets/scores/clayderman_reve_damour.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/clayderman_reve_damour.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 167,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "sawano_call_of_silence",
@@ -154,7 +154,7 @@
       "asset": "assets/scores/sawano_call_of_silence.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/sawano_call_of_silence.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 157,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "xiang_yun_duan",
@@ -166,7 +166,7 @@
       "asset": "assets/scores/xiang_yun_duan.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/xiang_yun_duan.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 212,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     },
     {
       "id": "jue_bie_shu",
@@ -178,7 +178,7 @@
       "asset": "assets/scores/jue_bie_shu.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/jue_bie_shu.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
       "durationHint": 324,
-      "scoreKind": "formal"
+      "scoreKind": "omrDraft"
     }
   ]
 }

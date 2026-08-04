@@ -23,8 +23,13 @@ class SoftLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SliverFillRemaining(
-      child: Center(child: CircularProgressIndicator()),
+    return SliverFillRemaining(
+      child: Center(
+        child: Semantics(
+          label: '加载中',
+          child: const CircularProgressIndicator(),
+        ),
+      ),
     );
   }
 }

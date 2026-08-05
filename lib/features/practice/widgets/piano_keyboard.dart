@@ -4,7 +4,7 @@ import '../../../shared/models/song.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../keyboard_geometry.dart';
 
-/// Display-only 88-key piano (A0–C8). No tap-to-play (avoids speaker→mic echo).
+/// 88-key piano (A0–C8). Practice page is display-only; pass [onKeyTap] for sandbox.
 ///
 /// Highlights are colored by hand ([AppColors.leftHand] / [AppColors.rightHand]),
 /// not by black vs white key type.
@@ -14,6 +14,7 @@ class PianoKeyboard extends StatelessWidget {
     required this.geometry,
     required this.highlighted,
     required this.pressed,
+    this.onKeyTap,
   });
 
   final KeyboardGeometry geometry;
@@ -21,6 +22,9 @@ class PianoKeyboard extends StatelessWidget {
   /// MIDI → hand for active/waiting highlights. Presence means highlighted.
   final Map<int, Hand> highlighted;
   final Set<int> pressed;
+
+  /// When set, keys are tappable (sandbox try-out). Practice leaves this null.
+  final ValueChanged<int>? onKeyTap;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +42,7 @@ class PianoKeyboard extends StatelessWidget {
                     height: h,
                     hand: highlighted[geometry.whiteMidis[i]],
                     pressed: pressed.contains(geometry.whiteMidis[i]),
+                    onTap: onKeyTap,
                   ),
               ],
             ),
@@ -54,6 +59,7 @@ class PianoKeyboard extends StatelessWidget {
                   width: geometry.blackWidth,
                   hand: highlighted[m],
                   pressed: pressed.contains(m),
+                  onTap: onKeyTap,
                 ),
               );
             }),
@@ -80,6 +86,7 @@ class _WhiteKey extends StatelessWidget {
     required this.height,
     required this.hand,
     required this.pressed,
+    this.onTap,
   });
 
   final int midi;
@@ -87,6 +94,7 @@ class _WhiteKey extends StatelessWidget {
   final double height;
   final Hand? hand;
   final bool pressed;
+  final ValueChanged<int>? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +108,7 @@ class _WhiteKey extends StatelessWidget {
     final lit = pressed || hand != null;
     final fontSize = (width * 0.55).clamp(6.0, 11.0);
 
-    return Container(
+    final child = Container(
       width: width,
       height: height,
       decoration: BoxDecoration(
@@ -126,6 +134,13 @@ class _WhiteKey extends StatelessWidget {
             )
           : null,
     );
+
+    if (onTap == null) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onTap!(midi),
+      child: child,
+    );
   }
 }
 
@@ -135,12 +150,14 @@ class _BlackKey extends StatelessWidget {
     required this.width,
     required this.hand,
     required this.pressed,
+    this.onTap,
   });
 
   final int midi;
   final double width;
   final Hand? hand;
   final bool pressed;
+  final ValueChanged<int>? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +171,7 @@ class _BlackKey extends StatelessWidget {
     final lit = pressed || hand != null;
     final fontSize = (width * 0.32).clamp(5.5, 9.0);
 
-    return Container(
+    final child = Container(
       decoration: BoxDecoration(
         color: fill,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(4)),
@@ -179,6 +196,13 @@ class _BlackKey extends StatelessWidget {
               ),
             )
           : null,
+    );
+
+    if (onTap == null) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onTap!(midi),
+      child: child,
     );
   }
 }

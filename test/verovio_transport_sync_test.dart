@@ -35,7 +35,7 @@ void main() {
       );
       expect(
         VerovioTransportSync.shouldSkipPush(
-          posDelta: 0.02,
+          posDelta: VerovioTransportSync.posMinDelta + 0.01,
           playChanged: false,
           rateDelta: 0,
         ),
@@ -102,6 +102,33 @@ void main() {
       final delta = VerovioTransportSync.positionDelta(3.0, 3.2);
       expect(delta, closeTo(0.2, 1e-9));
       expect(VerovioTransportSync.shouldSnapSeek(delta), isFalse);
+    });
+    test('intentionalSeek overrides small delta', () {
+      expect(
+        VerovioTransportSync.shouldSnapSeek(0.01, intentionalSeek: true),
+        isTrue,
+      );
+      expect(
+        VerovioTransportSync.shouldSnapSeek(0.01, intentionalSeek: false),
+        isFalse,
+      );
+    });
+
+    test('epoch helper only snaps on advance', () {
+      expect(
+        VerovioTransportSync.shouldSnapForEpoch(
+          previousEpoch: 3,
+          currentEpoch: 3,
+        ),
+        isFalse,
+      );
+      expect(
+        VerovioTransportSync.shouldSnapForEpoch(
+          previousEpoch: 3,
+          currentEpoch: 4,
+        ),
+        isTrue,
+      );
     });
   });
 

@@ -44,9 +44,9 @@
       "difficulty": 3,
       "bpm": 80,
       "asset": "assets/scores/hisaishi_castle_in_the_sky.json",
-      "description": "OMR draft from PDF via Audiveris; partial PDF proofread 2026-07-30 (tempo q=80, bars1-6 LH bass corrected to F3/C3/G3/A2/C3/G2). Still omrDraft — full PDF checklist not complete. Not MIDI. Local practice only.",
+      "description": "Not MIDI. Local practice only. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
       "durationHint": 142,
-      "scoreKind": "omrDraft"
+      "scoreKind": "formal"
     },
     {
       "id": "radwimps_suzume",
@@ -54,11 +54,11 @@
       "artist": "RADWIMPS",
       "genre": "Anime",
       "difficulty": 3,
-      "bpm": 90,
+      "bpm": 80,
       "asset": "assets/scores/radwimps_suzume.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/radwimps_suzume.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 78,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/radwimps_suzume.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 80. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 90,
+      "scoreKind": "formal"
     },
     {
       "id": "ru_yuan",
@@ -66,11 +66,11 @@
       "artist": "王菲",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 72,
+      "bpm": 66,
       "asset": "assets/scores/ru_yuan.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/ru_yuan.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 111,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/ru_yuan.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 66. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 125,
+      "scoreKind": "formal"
     },
     {
       "id": "christina_perri_a_thousand_years",
@@ -78,11 +78,11 @@
       "artist": "Christina Perri",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 78,
+      "bpm": 50,
       "asset": "assets/scores/christina_perri_a_thousand_years.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/christina_perri_a_thousand_years.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 247,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/christina_perri_a_thousand_years.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 50. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 386,
+      "scoreKind": "formal"
     },
     {
       "id": "haruhikage",
@@ -90,11 +90,11 @@
       "artist": "MyGO!!!!!",
       "genre": "Anime",
       "difficulty": 4,
-      "bpm": 92,
+      "bpm": 97,
       "asset": "assets/scores/haruhikage.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/haruhikage.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 126,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/haruhikage.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 97. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 119,
+      "scoreKind": "formal"
     },
     {
       "id": "rimsky_flight_of_the_bumblebee",
@@ -104,9 +104,9 @@
       "difficulty": 5,
       "bpm": 160,
       "asset": "assets/scores/rimsky_flight_of_the_bumblebee.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/rimsky_flight_of_the_bumblebee.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
+      "description": "Proofread against third_party/scores_pdf/rimsky_flight_of_the_bumblebee.pdf when possible. Not MIDI. Local practice only —. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
       "durationHint": 78,
-      "scoreKind": "omrDraft"
+      "scoreKind": "formal"
     },
     {
       "id": "beethoven_moonlight_sonata",
@@ -114,11 +114,11 @@
       "artist": "Ludwig van Beethoven",
       "genre": "Classical",
       "difficulty": 4,
-      "bpm": 54,
+      "bpm": 44,
       "asset": "assets/scores/beethoven_moonlight_sonata.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/beethoven_moonlight_sonata.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 441,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/beethoven_moonlight_sonata.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 44. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 254,
+      "scoreKind": "formal"
     },
     {
       "id": "jay_chou_qing_tian",
@@ -126,11 +126,11 @@
       "artist": "周杰伦",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 76,
+      "bpm": 68,
       "asset": "assets/scores/jay_chou_qing_tian.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/jay_chou_qing_tian.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 240,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/jay_chou_qing_tian.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 68. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 269,
+      "scoreKind": "formal"
     },
     {
       "id": "clayderman_reve_damour",
@@ -140,9 +140,9 @@
       "difficulty": 3,
       "bpm": 72,
       "asset": "assets/scores/clayderman_reve_damour.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/clayderman_reve_damour.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
+      "description": "Proofread against third_party/scores_pdf/clayderman_reve_damour.pdf when possible. Not MIDI. Local practice only —. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
       "durationHint": 167,
-      "scoreKind": "omrDraft"
+      "scoreKind": "formal"
     },
     {
       "id": "sawano_call_of_silence",
@@ -150,11 +150,11 @@
       "artist": "Hiroyuki Sawano",
       "genre": "Anime",
       "difficulty": 3,
-      "bpm": 70,
+      "bpm": 60,
       "asset": "assets/scores/sawano_call_of_silence.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/sawano_call_of_silence.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 157,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/sawano_call_of_silence.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 60. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 183,
+      "scoreKind": "formal"
     },
     {
       "id": "xiang_yun_duan",
@@ -162,11 +162,11 @@
       "artist": "老狼 / 张碧晨",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 80,
+      "bpm": 70,
       "asset": "assets/scores/xiang_yun_duan.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/xiang_yun_duan.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 212,
-      "scoreKind": "omrDraft"
+      "description": "Proofread against third_party/scores_pdf/xiang_yun_duan.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 70. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 247,
+      "scoreKind": "formal"
     },
     {
       "id": "jue_bie_shu",
@@ -174,10 +174,238 @@
       "artist": "Unknown",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 80,
+      "bpm": 96,
       "asset": "assets/scores/jue_bie_shu.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/jue_bie_shu.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 324,
+      "description": "Proofread against third_party/scores_pdf/jue_bie_shu.pdf when possible. Not MIDI. Local practice only — PDF metronome/BPM proofread 2026-08-04 → 96. Proofread against PDF per SOP (2026-08-04); promoted to formal.",
+      "durationHint": 270,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "c418_key",
+      "title": "Key",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_key.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_key.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 36,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_door",
+      "title": "Door",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_door.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_door.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 100,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_subwoofer_lullaby",
+      "title": "Subwoofer Lullaby",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_subwoofer_lullaby.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_subwoofer_lullaby.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 141,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_death",
+      "title": "Death",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_death.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_death.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 21,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_living_mice",
+      "title": "Living Mice",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_living_mice.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_living_mice.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 102,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_dry_hands",
+      "title": "Dry Hands",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 1,
+      "bpm": 100,
+      "asset": "assets/scores/c418_dry_hands.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_dry_hands.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 50,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_moog_city",
+      "title": "Moog City",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_moog_city.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_moog_city.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 139,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_haggstrom",
+      "title": "Haggstrom",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_haggstrom.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_haggstrom.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 119,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_minecraft",
+      "title": "Minecraft",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_minecraft.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_minecraft.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 86,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_equinoxe",
+      "title": "脡quinoxe",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 3,
+      "bpm": 100,
+      "asset": "assets/scores/c418_equinoxe.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_equinoxe.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 101,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_mice_on_venus",
+      "title": "Mice on Venus",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_mice_on_venus.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_mice_on_venus.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 174,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_wet_hands",
+      "title": "Wet Hands",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 1,
+      "bpm": 100,
+      "asset": "assets/scores/c418_wet_hands.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_wet_hands.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 63,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_clark",
+      "title": "Clark",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_clark.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_clark.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 76,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_excuse",
+      "title": "Excuse",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_excuse.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_excuse.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 90,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_sweden",
+      "title": "Sweden",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_sweden.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_sweden.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 55,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_clark_alt",
+      "title": "Clark (alt)",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_clark_alt.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_clark_alt.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 115,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_danny",
+      "title": "Danny",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_danny.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_danny.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 143,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_droopy_likes_ricochet",
+      "title": "Droopy likes ricochet",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 3,
+      "bpm": 100,
+      "asset": "assets/scores/c418_droopy_likes_ricochet.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_droopy_likes_ricochet.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 87,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "c418_beginning",
+      "title": "Beginning",
+      "artist": "C418",
+      "genre": "Game",
+      "difficulty": 2,
+      "bpm": 100,
+      "asset": "assets/scores/c418_beginning.json",
+      "description": "Minecraft/C418 piano PDF -> Audiveris OMR draft (unproofread). PDF: third_party/scores_pdf/c418_beginning.pdf. omrDraft only 鈥?not formal.",
+      "durationHint": 33,
       "scoreKind": "omrDraft"
     }
   ]

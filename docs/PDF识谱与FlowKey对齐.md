@@ -93,5 +93,10 @@ PDF（归档在 third_party/scores_pdf/）
 
 - 默认输入：**PDF**（`third_party/scores_pdf/`）
 - 默认引擎：**Audiveris**（本机安装后用 `scripts/omr-from-pdf.ps1`）
-- 默认质量门：**人工/半自动对着 PDF 校对通过** 才能 `--update-catalog`
+- 默认质量门：**人工对着 PDF 校对通过** 才能升 `formal`；未校对入库只能 `omrDraft`
+- 入库草稿：`omr-finish-import.ps1` 固定 `omrDraft` + `--fail-on-drift`
+- 升 formal：`omr_promote_formal.py --id <id> --confirm-sop-passed`（须确认 SOP 开/中/尾）
+- 进度与工具：[`omr_audit/PROOFREAD_STATUS.md`](./omr_audit/PROOFREAD_STATUS.md)
 - App 体验：在谱准的前提下，持续把播放、谱面、练习反馈往 FlowKey 靠
+
+**现状（2026-08-04）：** catalog **formal ×15**。原 OMR×12 已完成 PDF 速度/节奏补洞、JSON≡XML、开/中/尾 SOP 抽检后升 formal（证据见 `docs/omr_audit/PROOFREAD_STATUS.md`）。新 PDF 曲未校对前仍须 `omrDraft`。

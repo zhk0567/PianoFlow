@@ -1,0 +1,6 @@
+# NuGet CLI for webview_windows (WebView2 / WIL package restore).
+# Ensure-PianoFlowNuget in scripts/piano-flow-common.ps1 downloads nuget.exe here
+# if missing so CMake does not print "Nuget is not installed." on every build.
+*
+!.gitignore
+!README.md

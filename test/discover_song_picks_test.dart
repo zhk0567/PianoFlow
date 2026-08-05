@@ -107,9 +107,10 @@ void main() {
     expect(pick?.id, 'formal_hard');
   });
 
-  test('scoreKindRank formal < simplified < omrDraft', () {
+  test('scoreKindRank formal < simplified < omrDraft < userImport', () {
     expect(DiscoverSongPicks.scoreKindRank(ScoreKind.formal), 0);
     expect(DiscoverSongPicks.scoreKindRank(ScoreKind.simplified), 1);
     expect(DiscoverSongPicks.scoreKindRank(ScoreKind.omrDraft), 2);
+    expect(DiscoverSongPicks.scoreKindRank(ScoreKind.userImport), 3);
   });
 }

@@ -15,7 +15,8 @@ extension HandX on Hand {
 /// - [formal]: authored / textbook MusicXML（已校对或教材级）
 /// - [simplified]: JSON→MusicXML 简编（可读、跟进度，但非正式排版）
 /// - [omrDraft]: PDF→OMR 未逐音校对草稿（可练，但**不是**精确正式谱）
-enum ScoreKind { formal, simplified, omrDraft }
+/// - [userImport]: 用户工坊自导入（本地，禁止标 formal）
+enum ScoreKind { formal, simplified, omrDraft, userImport }
 
 class SongSummary {
   const SongSummary({
@@ -44,7 +45,7 @@ class SongSummary {
 
   factory SongSummary.fromJson(Map<String, dynamic> json) {
     final kindRaw = json['scoreKind'] as String?;
-    final known = {'formal', 'simplified', 'omrDraft'};
+    final known = {'formal', 'simplified', 'omrDraft', 'userImport'};
     if (kindRaw != null && !known.contains(kindRaw)) {
       pianoFlowLog(
         'Catalog',
@@ -64,23 +65,40 @@ class SongSummary {
       scoreKind: switch (kindRaw) {
         'formal' => ScoreKind.formal,
         'omrDraft' => ScoreKind.omrDraft,
+        'userImport' => ScoreKind.userImport,
         'simplified' => ScoreKind.simplified,
         _ => ScoreKind.simplified,
       },
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'artist': artist,
+        'genre': genre,
+        'difficulty': difficulty,
+        'bpm': bpm,
+        'asset': asset,
+        'description': description,
+        if (durationHint != null) 'durationHint': durationHint,
+        'scoreKind': scoreKind.name,
+      };
+
   bool get isSimplifiedScore => scoreKind == ScoreKind.simplified;
 
   bool get isOmrDraft => scoreKind == ScoreKind.omrDraft;
 
-  /// True only for proofread / textbook MusicXML — never for OMR drafts.
+  bool get isUserImport => scoreKind == ScoreKind.userImport;
+
+  /// True only for proofread / textbook MusicXML — never for OMR / user drafts.
   bool get isFormalScore => scoreKind == ScoreKind.formal;
 
   String get scoreKindLabel => switch (scoreKind) {
         ScoreKind.formal => '正式谱',
         ScoreKind.omrDraft => 'OMR草稿',
         ScoreKind.simplified => '简编谱',
+        ScoreKind.userImport => '自导入',
       };
 
   /// Discover / practice honesty line — OMR always marked 未校对.
@@ -91,9 +109,15 @@ class SongSummary {
   static const omrHonestyNotice =
       'OMR草稿未经逐音校对，可练但不保证与原谱完全一致';
 
-  /// Fixed practice-page banner when [isOmrDraft]; null for other kinds.
-  String? get practiceHonestyBanner =>
-      isOmrDraft ? omrHonestyNotice : null;
+  static const userImportHonestyNotice =
+      '自导入曲谱请自行核对准确性，不会标为正式谱';
+
+  /// Fixed practice-page banner when honesty needed; null for formal/simplified.
+  String? get practiceHonestyBanner {
+    if (isOmrDraft) return omrHonestyNotice;
+    if (isUserImport) return userImportHonestyNotice;
+    return null;
+  }
 
   /// Meta under「今日一首」title.
   String get homeTodayMetaLine =>

@@ -134,6 +134,27 @@ python .\scripts\omr_audit_score.py --all-omr --fail-on-drift
 
 报告写在 `docs\omr_audit\`。脚本**永远不会**把曲目标成 formal。`omr-finish-import.ps1` 也固定导入为 `omrDraft`，并带 `--fail-on-drift`。
 
+校对通过后升 formal（须人工确认 SOP 开/中/尾逐音）：
+
+```powershell
+python .\scripts\omr_promote_formal.py --id <score_id> --confirm-sop-passed
+# 内部会：catalog→formal、从 score_kind_policy 移除 id、改写 Dart 镜像、跑护栏
+```
+
+每首进度见 `docs\omr_audit\PROOFREAD_STATUS.md` 与 `docs\omr_audit\<id>_SOP.md`。
+
+**校对辅助脚本（均不自动升 formal）：**
+
+```powershell
+# PDF 首页预览 / 小节音高 dump
+python .\scripts\omr_pdf_preview.py --id hisaishi_castle_in_the_sky --pages 2
+python .\scripts\omr_dump_measures.py --id hisaishi_castle_in_the_sky --bars 8
+
+# MusicXML 渲成 PNG，与 PDF 并排（需：npm i verovio @resvg/resvg-js）
+node .\scripts\render_musicxml_png.js hisaishi_castle_in_the_sky 2
+# 输出：docs\omr_audit\_render\{id}\mxml_p*.png
+```
+
 ---
 
 ## 验收清单（每首正式曲）

@@ -266,8 +266,8 @@ class VerovioRuntime {
       );
     }
 
-    // v48: practice staff = SongScore JSON (same clock as audio/waterfall).
-    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v48';
+    // v50: continuous staff strip (breaks:none) — no mid-piece page seams.
+    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v51';
     final marker = File('${dir.path}${Platform.pathSeparator}.asset_stamp');
     final htmlOut = File('${dir.path}${Platform.pathSeparator}viewer.html');
     final wasmOut = File(
@@ -581,11 +581,14 @@ class VerovioRuntime {
       return;
     }
     _positionPushing = true;
+    // Cap drain so a flood of enqueues cannot pin the UI isolate.
+    var drained = 0;
     try {
       var b = beats;
       var s = snap;
       double? r = rate;
-      while (true) {
+      while (drained < 3) {
+        drained++;
         final rateArg = r != null ? ', $r' : '';
         var delivered = false;
         try {
@@ -614,19 +617,12 @@ class VerovioRuntime {
         _queuedSnap = false;
         _queuedRate = null;
       }
-    } finally {
-      _positionPushing = false;
-    }
-    // Race: a push may enqueue after the while-drain but before the flag clears.
-    // Re-enter so the latest beats/rate are never dropped (dropped syncs → staff lag).
-    if (_queuedBeats != null) {
-      final b = _queuedBeats!;
-      final s = _queuedSnap;
-      final r = _queuedRate;
+      // Drop any leftover queue — next throttle tick will re-anchor.
       _queuedBeats = null;
       _queuedSnap = false;
       _queuedRate = null;
-      await pushPosition(b, snap: s, beatsPerSec: r);
+    } finally {
+      _positionPushing = false;
     }
   }
 

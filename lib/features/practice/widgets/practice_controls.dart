@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/models/song.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../practice_clock.dart';
 import '../practice_constants.dart';
 import '../practice_models.dart';
 import 'visual_metronome.dart';
@@ -15,6 +16,7 @@ class PracticeControls extends StatelessWidget {
     required this.onRestart,
     required this.onSettings,
     required this.onSeek,
+    this.positionListenable,
   });
 
   final PracticeSnapshot snap;
@@ -22,6 +24,9 @@ class PracticeControls extends StatelessWidget {
   final VoidCallback onRestart;
   final ValueChanged<PracticeSettings> onSettings;
   final ValueChanged<double> onSeek;
+
+  /// When set, only the seek slider rebuilds at clock rate (not the whole strip).
+  final PracticeClock? positionListenable;
 
   @override
   Widget build(BuildContext context) {
@@ -79,35 +84,90 @@ class PracticeControls extends StatelessWidget {
                       overlayRadius: 14,
                     ),
                   ),
-                  child: Slider(
-                    value: snap.positionBeats.clamp(0, snap.durationBeats),
-                    max: snap.durationBeats <= 0 ? 1 : snap.durationBeats,
-                    onChanged: onSeek,
-                  ),
+                  child: positionListenable == null
+                      ? Slider(
+                          value: snap.positionBeats
+                              .clamp(0, snap.durationBeats),
+                          max: snap.durationBeats <= 0
+                              ? 1
+                              : snap.durationBeats,
+                          onChanged: s.mode.allowsSeek ? onSeek : null,
+                        )
+                      : ListenableBuilder(
+                          listenable: positionListenable!,
+                          builder: (context, _) {
+                            final pos = positionListenable!.positionBeats;
+                            return Slider(
+                              value: pos.clamp(0, snap.durationBeats),
+                              max: snap.durationBeats <= 0
+                                  ? 1
+                                  : snap.durationBeats,
+                              onChanged: s.mode.allowsSeek ? onSeek : null,
+                            );
+                          },
+                        ),
                 ),
               ),
             ],
           ),
+          if (s.mode.isExam)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  snap.isLeadInRitual
+                      ? '准备…'
+                      : snap.endHangActive
+                          ? '收束…'
+                          : '考试中 · 不可拖动进度',
+                  style: AppTheme.body(
+                    fontSize: 11,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 4),
           // Mode + hand
           Row(
             children: [
               Expanded(
-                child: SegmentedButton<bool>(
+                child: SegmentedButton<PracticeMode>(
                   style: segmentStyle,
                   segments: const [
-                    ButtonSegment(value: false, label: Text('练习')),
-                    ButtonSegment(value: true, label: Text('自动播放')),
+                    ButtonSegment(
+                      value: PracticeMode.wait,
+                      label: Text('练习'),
+                    ),
+                    ButtonSegment(
+                      value: PracticeMode.exam,
+                      label: Text('考试'),
+                    ),
+                    ButtonSegment(
+                      value: PracticeMode.autoPlay,
+                      label: Text('自动'),
+                    ),
                   ],
-                  selected: {s.mode.isAutoPlay},
+                  selected: {s.mode},
                   onSelectionChanged: (v) {
-                    if (v.first) {
+                    final mode = v.first;
+                    if (mode.isAutoPlay) {
                       onSettings(s.copyWith(
                         mode: PracticeMode.autoPlay,
                         guideAudio: true,
                       ));
+                    } else if (mode.isExam) {
+                      onSettings(s.copyWith(
+                        mode: PracticeMode.exam,
+                        guideAudio: false,
+                        loopEnabled: false,
+                      ));
                     } else {
-                      onSettings(s.copyWith(mode: PracticeMode.wait));
+                      onSettings(s.copyWith(
+                        mode: PracticeMode.wait,
+                        guideAudio: false,
+                      ));
                     }
                   },
                 ),
@@ -186,7 +246,7 @@ class PracticeControls extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      if (s.mode.isPractice) ...[
+                      if (s.mode.isPractice && !s.mode.isExam) ...[
                         _OptionChip(
                           label: '示范音',
                           selected: s.guideAudio,
@@ -206,13 +266,40 @@ class PracticeControls extends StatelessWidget {
                         enabled: s.metronome,
                         isPlaying: snap.isPlaying,
                       ),
+                      if (s.mode.allowsLoop) ...[
+                        const SizedBox(width: 6),
+                        _OptionChip(
+                          label: '循环',
+                          selected: s.loopEnabled,
+                          onSelected: (v) =>
+                              onSettings(s.copyWith(loopEnabled: v)),
+                        ),
+                      ],
                       const SizedBox(width: 6),
                       _OptionChip(
-                        label: '循环',
-                        selected: s.loopEnabled,
+                        label: '视觉特效',
+                        selected: s.visualFxEnabled,
                         onSelected: (v) =>
-                            onSettings(s.copyWith(loopEnabled: v)),
+                            onSettings(s.copyWith(visualFxEnabled: v)),
                       ),
+                      if (s.mode.isExam) ...[
+                        const SizedBox(width: 6),
+                        _OptionChip(
+                          label: '录制',
+                          selected: s.examRecordAudio,
+                          onSelected: (v) =>
+                              onSettings(s.copyWith(examRecordAudio: v)),
+                        ),
+                        if (snap.ghostHits.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          _OptionChip(
+                            label: '残影',
+                            selected: s.showGhost,
+                            onSelected: (v) =>
+                                onSettings(s.copyWith(showGhost: v)),
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
@@ -272,13 +359,12 @@ class PracticeControls extends StatelessWidget {
               ),
             ],
           ),
-          if (s.mode == PracticeMode.wait || s.mode.isAutoPlay)
+          if (s.mode.isPractice || s.mode.isAutoPlay)
             SizedBox(
               height: 22,
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: s.mode == PracticeMode.wait &&
-                        snap.waitingFor.isNotEmpty
+                child: s.mode.isPractice && snap.waitingFor.isNotEmpty
                     ? Text(
                         '请弹：${snap.waitingFor.map(_label).join(' · ')}',
                         style: AppTheme.body(
@@ -295,7 +381,15 @@ class PracticeControls extends StatelessWidget {
                               color: AppColors.textSecondary,
                             ),
                           )
-                        : const SizedBox.shrink(),
+                        : snap.isLeadInRitual
+                            ? Text(
+                                '开场准备',
+                                style: AppTheme.body(
+                                  fontSize: 12,
+                                  color: AppColors.accent,
+                                ),
+                              )
+                            : const SizedBox.shrink(),
               ),
             ),
         ],

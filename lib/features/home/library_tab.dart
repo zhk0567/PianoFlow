@@ -116,6 +116,16 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
                         ),
                       ),
                     ],
+                    if (_scoreKind == ScoreKind.userImport) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        SongSummary.userImportHonestyNotice,
+                        style: AppTheme.body(
+                          fontSize: 12,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     Text(
                       filtered.isEmpty

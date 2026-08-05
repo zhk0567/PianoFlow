@@ -37,18 +37,27 @@ void main() {
     }
   });
 
-  test('detects formal mislabel for provenance id', () {
+  test('detects formal with OMR-like description', () {
     final bad = SongSummary(
-      id: 'hisaishi_castle_in_the_sky',
-      title: '天空之城',
-      artist: 'Joe Hisaishi',
+      id: 'some_new_piece',
+      title: '新曲',
+      artist: 'Unknown',
       genre: '动画',
       difficulty: 3,
       bpm: 80,
       asset: 'assets/scores/x.json',
-      description: 'test',
+      description: 'OMR draft from PDF via Audiveris.',
       scoreKind: ScoreKind.formal,
     );
     expect(ScoreKindPolicy.catalogViolations([bad]), isNotEmpty);
+  });
+
+  test('empty omrProvenanceIds allows all-formal catalog', () {
+    expect(ScoreKindPolicy.omrProvenanceIds, isEmpty);
+    final songs = (catalog['songs'] as List)
+        .cast<Map<String, dynamic>>()
+        .map(SongSummary.fromJson)
+        .toList();
+    expect(songs.every((s) => s.scoreKind == ScoreKind.formal), isTrue);
   });
 }

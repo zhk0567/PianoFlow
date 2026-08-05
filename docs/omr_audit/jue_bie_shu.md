@@ -1,12 +1,12 @@
 # OMR audit — `jue_bie_shu`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-04 19:37
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\jue_bie_shu.pdf`
 - MusicXML: `assets\scores\musicxml\jue_bie_shu.musicxml`
 - JSON: `assets\scores\jue_bie_shu.json`
 - JSON ≡ reparse: **True** (1603/1603 notes)
-- BPM JSON/parse: 80 / 100
+- BPM JSON/parse: 96 / 96
 - keySignature JSON/parse: -1 / -1
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -15,13 +15,12 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=80) — practice tempo may be a catalog default
 - 237 same-hand leap(s) ≥12 semitones (OMR risk)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: True
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('4', '4')": 1}`
 

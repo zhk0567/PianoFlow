@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/auth_controller.dart';
 import '../features/auth/login_page.dart';
+import '../features/home/constellation_page.dart';
 import '../features/home/discover_tab.dart';
 import '../features/home/home_shell.dart';
 import '../features/home/library_tab.dart';
@@ -11,6 +12,9 @@ import '../features/home/profile_tab.dart';
 import '../features/practice/practice_page.dart';
 import '../features/profile/pitch_test_page.dart';
 import '../features/profile/settings_page.dart';
+import '../features/sandbox/sandbox_page.dart';
+import '../features/workshop/workshop_page.dart';
+import '../features/workshop/workshop_tools.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 
@@ -65,6 +69,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/workshop',
+                builder: (context, state) {
+                  final tool = WorkshopTool.parseId(
+                    state.uri.queryParameters['tool'],
+                  );
+                  return WorkshopPage(initialTool: tool);
+                },
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/profile',
                 builder: (context, state) => const ProfileTab(),
               ),
@@ -82,6 +99,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pitch-test',
         builder: (context, state) => const PitchTestPage(),
+      ),
+      GoRoute(
+        path: '/sandbox',
+        builder: (context, state) => const SandboxPage(),
+      ),
+      GoRoute(
+        path: '/constellation',
+        builder: (context, state) => const ConstellationPage(),
       ),
       GoRoute(
         path: '/settings',

@@ -164,17 +164,12 @@ class ScoreAudioPlayer {
       }
       _silentWarmFile = silentFile.path;
 
-      final noteEntries = _noteFiles.entries.toList();
-      final clickEntries = _clickFiles.entries.toList();
-      const batchSize = 8;
-      for (var i = 0; i < noteEntries.length; i += batchSize) {
-        final slice = noteEntries.skip(i).take(batchSize);
-        await Future.wait([
-          for (final e in slice) _bindPlayer(_notePlayers, e.key, e.value),
-        ]);
-      }
+      // Only bind metronome click players up front (2). Piano notes bind lazily
+      // on first use — creating ~88 AudioPlayers at init floods Windows with
+      // audioplayers "non-platform thread" engine ERRORs (plugin bug).
       await Future.wait([
-        for (final e in clickEntries) _bindPlayer(_clickPlayers, e.key, e.value),
+        for (final e in _clickFiles.entries)
+          _bindPlayer(_clickPlayers, e.key, e.value),
       ]);
 
       // Open the Windows/desktop audio device once so the first audible
@@ -233,6 +228,52 @@ class ScoreAudioPlayer {
     // Preload so taps never pay setSource / prepare cost.
     await p.setSource(DeviceFileSource(path));
     map[key] = p;
+  }
+
+  /// Lazily create the dedicated one-shot player for [midi] (preloaded source).
+  Future<AudioPlayer?> _notePlayerFor(int midi) async {
+    final m = midi.clamp(PracticeConstants.midiMin, PracticeConstants.midiMax);
+    final hit = _notePlayers[m];
+    if (hit != null) return hit;
+    final inflight = _noteBindInflight[m];
+    if (inflight != null) return inflight;
+    final path = _noteFiles[m];
+    if (path == null) return null;
+    final future = () async {
+      await _bindPlayer(_notePlayers, m, path);
+      return _notePlayers[m];
+    }();
+    _noteBindInflight[m] = future;
+    try {
+      return await future;
+    } finally {
+      _noteBindInflight.remove(m);
+    }
+  }
+
+  final Map<int, Future<AudioPlayer?>> _noteBindInflight = {};
+
+  /// Bind piano players for [midis] without sounding them.
+  ///
+  /// Call before transport start so the first notes do not pay AudioPlayer
+  /// create+setSource on the audible beat (severe hitch on Windows).
+  Future<void> prefetchMidis(
+    Iterable<int> midis, {
+    int batchSize = 2,
+    int yieldMs = 1,
+  }) async {
+    await ensureReady();
+    var n = 0;
+    for (final raw in midis) {
+      final m =
+          raw.clamp(PracticeConstants.midiMin, PracticeConstants.midiMax);
+      if (_notePlayers.containsKey(m)) continue;
+      await _notePlayerFor(m);
+      n++;
+      if (yieldMs > 0 && n % batchSize == 0) {
+        await Future<void>.delayed(Duration(milliseconds: yieldMs));
+      }
+    }
   }
 
   /// Map linear master (0–[volumeMax]) onto AudioPlayer's 0–1 fader.
@@ -429,12 +470,11 @@ class ScoreAudioPlayer {
   }
 
   void _triggerNote(int midi, double volume, double balance) {
-    final player = _notePlayers[midi.clamp(
-      PracticeConstants.midiMin,
-      PracticeConstants.midiMax,
-    )];
-    if (player == null) return;
-    unawaited(_retrigger(player, volume, balance: balance));
+    unawaited(() async {
+      final player = await _notePlayerFor(midi);
+      if (player == null) return;
+      await _retrigger(player, volume, balance: balance);
+    }());
   }
 
   void _triggerClick({required bool accent}) {
@@ -613,7 +653,7 @@ class ScoreAudioPlayer {
 
 final scoreAudioProvider = Provider<ScoreAudioPlayer>((ref) {
   final player = ScoreAudioPlayer();
-  // Start 88-tone preload as soon as anything reads this provider.
+  // Preload cache + click players; piano notes bind lazily on first use.
   unawaited(player.ensureReady());
   ref.onDispose(player.dispose);
   return player;

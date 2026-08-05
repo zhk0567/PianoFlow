@@ -5,6 +5,42 @@ $script:PianoFlowRoot = Split-Path -Parent $PSScriptRoot
 $script:PianoFlowFlutterBin = "F:\Other\flutter\bin"
 $script:PianoFlowDebugExe = Join-Path $script:PianoFlowRoot "build\windows\x64\runner\Debug\piano_flow.exe"
 $script:PianoFlowReleaseExe = Join-Path $script:PianoFlowRoot "build\windows\x64\runner\Release\piano_flow.exe"
+$script:PianoFlowNugetDir = Join-Path $script:PianoFlowRoot "third_party\nuget"
+$script:PianoFlowNugetExe = Join-Path $script:PianoFlowNugetDir "nuget.exe"
+# Must match webview_windows windows/CMakeLists.txt NUGET_SHA256.
+$script:PianoFlowNugetSha256 = "852B71CC8C8C2D40D09EA49D321FF56FD2397B9D6EA9F96E532530307BBBAFD3"
+$script:PianoFlowNugetUrl = "https://dist.nuget.org/win-x86-commandline/v5.10.0/nuget.exe"
+
+function Ensure-PianoFlowNuget {
+    if (-not (Test-Path $script:PianoFlowNugetDir)) {
+        New-Item -ItemType Directory -Force -Path $script:PianoFlowNugetDir | Out-Null
+    }
+    $needFetch = $true
+    if (Test-Path $script:PianoFlowNugetExe) {
+        try {
+            $hash = (Get-FileHash -Path $script:PianoFlowNugetExe -Algorithm SHA256).Hash
+            if ($hash -eq $script:PianoFlowNugetSha256) { $needFetch = $false }
+        } catch {
+            $needFetch = $true
+        }
+    }
+    if ($needFetch) {
+        Write-Host "Downloading nuget.exe (webview_windows)..." -ForegroundColor DarkGray
+        try {
+            Invoke-WebRequest -Uri $script:PianoFlowNugetUrl -OutFile $script:PianoFlowNugetExe -UseBasicParsing
+        } catch {
+            Write-Host ("WARN: nuget download failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+            return $false
+        }
+        $hash = (Get-FileHash -Path $script:PianoFlowNugetExe -Algorithm SHA256).Hash
+        if ($hash -ne $script:PianoFlowNugetSha256) {
+            Write-Host "WARN: nuget.exe hash mismatch" -ForegroundColor Yellow
+            return $false
+        }
+    }
+    $env:PATH = "$script:PianoFlowNugetDir;$env:PATH"
+    return $true
+}
 
 function Initialize-PianoFlowEnv {
     Set-Location $script:PianoFlowRoot
@@ -13,6 +49,9 @@ function Initialize-PianoFlowEnv {
         Write-Host "Flutter not found: $script:PianoFlowFlutterBin" -ForegroundColor Red
         return $false
     }
+    # Put nuget on PATH before flutter/cmake so webview_windows does not
+    # print "Nuget is not installed." on every configure.
+    $null = Ensure-PianoFlowNuget
     return $true
 }
 

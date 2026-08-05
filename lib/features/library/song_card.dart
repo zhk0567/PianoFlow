@@ -75,6 +75,7 @@ class RecordAlbumCard extends ConsumerWidget {
                       ScoreKind.formal => Icons.menu_book_rounded,
                       ScoreKind.omrDraft => Icons.document_scanner_rounded,
                       ScoreKind.simplified => Icons.album_rounded,
+                      ScoreKind.userImport => Icons.upload_file_rounded,
                     },
                     size: 140,
                     color: hue,

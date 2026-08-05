@@ -1,4 +1,4 @@
-# PianoFlow — MusicXML 入库（一键转换 + catalog）。
+﻿# PianoFlow — MusicXML 入库（一键转换 + catalog）。
 # Prefer MusicXML/MXL/MSCZ that matches the reference PDF. Do NOT use MIDI.
 # -ScoreKind: formal | simplified | omrDraft（OMR 必须 omrDraft，禁止冒充 formal）
 #
@@ -138,14 +138,14 @@ Docs: docs\曲谱导入SOP.md
   if ($Description) { $argsList += @("--description", $Description) }
   elseif ($Pdf -or $Title) {
     $kindZh = switch ($ScoreKind) {
-      "formal" { "正式谱" }
-      "omrDraft" { "OMR草稿" }
-      "simplified" { "简编谱" }
+      "formal" { "formal" }
+      "omrDraft" { "OMR draft" }
+      "simplified" { "simplified" }
       default { $ScoreKind }
     }
     $argsList += @(
       "--description",
-      "MusicXML 导入（$kindZh；$Id）。见 docs/曲谱导入SOP.md。"
+      "MusicXML import ($kindZh; $Id). See docs/曲谱导入SOP.md."
     )
   }
 

@@ -1,6 +1,6 @@
 # OMR audit — `hisaishi_castle_in_the_sky`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-04 19:37
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\hisaishi_castle_in_the_sky.pdf`
 - MusicXML: `assets\scores\musicxml\hisaishi_castle_in_the_sky.musicxml`

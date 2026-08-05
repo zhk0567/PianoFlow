@@ -1,12 +1,12 @@
 # OMR audit — `clayderman_reve_damour`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-04 19:37
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\clayderman_reve_damour.pdf`
 - MusicXML: `assets\scores\musicxml\clayderman_reve_damour.musicxml`
 - JSON: `assets\scores\clayderman_reve_damour.json`
 - JSON ≡ reparse: **True** (1103/1103 notes)
-- BPM JSON/parse: 72 / 100
+- BPM JSON/parse: 72 / 72
 - keySignature JSON/parse: -2 / -2
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -15,13 +15,12 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=72) — practice tempo may be a catalog default
 - 250 same-hand leap(s) ≥12 semitones (OMR risk)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: True
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('4', '4')": 1}`
 

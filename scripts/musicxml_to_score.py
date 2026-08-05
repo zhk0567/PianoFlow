@@ -250,7 +250,10 @@ def parse_musicxml(root: ET.Element) -> dict:
                 if tag == "attributes":
                     div_t = find_text(el, "divisions")
                     if div_t:
-                        divisions = int(div_t)
+                        try:
+                            divisions = max(1, int(div_t))
+                        except ValueError:
+                            warnings.append(f"bad divisions={div_t!r}; keep {divisions}")
                     time_el = find_child(el, "time")
                     if time_el is not None:
                         beats = find_text(time_el, "beats")
@@ -347,8 +350,11 @@ def parse_musicxml(root: ET.Element) -> dict:
                     warnings.append(f"skip out-of-range midi={midi}")
                     continue
 
-                start = abs_beat + onset_div / float(divisions)
-                duration = dur_div / float(divisions)
+                start = abs_beat + onset_div / float(max(divisions, 1))
+                duration = dur_div / float(max(divisions, 1))
+                if duration <= 0:
+                    duration = 0.25 / float(max(divisions, 1)) if divisions else 0.25
+                    # Keep a tiny positive duration for zero-duration heads.
                 if duration <= 0:
                     continue
 
@@ -364,7 +370,7 @@ def parse_musicxml(root: ET.Element) -> dict:
             # Advance absolute time by written measure length (max cursor / divisions)
             # Prefer time signature length when measure is empty of notes.
             beats_per_measure = time_num * (4.0 / time_den)
-            written = measure_max / float(divisions) if divisions else 0.0
+            written = measure_max / float(max(divisions, 1)) if divisions else 0.0
             abs_beat += written if written > 0.01 else beats_per_measure
 
     if direction_tempo:
@@ -468,6 +474,7 @@ def resolve_catalog_meta(
         "formal": "正式谱",
         "omrDraft": "OMR草稿",
         "simplified": "简编谱",
+        "userImport": "自导入",
     }.get(kind, kind)
     default_desc = f"MusicXML 导入（{kind_zh}；{score_id}）。"
     return {
@@ -481,8 +488,15 @@ def resolve_catalog_meta(
     }
 
 
-def write_score(score_id: str, parsed: dict, title_override: str | None = None) -> Path:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+def write_score(
+    score_id: str,
+    parsed: dict,
+    title_override: str | None = None,
+    *,
+    out_dir: Path | None = None,
+) -> Path:
+    dest = out_dir or OUT_DIR
+    dest.mkdir(parents=True, exist_ok=True)
     meta = CATALOG_META.get(score_id, {})
     title = title_override or meta.get("title") or parsed["title"]
     payload = {
@@ -493,9 +507,148 @@ def write_score(score_id: str, parsed: dict, title_override: str | None = None) 
         "keySignature": parsed["keySignature"],
         "notes": parsed["notes"],
     }
-    out = OUT_DIR / f"{score_id}.json"
+    out = dest / f"{score_id}.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return out
+
+
+def update_user_catalog(
+    score_id: str,
+    parsed: dict,
+    user_dir: Path,
+    *,
+    meta_overrides: dict | None = None,
+) -> None:
+    """Upsert into user_dir/user_catalog.json — always scoreKind=userImport."""
+    catalog_path = user_dir / "user_catalog.json"
+    existing_entry = None
+    songs: list = []
+    if catalog_path.exists():
+        data = json.loads(catalog_path.read_text(encoding="utf-8"))
+        songs = list(data.get("songs") or [])
+        for s in songs:
+            if s.get("id") == score_id:
+                existing_entry = s
+                break
+    else:
+        data = {"songs": []}
+
+    ov = dict(meta_overrides or {})
+    ov["scoreKind"] = "userImport"  # never formal
+    meta = resolve_catalog_meta(
+        score_id,
+        parsed=parsed,
+        overrides=ov,
+        existing=existing_entry,
+    )
+    if meta is None:
+        meta = {
+            "title": ov.get("title") or parsed.get("title") or score_id,
+            "artist": ov.get("artist") or "自导入",
+            "genre": ov.get("genre") or "Classical",
+            "difficulty": int(ov.get("difficulty") or 3),
+            "description": ov.get("description")
+            or f"用户工坊自导入（{score_id}）。",
+            "scoreKind": "userImport",
+        }
+    meta["scoreKind"] = "userImport"
+
+    duration_beats = 0.0
+    for n in parsed["notes"]:
+        duration_beats = max(duration_beats, n["start"] + n["duration"])
+    bpm = int(parsed["bpm"])
+    duration_hint = max(8, int(round(duration_beats * 60 / max(bpm, 1))))
+
+    entry = {
+        "id": score_id,
+        "title": meta["title"],
+        "artist": meta["artist"],
+        "genre": meta["genre"],
+        "difficulty": meta["difficulty"],
+        "bpm": bpm,
+        "asset": f"user:{score_id}",
+        "description": meta["description"],
+        "durationHint": duration_hint,
+        "scoreKind": "userImport",
+    }
+
+    replaced = False
+    for i, s in enumerate(songs):
+        if s.get("id") == score_id:
+            songs[i] = entry
+            replaced = True
+            break
+    if not replaced:
+        songs.append(entry)
+    data["songs"] = songs
+    catalog_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"[user-catalog] {'updated' if replaced else 'added'} {score_id} → {catalog_path}")
+
+
+def convert_user_import(
+    score_id: str,
+    *,
+    input_path: Path,
+    user_dir: Path,
+    meta_overrides: dict | None = None,
+) -> int:
+    """Convert MusicXML into ApplicationDocuments-style user import dir.
+
+    Never writes assets/ or marks formal.
+    """
+    user_dir = user_dir.resolve()
+    user_dir.mkdir(parents=True, exist_ok=True)
+    xml_dir = user_dir / "musicxml"
+    xml_dir.mkdir(parents=True, exist_ok=True)
+
+    path = input_path.resolve()
+    if not path.exists():
+        print(f"[{score_id}] ERROR: input not found: {path}", file=sys.stderr)
+        return 1
+
+    print(f"[{score_id}] user-import reading {path}")
+    # Expand .mxl into musicxml/{id}.musicxml under user dir (not third_party).
+    if path.suffix.lower() == ".mxl":
+        with zipfile.ZipFile(path, "r") as zf:
+            names = [
+                n
+                for n in zf.namelist()
+                if n.lower().endswith((".musicxml", ".xml"))
+                and not n.startswith("__MACOSX")
+            ]
+            if not names:
+                print(f"[{score_id}] ERROR: no MusicXML inside MXL", file=sys.stderr)
+                return 1
+            dest = xml_dir / f"{score_id}.musicxml"
+            dest.write_bytes(zf.read(names[0]))
+            path = dest
+    else:
+        dest = xml_dir / f"{score_id}.musicxml"
+        shutil.copy2(path, dest)
+        path = dest
+
+    root = load_xml_root(path)
+    parsed = parse_musicxml(root)
+    if not parsed["notes"]:
+        print(f"[{score_id}] ERROR: no notes parsed", file=sys.stderr)
+        return 1
+
+    title_ov = (meta_overrides or {}).get("title")
+    out = write_score(score_id, parsed, title_override=title_ov, out_dir=user_dir)
+    print(
+        f"[{score_id}] wrote {out}  notes={len(parsed['notes'])}  "
+        f"bpm={parsed['bpm']}  (userImport)"
+    )
+    update_user_catalog(
+        score_id,
+        parsed,
+        user_dir,
+        meta_overrides=meta_overrides,
+    )
+    return 0
 
 
 def _existing_catalog_entry(score_id: str) -> dict | None:
@@ -676,7 +829,7 @@ def main() -> int:
     ap.add_argument(
         "--score-kind",
         dest="score_kind",
-        choices=("formal", "simplified", "omrDraft"),
+        choices=("formal", "simplified", "omrDraft", "userImport"),
         help="Catalog scoreKind (use omrDraft for unproofread PDF→OMR imports)",
     )
     ap.add_argument(
@@ -684,7 +837,41 @@ def main() -> int:
         action="store_true",
         help="Do not copy MusicXML into assets/scores/musicxml/",
     )
+    ap.add_argument(
+        "--user-import-dir",
+        type=Path,
+        help="Write JSON+MusicXML+user_catalog into this dir (forces scoreKind=userImport; no assets/)",
+    )
     args = ap.parse_args()
+
+    if args.user_import_dir is not None:
+        if not args.id:
+            ap.error("--user-import-dir requires --id")
+            return 2
+        if args.input is None:
+            ap.error("--user-import-dir requires --input")
+            return 2
+        if args.all or args.update_catalog:
+            ap.error("--user-import-dir cannot combine with --all / --update-catalog")
+            return 2
+        meta_overrides = {
+            "title": args.title,
+            "artist": args.artist,
+            "genre": args.genre,
+            "difficulty": args.difficulty,
+            "description": args.description,
+            "scoreKind": "userImport",
+        }
+        try:
+            return convert_user_import(
+                args.id,
+                input_path=args.input,
+                user_dir=args.user_import_dir,
+                meta_overrides=meta_overrides,
+            )
+        except Exception as e:
+            print(f"[{args.id}] ERROR: {e}", file=sys.stderr)
+            return 1
 
     if args.all:
         ids = catalog_score_ids()

@@ -215,4 +215,24 @@ abstract final class PracticeConstants {
   /// After a correct chord: nudge past the onset by this amount so transport
   /// free-advances through gaps (do **not** teleport to the next note start).
   static const waitAdvanceEpsilonBeats = 0.04;
+
+  // —— Hit grading (跟弹判定) ————————————————————————————————
+
+  /// `|pos - onset| ≤ this` → Perfect; else within [waitEarlyHitBeats] → Good.
+  static const judgePerfectBeats = 0.08;
+
+  // —— Lightweight SeeMusic-style FX ——————————————————————————
+
+  static const visualFxMaxParticles = 40;
+  static const visualFxBurstCount = 6;
+  static const visualFxParticleMs = 280;
+
+  /// Hold last chord visuals before settlement sheet (末音悬停).
+  static const endHangMs = 1400;
+
+  /// Hands-dialogue arc: both hands graded within this window.
+  static const handsDialogueMs = 220;
+
+  /// Flowkey-style daily practice goal (minutes).
+  static const dailyPracticeGoalMinutes = 20;
 }

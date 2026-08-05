@@ -1,16 +1,17 @@
 /// Pure Verovio playhead sync decisions (seek / loop snap vs ease).
 ///
-/// Used by [VerovioStaffLane] so seek/loop jumps hard-correct the cursor while
-/// normal ticks and rate-only updates ease without flash-scrolling.
+/// Used by [VerovioStaffLane] so intentional seek/loop jumps hard-correct the
+/// cursor while normal ticks, freeze, and end-hang ease without flash-scrolling.
 abstract final class VerovioTransportSync {
-  /// Ignore smaller beat moves unless play/rate also changed (slow tempos use heartbeat).
-  static const posMinDelta = 0.01;
+  /// Ignore smaller beat moves unless play/rate also changed.
+  /// With ~8 Hz Dart anchors, normal ticks often exceed 0.01 — throttle still gates IPC.
+  static const posMinDelta = 0.02;
 
   /// Ignore tiny rate noise.
   static const rateMinDelta = 0.01;
 
-  /// Absolute beat jump above this → hard snap (seek / loop wrap).
-  /// Equal to this value still eases (strict `>`), matching legacy lane behavior.
+  /// Absolute beat jump above this → hard snap **only when used without epoch**.
+  /// Prefer [shouldSnapForEpoch] from [PracticeClock.seekEpoch].
   static const seekSnapBeats = 0.35;
 
   static double positionDelta(double fromBeats, double toBeats) =>
@@ -30,8 +31,24 @@ abstract final class VerovioTransportSync {
         rateDelta <= rateMinDelta;
   }
 
-  /// True → [pushPosition] with `snap: true` (seek / loop wrap).
-  static bool shouldSnapSeek(double posDelta) => posDelta > seekSnapBeats;
+  /// True → [pushPosition] with `snap: true`.
+  ///
+  /// When [intentionalSeek] is true, always snap. Otherwise only large deltas
+  /// snap (legacy). Lane should prefer [shouldSnapForEpoch] instead.
+  static bool shouldSnapSeek(
+    double posDelta, {
+    bool intentionalSeek = false,
+  }) {
+    if (intentionalSeek) return true;
+    return posDelta > seekSnapBeats;
+  }
+
+  /// Lane helper: snap only when the clock seek epoch advanced.
+  static bool shouldSnapForEpoch({
+    required int previousEpoch,
+    required int currentEpoch,
+  }) =>
+      currentEpoch != previousEpoch;
 
   /// While a score push holds the bridge, resize must not be dropped — defer.
   static bool shouldDeferResize({required bool pushing}) => pushing;

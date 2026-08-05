@@ -35,8 +35,9 @@ _OMR_SOURCE_MARKERS = (
 
 def load_policy(path: Path = POLICY) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
-    ids = data.get("omrProvenanceIds") or []
-    if not isinstance(ids, list) or not ids:
+    ids = data.get("omrProvenanceIds")
+    # Empty list is valid after all OMR drafts are promoted to formal.
+    if not isinstance(ids, list):
         raise SystemExit(f"policy missing omrProvenanceIds: {path}")
     return data
 

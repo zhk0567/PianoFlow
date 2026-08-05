@@ -1,18 +1,30 @@
 # OMR audit index
 
-Generated: 2026-07-30 16:53
+**进度总表：** [`PROOFREAD_STATUS.md`](./PROOFREAD_STATUS.md)  
+**抽检汇总：** [`_sop_spotcheck.md`](./_sop_spotcheck.md)  
+**政策：** 自动化审计**永不**自行升 formal；原 12 首已于 2026-08-04 SOP 通过后升为 `formal`。
+
+## SOP 清单（每首一份）
+
+| id | SOP |
+|----|-----|
+| `hisaishi_castle_in_the_sky` | [SOP](./hisaishi_castle_in_the_sky_SOP.md) |
+| `radwimps_suzume` | [SOP](./radwimps_suzume_SOP.md) |
+| `ru_yuan` | [SOP](./ru_yuan_SOP.md) |
+| `christina_perri_a_thousand_years` | [SOP](./christina_perri_a_thousand_years_SOP.md) |
+| `haruhikage` | [SOP](./haruhikage_SOP.md) |
+| `rimsky_flight_of_the_bumblebee` | [SOP](./rimsky_flight_of_the_bumblebee_SOP.md) |
+| `beethoven_moonlight_sonata` | [SOP](./beethoven_moonlight_sonata_SOP.md) |
+| `jay_chou_qing_tian` | [SOP](./jay_chou_qing_tian_SOP.md) |
+| `clayderman_reve_damour` | [SOP](./clayderman_reve_damour_SOP.md) |
+| `sawano_call_of_silence` | [SOP](./sawano_call_of_silence_SOP.md) |
+| `xiang_yun_duan` | [SOP](./xiang_yun_duan_SOP.md) |
+| `jue_bie_shu` | [SOP](./jue_bie_shu_SOP.md) |
+
+## 最新自动审计
+
+Generated: 2026-08-04 21:15
 
 | id | kind | JSON≡XML | notes | warnings | promote |
 |----|------|----------|-------|----------|---------|
-| `hisaishi_castle_in_the_sky` | omrDraft | True | 219 | 2 | NO |
-| `radwimps_suzume` | omrDraft | True | 417 | 5 | NO |
-| `ru_yuan` | omrDraft | True | 486 | 5 | NO |
-| `christina_perri_a_thousand_years` | omrDraft | True | 969 | 3 | NO |
-| `haruhikage` | omrDraft | True | 1161 | 3 | NO |
-| `rimsky_flight_of_the_bumblebee` | omrDraft | True | 1165 | 4 | NO |
-| `beethoven_moonlight_sonata` | omrDraft | True | 1169 | 3 | NO |
-| `jay_chou_qing_tian` | omrDraft | True | 1141 | 3 | NO |
-| `clayderman_reve_damour` | omrDraft | True | 1103 | 3 | NO |
-| `sawano_call_of_silence` | omrDraft | True | 605 | 4 | NO |
-| `xiang_yun_duan` | omrDraft | True | 1570 | 3 | NO |
-| `jue_bie_shu` | omrDraft | True | 1603 | 3 | NO |
+| `c418_beginning` | omrDraft | True | 51 | 3 | NO |

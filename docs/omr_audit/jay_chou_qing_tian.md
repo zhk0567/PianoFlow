@@ -1,12 +1,12 @@
 # OMR audit — `jay_chou_qing_tian`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-04 19:37
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\jay_chou_qing_tian.pdf`
 - MusicXML: `assets\scores\musicxml\jay_chou_qing_tian.musicxml`
 - JSON: `assets\scores\jay_chou_qing_tian.json`
 - JSON ≡ reparse: **True** (1141/1141 notes)
-- BPM JSON/parse: 76 / 100
+- BPM JSON/parse: 68 / 68
 - keySignature JSON/parse: 1 / 1
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -15,13 +15,12 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=76) — practice tempo may be a catalog default
 - 97 same-hand leap(s) ≥12 semitones (OMR risk)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: True
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('4', '4')": 1}`
 

@@ -1,7 +1,7 @@
 {
   "id": "christina_perri_a_thousand_years",
-  "title": "A Thousand Years",
-  "bpm": 78,
+  "title": "Untitled",
+  "bpm": 50,
   "timeSignature": {
     "num": 6,
     "den": 8
@@ -5421,55 +5421,37 @@
       "hand": "right"
     },
     {
-      "midi": 53,
-      "start": 285.0,
-      "duration": 1.0,
-      "hand": "left"
-    },
-    {
-      "midi": 58,
-      "start": 285.0,
-      "duration": 1.0,
-      "hand": "left"
-    },
-    {
       "midi": 75,
       "start": 285.0,
-      "duration": 1.5,
+      "duration": 3.0,
       "hand": "right"
     },
     {
       "midi": 53,
-      "start": 286.0,
+      "start": 286.5,
       "duration": 1.0,
       "hand": "left"
     },
     {
       "midi": 58,
-      "start": 286.0,
+      "start": 286.5,
+      "duration": 1.0,
+      "hand": "left"
+    },
+    {
+      "midi": 53,
+      "start": 287.5,
+      "duration": 1.0,
+      "hand": "left"
+    },
+    {
+      "midi": 58,
+      "start": 287.5,
       "duration": 1.0,
       "hand": "left"
     },
     {
       "midi": 74,
-      "start": 286.0,
-      "duration": 1.5,
-      "hand": "right"
-    },
-    {
-      "midi": 53,
-      "start": 287.5,
-      "duration": 1.5,
-      "hand": "left"
-    },
-    {
-      "midi": 58,
-      "start": 287.5,
-      "duration": 1.5,
-      "hand": "left"
-    },
-    {
-      "midi": 65,
       "start": 287.5,
       "duration": 1.5,
       "hand": "right"
@@ -5477,47 +5459,47 @@
     {
       "midi": 53,
       "start": 289.0,
+      "duration": 1.5,
+      "hand": "left"
+    },
+    {
+      "midi": 58,
+      "start": 289.0,
+      "duration": 1.5,
+      "hand": "left"
+    },
+    {
+      "midi": 65,
+      "start": 289.0,
+      "duration": 1.5,
+      "hand": "right"
+    },
+    {
+      "midi": 53,
+      "start": 290.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 57,
-      "start": 289.0,
+      "start": 290.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 60,
-      "start": 289.0,
+      "start": 290.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 65,
-      "start": 289.0,
+      "start": 290.5,
       "duration": 1.5,
       "hand": "right"
     },
     {
       "midi": 51,
-      "start": 290.5,
-      "duration": 1.5,
-      "hand": "left"
-    },
-    {
-      "midi": 55,
-      "start": 290.5,
-      "duration": 1.5,
-      "hand": "left"
-    },
-    {
-      "midi": 58,
-      "start": 290.5,
-      "duration": 1.5,
-      "hand": "left"
-    },
-    {
-      "midi": 51,
       "start": 292.0,
       "duration": 1.5,
       "hand": "left"
@@ -5571,13 +5553,13 @@
       "hand": "left"
     },
     {
-      "midi": 50,
+      "midi": 51,
       "start": 296.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
-      "midi": 53,
+      "midi": 55,
       "start": 296.5,
       "duration": 1.5,
       "hand": "left"
@@ -5643,13 +5625,13 @@
       "hand": "left"
     },
     {
-      "midi": 51,
+      "midi": 50,
       "start": 302.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
-      "midi": 55,
+      "midi": 53,
       "start": 302.5,
       "duration": 1.5,
       "hand": "left"
@@ -5711,6 +5693,12 @@
     {
       "midi": 58,
       "start": 307.0,
+      "duration": 1.5,
+      "hand": "left"
+    },
+    {
+      "midi": 51,
+      "start": 308.5,
       "duration": 1.5,
       "hand": "left"
     },
@@ -5722,12 +5710,6 @@
     },
     {
       "midi": 58,
-      "start": 308.5,
-      "duration": 1.5,
-      "hand": "left"
-    },
-    {
-      "midi": 62,
       "start": 308.5,
       "duration": 1.5,
       "hand": "left"
@@ -5751,74 +5733,92 @@
       "hand": "left"
     },
     {
-      "midi": 53,
+      "midi": 55,
       "start": 311.5,
+      "duration": 1.5,
+      "hand": "left"
+    },
+    {
+      "midi": 58,
+      "start": 311.5,
+      "duration": 1.5,
+      "hand": "left"
+    },
+    {
+      "midi": 62,
+      "start": 311.5,
+      "duration": 1.5,
+      "hand": "left"
+    },
+    {
+      "midi": 53,
+      "start": 313.0,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 57,
-      "start": 311.5,
+      "start": 313.0,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 60,
-      "start": 311.5,
+      "start": 313.0,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 53,
-      "start": 313.0,
+      "start": 314.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 57,
-      "start": 313.0,
+      "start": 314.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 60,
-      "start": 313.0,
+      "start": 314.5,
       "duration": 1.5,
       "hand": "left"
     },
     {
       "midi": 51,
-      "start": 314.5,
+      "start": 316.0,
       "duration": 3.0,
       "hand": "left"
     },
     {
       "midi": 55,
-      "start": 314.5,
+      "start": 316.0,
       "duration": 3.0,
       "hand": "left"
     },
     {
       "midi": 58,
-      "start": 314.5,
+      "start": 316.0,
       "duration": 3.0,
       "hand": "left"
     },
     {
       "midi": 51,
-      "start": 317.5,
+      "start": 319.0,
       "duration": 3.0,
       "hand": "left"
     },
     {
       "midi": 55,
-      "start": 317.5,
+      "start": 319.0,
       "duration": 3.0,
       "hand": "left"
     },
     {
       "midi": 58,
-      "start": 317.5,
+      "start": 319.0,
       "duration": 3.0,
       "hand": "left"
     }

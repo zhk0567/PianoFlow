@@ -95,6 +95,20 @@ void main() {
     );
     expect(omr.practiceHonestyBanner, SongSummary.omrHonestyNotice);
     expect(formal.practiceHonestyBanner, isNull);
+    final user = SongSummary.fromJson({
+      'id': 'u',
+      'title': 'T',
+      'artist': 'A',
+      'genre': 'Classical',
+      'difficulty': 2,
+      'bpm': 100,
+      'asset': 'user:u',
+      'scoreKind': 'userImport',
+    });
+    expect(user.isUserImport, isTrue);
+    expect(user.isFormalScore, isFalse);
+    expect(user.scoreKindLabel, '自导入');
+    expect(user.practiceHonestyBanner, SongSummary.userImportHonestyNotice);
     expect(
       SongSummary(
         id: 'x',

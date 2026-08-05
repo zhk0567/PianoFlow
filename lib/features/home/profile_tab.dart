@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ui_bits.dart';
 import '../auth/auth_controller.dart';
+import '../practice/practice_constants.dart';
 import '../practice/practice_stats_store.dart';
 
 class ProfileTab extends ConsumerWidget {
@@ -17,6 +18,9 @@ class ProfileTab extends ConsumerWidget {
     final auth = ref.watch(authProvider);
     final stats = ref.watch(practiceStatsProvider);
     final minutes = (stats.totalSeconds / 60).floor();
+    final todayMin = (stats.todaySeconds() / 60).floor();
+    final todayProgress = stats.todayProgress01();
+    final goal = PracticeConstants.dailyPracticeGoalMinutes;
     final name = auth.displayName ?? '访客';
     final email = auth.email ?? '';
     final initial =
@@ -84,6 +88,52 @@ class ProfileTab extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 28),
+            const SectionTitle('今日练习'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadii.lg),
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        '今日 $todayMin / $goal 分钟',
+                        style: AppTheme.body(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${(todayProgress * 100).round()}%',
+                        style: AppTheme.body(
+                          fontSize: 13,
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: todayProgress,
+                      minHeight: 8,
+                      backgroundColor: AppColors.surfaceAlt,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
             const SectionTitle('练习概览'),
             const SizedBox(height: 12),
             Container(
@@ -111,6 +161,21 @@ class ProfileTab extends ConsumerWidget {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
+                  _ActionRow(
+                    icon: Icons.auto_awesome_rounded,
+                    title: '练习星座',
+                    subtitle: '点亮练过的曲子',
+                    onTap: () => context.push('/constellation'),
+                  ),
+                  const Divider(height: 1, color: AppColors.border),
+                  _ActionRow(
+                    icon: Icons.music_note_outlined,
+                    title: '节拍器与试音',
+                    subtitle: '独立节拍器 + 点按 88 键试音',
+                    onTap: () => context.push('/sandbox'),
+                  ),
+                  const Divider(height: 1, color: AppColors.border),
+
                   _ActionRow(
                     icon: Icons.graphic_eq,
                     title: '音高识别测试',

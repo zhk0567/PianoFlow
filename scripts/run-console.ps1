@@ -28,7 +28,9 @@ $script:RunExitCode = 0
 
 function Invoke-FlutterRun {
     Write-Host "flutter run -d windows --no-pub" -ForegroundColor Green
-    # Start-Process keeps stdout on the console and OUT of the PS pipeline.
+    # Direct console attach — do NOT redirect stdout/stderr (breaks flutter run,
+    # exit 5, empty log). audioplayers spam is reduced by lazy AudioPlayer bind;
+    # AXTree spam by ExcludeSemantics in main.dart.
     $p = Start-Process -FilePath "cmd.exe" `
         -ArgumentList "/c", "flutter run -d windows --no-pub" `
         -NoNewWindow -Wait -PassThru

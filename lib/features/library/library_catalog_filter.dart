@@ -32,6 +32,7 @@ abstract final class LibraryCatalogFilter {
     (ScoreKind.formal, '正式谱'),
     (ScoreKind.omrDraft, 'OMR草稿'),
     (ScoreKind.simplified, '简编谱'),
+    (ScoreKind.userImport, '自导入'),
   ];
 
   /// Only kinds that appear in [songs], plus「全部谱种」.

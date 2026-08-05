@@ -9,11 +9,17 @@ set(BINARY_NAME "piano_flow")
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
-# webview_windows uses add_custom_command(TARGET ... DEPENDS ...) which newer
-# CMake flags under CMP0175; keep OLD until the plugin is updated.
+# webview_windows calls project() in its own CMakeLists; parent cmake_policy()
+# does not apply. DEFAULT_* initializes policy for those nested projects so
+# add_custom_command(TARGET … DEPENDS …) does not spam CMP0175 every build.
 if(POLICY CMP0175)
   cmake_policy(SET CMP0175 OLD)
 endif()
+set(CMAKE_POLICY_DEFAULT_CMP0175 OLD)
+# Quiet remaining plugin-authoring CMake "dev" warnings in the Flutter console.
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE INTERNAL "Quiet plugin CMake -Wdev")
+# So webview_windows find_program(nuget) succeeds without printing NOTICE.
+list(APPEND CMAKE_PROGRAM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/nuget")
 
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)

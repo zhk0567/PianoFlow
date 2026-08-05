@@ -78,6 +78,9 @@ class PitchService {
   final Map<int, int> _missCount = {};
   Set<int> _locked = {};
   final Set<int> _emitted = {};
+
+  /// Optional PCM16 tee (exam recording). Called on every raw mic chunk.
+  void Function(Uint8List pcm)? pcmTee;
   DateTime? _lastHeard;
   Timer? _clearTimer;
   bool _running = false;
@@ -223,6 +226,7 @@ class PitchService {
 
   void _onPcm(Uint8List data) {
     if (data.isEmpty) return;
+    pcmTee?.call(data);
     _pending.add(data);
     final windowBytes = _window * 2;
     final hopBytes = _hop * 2;

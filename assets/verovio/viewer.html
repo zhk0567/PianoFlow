@@ -50,6 +50,8 @@
       background: #FFFBF5;
       overflow: visible;
       flex: 0 0 auto;
+      margin: 0;
+      padding: 0;
     }
     #svg svg.definition-scale {
       overflow: visible;
@@ -83,6 +85,20 @@
       z-index: 5;
       display: none;
     }
+    #firefly {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      margin-left: -5px;
+      margin-top: -5px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 220, 120, 0.95) 0%, rgba(232, 119, 34, 0.35) 45%, rgba(232, 119, 34, 0) 70%);
+      pointer-events: none;
+      z-index: 6;
+      display: none;
+      opacity: 0.85;
+      transition: opacity 0.2s ease;
+    }
   </style>
 </head>
 <body>
@@ -92,6 +108,7 @@
       <div id="svg"></div>
     </div>
     <div id="playhead"></div>
+    <div id="firefly"></div>
   </div>
   <script src="verovio-toolkit-wasm.js"></script>
   <script>
@@ -120,7 +137,7 @@
      * + guide audio). JS may ease ≤ this many seconds between bridge ticks —
      * never free-run for minutes (that made staff feel like a second system).
      */
-    const MAX_EXTRAPOLATE_SEC = 0.12;
+    const MAX_EXTRAPOLATE_SEC = 0.18;
     /** Keep rAF only while Dart recently confirmed play (ms). */
     const DART_LIVE_MS = 500;
     /** Soft catch-up only when paused (rate==0); play always hard-tracks. */
@@ -351,9 +368,16 @@
       return focusContentX(beats, noteX);
     }
 
+    let cachedMaxScrollX = 0;
+    let cachedMaxScrollHostW = 0;
+
     function maxScrollX(wrap) {
       const host = document.getElementById('svg');
       if (!host) return Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+      const hostW = wrap.clientWidth || 0;
+      if (cachedMaxScrollX > 0 && hostW === cachedMaxScrollHostW) {
+        return cachedMaxScrollX;
+      }
       // Prefer explicit CSS widths from sizeEngravingFixedScale — WebView2
       // scrollWidth/getBoundingClientRect can under-report after height clamps,
       // which made maxS≈0 and froze horizontal scroll ("五线谱不动").
@@ -382,7 +406,14 @@
           if (sw > contentW) contentW = sw;
         }
       }
-      return Math.max(0, contentW - wrap.clientWidth);
+      cachedMaxScrollHostW = hostW;
+      cachedMaxScrollX = Math.max(0, contentW - hostW);
+      return cachedMaxScrollX;
+    }
+
+    function invalidateScrollMetrics() {
+      cachedMaxScrollX = 0;
+      cachedMaxScrollHostW = 0;
     }
 
     /**
@@ -394,7 +425,18 @@
     function paintPlayhead(ph, contentX, sx) {
       ph.style.display = 'block';
       ph.style.height = '100%';
-      ph.style.left = (contentX - sx) + 'px';
+      const viewX = (contentX - sx);
+      ph.style.left = viewX + 'px';
+      const ff = document.getElementById('firefly');
+      if (ff) {
+        ff.style.display = 'block';
+        ff.style.left = viewX + 'px';
+        const wrap = document.getElementById('wrap');
+        const midY = wrap ? (wrap.clientHeight * 0.42) : 120;
+        const pulse = 0.65 + 0.35 * Math.sin(performance.now() / 420);
+        ff.style.top = midY + 'px';
+        ff.style.opacity = String(pulse);
+      }
     }
 
     function applyScrollTransform(sx) {
@@ -563,15 +605,18 @@
       const cssH = (options && options.cssHeight) || wrap.clientHeight || window.innerHeight || 220;
       const scale = (options && options.scale) || 60;
       const measures = countMeasures(musicXml || '');
-      // One readable system width ≈ Flutter lane — NEVER crush the whole piece
-      // into a single capped pageWidth (that smashed late measures into illegible
-      // overlapping ink — user screenshot).
-      // Wider systems → dense 16ths keep readable px/beat (avoid turtle scroll).
+      // Continuous strip: width grows with measure count so Verovio can use
+      // breaks:'none' (one system) — capped pageWidth + breaks:auto caused
+      // mid-piece page seams (gap + re-clef) when pages were laid horizontally.
+      const perMeasure = 240;
       const pageWidth = Math.max(
-        2000,
-        Math.min(3200, Math.floor(cssW * 120 / scale)),
+        2400,
+        Math.min(28000, Math.max(
+          Math.floor(cssW * 140 / scale),
+          measures * perMeasure,
+        )),
       );
-      // Tall enough for one piano grand staff; Verovio paginates the rest.
+      // One grand staff tall — avoid multi-system pages.
       const pageHeight = Math.max(
         560,
         Math.min(
@@ -587,7 +632,7 @@
         cssH,
         measures,
         rawWidth: pageWidth,
-        breaks: 'auto',
+        breaks: 'none',
       };
     }
 
@@ -597,21 +642,21 @@
         pageWidth: pageWidth,
         pageHeight: pageHeight,
         adjustPageHeight: true,
-        // Keep the chosen pageWidth — do not shrink systems back into a crush.
         adjustPageWidth: false,
-        breaks: breaksMode || (lay && lay.breaks) || 'auto',
+        breaks: breaksMode || (lay && lay.breaks) || 'none',
         footer: 'none',
         header: 'none',
         svgViewBox: true,
-        pageMarginTop: 36,
-        pageMarginBottom: 36,
-        pageMarginLeft: 48,
-        pageMarginRight: 28,
+        pageMarginTop: 28,
+        pageMarginBottom: 28,
+        pageMarginLeft: 40,
+        pageMarginRight: 20,
         spacingStaff: 14,
         spacingSystem: 8,
-        // Prefer horizontal room for short notes (SongScore 16ths) over crush.
-        spacingLinear: 0.78,
-        spacingNonLinear: 0.30,
+        // Equal measure width: duration-linear spacing.
+        spacingLinear: 0.08,
+        spacingNonLinear: 1.0,
+        noJustification: true,
         unit: 9,
         justifyVertically: false,
         mnumInterval: 1,
@@ -702,12 +747,18 @@
       }
       const host = document.getElementById('svg');
       host.innerHTML = html;
-      // Multi-page must be a horizontal strip — vertical stack breaks beat→X scroll.
+      // Multi-page must be a horizontal strip — vertical stack breaks beat→X.
       host.style.display = 'flex';
       host.style.flexDirection = 'row';
       host.style.flexWrap = 'nowrap';
-      // Top-align: centering clipped the grand-staff brace/clef under the keyboard.
       host.style.alignItems = 'flex-start';
+      // Prefer continuous strip; if Verovio still emits multiple pages, abut them
+      // (collapse gutters) so the playhead does not jump a blank seam.
+      const pages = rootPageSvgs(host);
+      pages.forEach((svg, i) => {
+        svg.style.margin = '0';
+        if (i > 0) svg.style.marginLeft = '-12px';
+      });
       polishMeasureNumbers(host);
       sizeEngravingFixedScale(host);
       const notes = host.querySelectorAll('g.note').length;
@@ -940,9 +991,10 @@
           let scale = (options && options.scale) || lay.scale;
           let pageHeight = lay.pageHeight;
           let pageWidth = lay.pageWidth;
-          let breaksMode = 'auto';
+          // Default: continuous strip (no mid-piece page seams).
+          let breaksMode = lay.breaks || 'none';
           if (mode === 'safe') {
-            // Still paginate horizontally — readable width, slightly shorter page.
+            // Fallback: paginate if continuous engrave failed.
             pageWidth = Math.max(1500, Math.min(2200, pageWidth));
             pageHeight = Math.max(520, Math.min(pageHeight, 720));
             breaksMode = 'auto';
@@ -957,7 +1009,7 @@
             logHost('engrave NARROW pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale);
           } else {
             applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
-            logHost('engrave NORM pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' measures=' + lay.measures + ' breaks=auto');
+            logHost('engrave NORM pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' measures=' + lay.measures + ' breaks=' + breaksMode);
           }
           const loaded = toolkit.loadData(lastMusicXml);
           if (loaded === false) {
@@ -1007,6 +1059,7 @@
           // Size first, then measure — sizing after rebuildBeatXPoints invalidates X.
           sizeEngravingFixedScale(document.getElementById('svg'));
           rebuildBeatXPoints();
+          invalidateScrollMetrics();
           updatePlayhead(lastBeats, true);
         });
         return ok;
@@ -1032,7 +1085,7 @@
       const wrap = document.getElementById('wrap');
       const keepBeats = lastBeats;
 
-      applyToolkitOptions(lay, scale, pageHeight, pageWidth, 'auto');
+      applyToolkitOptions(lay, scale, pageHeight, pageWidth, lay.breaks || 'none');
       try {
         if (typeof toolkit.redoLayout === 'function') {
           toolkit.redoLayout();
@@ -1051,6 +1104,7 @@
       afterLayout(() => {
         sizeEngravingFixedScale(document.getElementById('svg'));
         rebuildBeatXPoints();
+        invalidateScrollMetrics();
         updatePlayhead(keepBeats, true);
       });
       return true;
@@ -1066,9 +1120,9 @@
       const raw = Number(beats);
       let b = Number.isFinite(raw) ? raw : 0;
       const now = performance.now();
-      const jump = Math.abs(b - lastBeats);
-      const seekSnap = !!snap || jump > SEEK_BEAT_EPS;
-      const prevRate = beatsPerSec;
+      // Trust Dart snap flag only — do not infer seek from jump size
+      // (freeze/unfreeze and end-hang must ease, not flash-jump).
+      const seekSnap = !!snap;
 
       if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0) {
         beatsPerSec = rate;
@@ -1076,13 +1130,12 @@
         beatsPerSec = 0;
       }
 
-      if (beatsPerSec > 0 && !(prevRate > 0)) {
-        forceSnap = true;
-      }
-
+      // Do NOT forceSnap when rate 0→positive (wait unfreeze) — that caused
+      // the orange playhead to jump. Only intentional Dart snap may hard-jump.
       lastBeats = b;
       lastSyncTime = now;
-      updatePlayhead(b, seekSnap || jump > 0.12 || forceSnap);
+      updatePlayhead(b, seekSnap || forceSnap);
+      if (seekSnap) forceSnap = false;
     };
 
     function onVisibilityResume() {

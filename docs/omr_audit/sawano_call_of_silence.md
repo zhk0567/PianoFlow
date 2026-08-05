@@ -1,12 +1,12 @@
 # OMR audit — `sawano_call_of_silence`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-04 19:37
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\sawano_call_of_silence.pdf`
 - MusicXML: `assets\scores\musicxml\sawano_call_of_silence.musicxml`
 - JSON: `assets\scores\sawano_call_of_silence.json`
 - JSON ≡ reparse: **True** (605/605 notes)
-- BPM JSON/parse: 70 / 100
+- BPM JSON/parse: 60 / 60
 - keySignature JSON/parse: 0 / 0
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -16,13 +16,12 @@
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
 - MusicXML has no <key>/fifths — OMR often drops key signature
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=70) — practice tempo may be a catalog default
 - 103 same-hand leap(s) ≥12 semitones (OMR risk)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: False
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('4', '4')": 1}`
 

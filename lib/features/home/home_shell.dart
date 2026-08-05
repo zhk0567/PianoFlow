@@ -28,6 +28,11 @@ class HomeShell extends StatelessWidget {
       label: '曲库',
     ),
     _NavItem(
+      icon: Icons.handyman_outlined,
+      selectedIcon: Icons.handyman_rounded,
+      label: '工坊',
+    ),
+    _NavItem(
       icon: Icons.person_outline_rounded,
       selectedIcon: Icons.person_rounded,
       label: '我的',

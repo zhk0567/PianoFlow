@@ -6,30 +6,35 @@ import 'package:webview_windows/webview_windows.dart';
 
 import '../../../shared/models/song.dart';
 import '../../../shared/piano_flow_log.dart';
+import '../practice_clock.dart';
 import '../verovio_runtime.dart';
 import '../verovio_transport_sync.dart';
 
 /// Verovio-engraved staff (MusicXML). Falls back to generated MusicXML from [SongScore].
 ///
 /// Relies on [VerovioRuntime] singleton — does not recreate WebView/WASM per visit.
+///
+/// Prefer [clock] for live playhead: listens + throttled pushPosition without
+/// rebuilding this widget at 60 Hz (WebView2 rebuild storms freeze the UI).
 class VerovioStaffLane extends StatefulWidget {
   const VerovioStaffLane({
     super.key,
     required this.score,
-    required this.positionBeats,
     required this.hand,
+    this.clock,
+    this.positionBeats = 0,
     this.isPlaying = false,
     this.beatsPerSec = 0,
   });
 
   final SongScore score;
-  final double positionBeats;
   final Hand hand;
 
-  /// When false, viewer must freeze (rate 0) even if [positionBeats] is unchanged.
-  final bool isPlaying;
+  /// When set, live beats/rate come from this listenable (not parent rebuilds).
+  final PracticeClock? clock;
 
-  /// Transport rate in quarter-notes per second (bpm/60*speed while playing).
+  final double positionBeats;
+  final bool isPlaying;
   final double beatsPerSec;
 
   @override
@@ -49,7 +54,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   Size? _pendingViewport;
   Timer? _resizeDebounce;
   Timer? _posThrottle;
-  Timer? _playHeartbeat;
   double? _pendingPosBeats;
   double? _pendingPosRate;
   bool _pendingPosSnap = false;
@@ -60,24 +64,36 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   /// Set when resize arrives during [_pushing]; flushed after the busy op ends.
   bool _pendingResize = false;
 
+  double _lastHeardBeats = 0;
+  double _lastHeardRate = 0;
+  int _lastSeekEpoch = 0;
+
   static const _resizeSlop = 16.0;
   static const _resizeDebounceMs = 450;
-  /// Shared clock with waterfall/audio: push positionBeats often enough that the
-  /// viewer only eases ≤~120ms (see viewer MAX_EXTRAPOLATE_SEC), never free-runs alone.
-  static const _posThrottleMs = 50;
-  static const _playHeartbeatMs = 80;
+  /// Anchor pushes only (~8 Hz). Motion continues via JS extrapolation.
+  static const _posThrottleMs = 125;
 
-  double get _transportRate =>
-      widget.isPlaying ? widget.beatsPerSec.clamp(0.0, 40.0) : 0.0;
+  double get _liveBeats =>
+      widget.clock?.positionBeats ?? widget.positionBeats;
+
+  double get _transportRate {
+    if (!widget.isPlaying) return 0;
+    final r = widget.clock?.beatsPerSec ?? widget.beatsPerSec;
+    return r.clamp(0.0, 40.0);
+  }
 
   @override
   void initState() {
     super.initState();
+    _lastHeardBeats = _liveBeats;
+    _lastHeardRate = _transportRate;
+    _lastSeekEpoch = widget.clock?.seekEpoch ?? 0;
     if (!Platform.isWindows) {
       _error = 'Verovio 谱面目前仅支持 Windows';
       return;
     }
     _runtime.controller.addListener(_onController);
+    widget.clock?.addListener(_onClock);
     // Parallel: MusicXML read + toolkit ensure (often already prewarmed).
     _xmlFuture = _runtime.resolveMusicXml(widget.score, widget.hand);
     if (_runtime.isToolkitReady) {
@@ -85,7 +101,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       if (_runtime.hasScoreFor(widget.score, widget.hand)) {
         unawaited(
           _runtime.pushPosition(
-            widget.positionBeats,
+            _liveBeats,
             snap: true,
             beatsPerSec: _transportRate,
           ),
@@ -93,30 +109,41 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       }
     }
     unawaited(_bind());
-    _syncPlayHeartbeat();
   }
 
-  void _syncPlayHeartbeat() {
-    _playHeartbeat?.cancel();
-    _playHeartbeat = null;
-    if (!widget.isPlaying || _transportRate <= 0 || _disposed) return;
-    _playHeartbeat = Timer.periodic(
-      const Duration(milliseconds: _playHeartbeatMs),
-      (_) {
-        if (_disposed || !mounted || !widget.isPlaying) return;
-        unawaited(
-          _runtime.pushPosition(
-            widget.positionBeats,
-            snap: false,
-            beatsPerSec: _transportRate,
-          ),
-        );
-      },
+  void _onClock() {
+    if (_disposed || !mounted) return;
+    final beats = _liveBeats;
+    final rate = _transportRate;
+    final epoch = widget.clock?.seekEpoch ?? _lastSeekEpoch;
+    final seek = VerovioTransportSync.shouldSnapForEpoch(
+      previousEpoch: _lastSeekEpoch,
+      currentEpoch: epoch,
     );
+    final posDelta =
+        VerovioTransportSync.positionDelta(_lastHeardBeats, beats);
+    final rateDelta =
+        VerovioTransportSync.rateDelta(_lastHeardRate, rate);
+    if (!seek &&
+        VerovioTransportSync.shouldSkipPush(
+          posDelta: posDelta,
+          playChanged: false,
+          rateDelta: rateDelta,
+        )) {
+      return;
+    }
+    _lastHeardBeats = beats;
+    _lastHeardRate = rate;
+    _lastSeekEpoch = epoch;
+    _schedulePosition(beats, snap: seek, rate: rate);
   }
 
   void _onController() {
-    if (mounted) setState(() {});
+    // Only refresh chrome while binding/switching — avoid setState storms
+    // whenever WebView2 fires controller notifications during playback.
+    if (!_bound || _switching) {
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _bind() async {
@@ -137,7 +164,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       final sameScore = _runtime.hasScoreFor(widget.score, widget.hand);
       if (sameScore) {
         await _runtime.pushPosition(
-          widget.positionBeats,
+          _liveBeats,
           snap: true,
           beatsPerSec: _transportRate,
         );
@@ -184,7 +211,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
         );
         if (_disposed) return;
         await _runtime.pushPosition(
-          widget.positionBeats,
+          _liveBeats,
           snap: true,
           beatsPerSec: _transportRate,
         );
@@ -230,7 +257,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       await _runtime.pushResize(_viewport);
       if (_disposed) return;
       await _runtime.pushPosition(
-        widget.positionBeats,
+        _liveBeats,
         snap: true,
         beatsPerSec: _transportRate,
       );
@@ -299,6 +326,11 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   @override
   void didUpdateWidget(covariant VerovioStaffLane oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.clock != widget.clock) {
+      oldWidget.clock?.removeListener(_onClock);
+      widget.clock?.addListener(_onClock);
+    }
+
     if (oldWidget.score.id != widget.score.id ||
         oldWidget.hand != widget.hand) {
       _posThrottle?.cancel();
@@ -324,6 +356,19 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       return;
     }
 
+    // Live beats/rate from [clock] — never drive pushPosition via 60 Hz rebuilds.
+    if (widget.clock != null) {
+      final playChanged = oldWidget.isPlaying != widget.isPlaying;
+      if (playChanged) {
+        final beats = _liveBeats;
+        final rate = _transportRate;
+        _lastHeardBeats = beats;
+        _lastHeardRate = rate;
+        _schedulePosition(beats, snap: false, rate: rate);
+      }
+      return;
+    }
+
     final posDelta = VerovioTransportSync.positionDelta(
       oldWidget.positionBeats,
       widget.positionBeats,
@@ -334,8 +379,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       widget.beatsPerSec,
     );
 
-    // Pause/resume must push even when positionBeats is unchanged — otherwise
-    // the viewer keeps extrapolating (or stays frozen) after transport stops.
     if (VerovioTransportSync.shouldSkipPush(
       posDelta: posDelta,
       playChanged: playChanged,
@@ -344,10 +387,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       return;
     }
 
-    _syncPlayHeartbeat();
-
-    // Snap only on real seeks / large jumps — not on play/pause alone.
-    // Rate-only updates must ease so start does not flash scroll.
     final seek = VerovioTransportSync.shouldSnapSeek(posDelta);
     _schedulePosition(
       widget.positionBeats,
@@ -399,9 +438,9 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   @override
   void dispose() {
     _disposed = true;
+    widget.clock?.removeListener(_onClock);
     _resizeDebounce?.cancel();
     _posThrottle?.cancel();
-    _playHeartbeat?.cancel();
     _runtime.controller.removeListener(_onController);
     // Do NOT dispose shared WebviewController — kept warm for next visit.
     super.dispose();

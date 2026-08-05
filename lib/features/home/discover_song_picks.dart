@@ -10,6 +10,7 @@ abstract final class DiscoverSongPicks {
         ScoreKind.formal => 0,
         ScoreKind.simplified => 1,
         ScoreKind.omrDraft => 2,
+        ScoreKind.userImport => 3,
       };
 
   static int compareForEntry(SongSummary a, SongSummary b) {

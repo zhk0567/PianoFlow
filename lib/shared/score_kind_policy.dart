@@ -7,18 +7,25 @@ import 'models/song.dart';
 abstract final class ScoreKindPolicy {
   /// PDF→Audiveris OMR ids (generated from score_kind_policy.json).
   static const omrProvenanceIds = <String>{
-    'beethoven_moonlight_sonata',
-    'christina_perri_a_thousand_years',
-    'clayderman_reve_damour',
-    'haruhikage',
-    'hisaishi_castle_in_the_sky',
-    'jay_chou_qing_tian',
-    'jue_bie_shu',
-    'radwimps_suzume',
-    'rimsky_flight_of_the_bumblebee',
-    'ru_yuan',
-    'sawano_call_of_silence',
-    'xiang_yun_duan',
+    'c418_beginning',
+    'c418_clark',
+    'c418_clark_alt',
+    'c418_danny',
+    'c418_death',
+    'c418_door',
+    'c418_droopy_likes_ricochet',
+    'c418_dry_hands',
+    'c418_equinoxe',
+    'c418_excuse',
+    'c418_haggstrom',
+    'c418_key',
+    'c418_living_mice',
+    'c418_mice_on_venus',
+    'c418_minecraft',
+    'c418_moog_city',
+    'c418_subwoofer_lullaby',
+    'c418_sweden',
+    'c418_wet_hands',
   };
 
   static final _omrDesc = RegExp(

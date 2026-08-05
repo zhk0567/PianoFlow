@@ -55,12 +55,16 @@ def write_policy(ids: list[str], path: Path = POLICY) -> None:
 
 def rewrite_dart(ids: list[str], path: Path = DART) -> None:
     text = path.read_text(encoding="utf-8")
-    body = ",\n".join(f"    '{sid}'" for sid in sorted(set(ids)))
-    block = (
-        "static const omrProvenanceIds = <String>{\n"
-        f"{body},\n"
-        "  };"
-    )
+    sorted_ids = sorted(set(ids))
+    if sorted_ids:
+        body = ",\n".join(f"    '{sid}'" for sid in sorted_ids)
+        block = (
+            "static const omrProvenanceIds = <String>{\n"
+            f"{body},\n"
+            "  };"
+        )
+    else:
+        block = "static const omrProvenanceIds = <String>{};"
     if not _DART_SET_RE.search(text):
         raise SystemExit(f"cannot find omrProvenanceIds set in {path}")
     path.write_text(_DART_SET_RE.sub(block, text, count=1), encoding="utf-8")
@@ -93,6 +97,23 @@ def check_policy_dart_sync() -> list[str]:
             f"in Dart not JSON: {', '.join(only_dart)}"
         )
     return violations
+
+
+def remove_id(score_id: str) -> bool:
+    """Drop an id after human proofread promotion to formal."""
+    if not re.fullmatch(r"[a-z0-9_]+", score_id):
+        raise SystemExit(f"id must be snake_case ascii: {score_id!r}")
+    policy = load_policy()
+    ids = [str(x) for x in policy["omrProvenanceIds"]]
+    if score_id not in ids:
+        print(f"POLICY_SYNC remove skip (not present): {score_id}")
+        rewrite_dart(ids)
+        return False
+    ids = [x for x in ids if x != score_id]
+    write_policy(ids)
+    rewrite_dart(ids)
+    print(f"POLICY_SYNC removed: {score_id} (policyOmr={len(set(ids))})")
+    return True
 
 
 def add_id(score_id: str) -> bool:
@@ -139,6 +160,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Sync OMR provenance policy + Dart")
     ap.add_argument("--add-id", help="Register one OMR id")
     ap.add_argument(
+        "--remove-id",
+        help="Unregister one id after promoting to formal (SOP checklist passed)",
+    )
+    ap.add_argument(
         "--sync-from-catalog",
         action="store_true",
         help="Union all catalog omrDraft ids into policy",
@@ -157,6 +182,9 @@ def main() -> int:
 
     if args.add_id:
         add_id(args.add_id)
+        return 0
+    if args.remove_id:
+        remove_id(args.remove_id)
         return 0
     if args.sync_from_catalog:
         sync_from_catalog()
@@ -182,7 +210,7 @@ def main() -> int:
         return 0
 
     ap.error(
-        "Provide --add-id, --sync-from-catalog, --rewrite-dart, or --check"
+        "Provide --add-id, --remove-id, --sync-from-catalog, --rewrite-dart, or --check"
     )
     return 2
 

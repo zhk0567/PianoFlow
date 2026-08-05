@@ -359,14 +359,29 @@ def main() -> int:
         ids = [args.id]
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    index_lines = [
-        "# OMR audit index",
+    generated = datetime.now().strftime("%Y-%m-%d %H:%M")
+    auto_lines = [
+        "## 最新自动审计",
         "",
-        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"Generated: {generated}",
         "",
         "| id | kind | JSON≡XML | notes | warnings | promote |",
         "|----|------|----------|-------|----------|---------|",
     ]
+    # Curated README head (SOP index etc.) is preserved when present.
+    curated_head = "\n".join(
+        [
+            "# OMR audit index",
+            "",
+            "**进度总表：** [`PROOFREAD_STATUS.md`](./PROOFREAD_STATUS.md)",
+            "**升 formal（人工确认后）：** "
+            "`python .\\scripts\\omr_promote_formal.py --id <id> --confirm-sop-passed`",
+            "**政策：** 自动化审计**永不**推荐升 formal；未逐音校对保持 `omrDraft`。",
+            "",
+            "每首 SOP：`docs/omr_audit/<id>_SOP.md`。渲图对照：`_render/{id}/`。",
+            "",
+        ]
+    )
 
     drift_ids: list[str] = []
     print(f"Repo: {REPO}")
@@ -391,14 +406,24 @@ def main() -> int:
             f"issues={n_iss} warnings={n_warn} "
             f"promote=NO -> {out_disp}"
         )
-        index_lines.append(
+        auto_lines.append(
             f"| `{sid}` | {report.get('scoreKind')} | "
             f"{equal} | "
             f"{report.get('note_count_json')} | {n_warn} | NO |"
         )
 
+    auto_block = "\n".join(auto_lines) + "\n"
     index_path = args.out_dir / "README.md"
-    index_path.write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    if index_path.is_file():
+        prev = index_path.read_text(encoding="utf-8")
+        marker = "## 最新自动审计"
+        if marker in prev:
+            head = prev.split(marker, 1)[0].rstrip() + "\n\n"
+        else:
+            head = curated_head
+    else:
+        head = curated_head
+    index_path.write_text(head + auto_block, encoding="utf-8")
     try:
         index_disp = str(index_path.relative_to(REPO))
     except ValueError:

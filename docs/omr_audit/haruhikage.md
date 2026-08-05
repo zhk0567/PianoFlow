@@ -1,12 +1,12 @@
 # OMR audit — `haruhikage`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-04 19:37
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\haruhikage.pdf`
 - MusicXML: `assets\scores\musicxml\haruhikage.musicxml`
 - JSON: `assets\scores\haruhikage.json`
 - JSON ≡ reparse: **True** (1161/1161 notes)
-- BPM JSON/parse: 92 / 100
+- BPM JSON/parse: 97 / 97
 - keySignature JSON/parse: 5 / 5
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -15,13 +15,12 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=92) — practice tempo may be a catalog default
 - 334 same-hand leap(s) ≥12 semitones (OMR risk)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: True
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('6', '8')": 3}`
 

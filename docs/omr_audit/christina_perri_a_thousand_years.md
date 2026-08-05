@@ -1,12 +1,12 @@
 # OMR audit — `christina_perri_a_thousand_years`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-04 19:37
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\christina_perri_a_thousand_years.pdf`
 - MusicXML: `assets\scores\musicxml\christina_perri_a_thousand_years.musicxml`
 - JSON: `assets\scores\christina_perri_a_thousand_years.json`
 - JSON ≡ reparse: **True** (969/969 notes)
-- BPM JSON/parse: 78 / 100
+- BPM JSON/parse: 50 / 50
 - keySignature JSON/parse: -2 / -2
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -15,13 +15,12 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=78) — practice tempo may be a catalog default
 - 34 same-hand leap(s) ≥12 semitones (OMR risk)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: True
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('6', '8')": 1}`
 

@@ -1,6 +1,6 @@
 {
   "id": "clayderman_reve_damour",
-  "title": "梦中的婚礼",
+  "title": "Untitled",
   "bpm": 72,
   "timeSignature": {
     "num": 4,
@@ -21,19 +21,19 @@
       "hand": "left"
     },
     {
-      "midi": 58,
+      "midi": 55,
       "start": 1.0,
       "duration": 0.5,
       "hand": "left"
     },
     {
-      "midi": 50,
+      "midi": 58,
       "start": 1.5,
       "duration": 0.5,
       "hand": "left"
     },
     {
-      "midi": 58,
+      "midi": 55,
       "start": 2.0,
       "duration": 0.5,
       "hand": "left"
@@ -45,7 +45,7 @@
       "hand": "left"
     },
     {
-      "midi": 58,
+      "midi": 55,
       "start": 3.0,
       "duration": 0.5,
       "hand": "left"
@@ -57,7 +57,13 @@
       "hand": "left"
     },
     {
-      "midi": 79,
+      "midi": 74,
+      "start": 3.5,
+      "duration": 0.25,
+      "hand": "right"
+    },
+    {
+      "midi": 75,
       "start": 3.75,
       "duration": 0.25,
       "hand": "right"
@@ -6603,28 +6609,28 @@
       "hand": "right"
     },
     {
+      "midi": 67,
+      "start": 196.5,
+      "duration": 3.5,
+      "hand": "right"
+    },
+    {
       "midi": 50,
-      "start": 196.0,
-      "duration": 0.5,
+      "start": 198.0,
+      "duration": 0.25,
       "hand": "left"
     },
     {
       "midi": 57,
-      "start": 196.5,
-      "duration": 0.5,
+      "start": 198.25,
+      "duration": 0.25,
       "hand": "left"
     },
     {
       "midi": 58,
-      "start": 197.0,
-      "duration": 3.0,
+      "start": 198.5,
+      "duration": 3.5,
       "hand": "left"
-    },
-    {
-      "midi": 67,
-      "start": 197.0,
-      "duration": 3.0,
-      "hand": "right"
     }
   ]
 }

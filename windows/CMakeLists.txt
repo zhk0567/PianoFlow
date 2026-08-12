@@ -45,6 +45,14 @@ if(EXISTS "${_PIANO_ORT_ROOT}/include/onnxruntime_cxx_api.h")
   message(STATUS "PianoFlow: using local ONNX Runtime at ${ONNXRUNTIME_ROOT_DIR}")
 endif()
 
+# audioplayers_windows / webview_windows need nuget.exe at configure time.
+# Prefer repo-local copy (scripts ensure `_tools/nuget.exe`) over FetchContent download.
+set(_PIANO_NUGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../_tools")
+if(EXISTS "${_PIANO_NUGET_DIR}/nuget.exe")
+  list(APPEND CMAKE_PROGRAM_PATH "${_PIANO_NUGET_DIR}")
+  message(STATUS "PianoFlow: nuget search path ${_PIANO_NUGET_DIR}")
+endif()
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

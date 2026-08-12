@@ -7,17 +7,20 @@ import 'models/song.dart';
 abstract final class ScoreKindPolicy {
   /// PDF→Audiveris OMR ids (generated from score_kind_policy.json).
   static const omrProvenanceIds = <String>{
-    'beethoven_moonlight_sonata',
+    'an_he_qiao',
     'christina_perri_a_thousand_years',
     'clayderman_reve_damour',
     'haruhikage',
     'hisaishi_castle_in_the_sky',
     'jay_chou_qing_tian',
     'jue_bie_shu',
+    'pure_imagination',
     'radwimps_suzume',
     'rimsky_flight_of_the_bumblebee',
     'ru_yuan',
+    'rush_e',
     'sawano_call_of_silence',
+    'when_you_wish_upon_a_star',
     'xiang_yun_duan',
   };
 

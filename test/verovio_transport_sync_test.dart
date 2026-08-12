@@ -112,19 +112,35 @@ void main() {
     });
   });
 
-  group('error log messages', () {
-    test('resize and position failure strings stay grep-friendly', () {
+  group('shouldSnapForRateZeroCrossing', () {
+    test('snaps when freeze starts or ends', () {
       expect(
-        VerovioTransportSync.resizeFallbackLog('boom'),
-        contains('pfResize failed'),
+        VerovioTransportSync.shouldSnapForRateZeroCrossing(
+          previousRate: 2.0,
+          currentRate: 0,
+        ),
+        isTrue,
       );
       expect(
-        VerovioTransportSync.positionPushFailedLog(
-          beats: 1.5,
-          snap: true,
-          error: 'x',
+        VerovioTransportSync.shouldSnapForRateZeroCrossing(
+          previousRate: 0,
+          currentRate: 2.0,
         ),
-        contains('pfSetPosition failed'),
+        isTrue,
+      );
+      expect(
+        VerovioTransportSync.shouldSnapForRateZeroCrossing(
+          previousRate: 2.0,
+          currentRate: 2.1,
+        ),
+        isFalse,
+      );
+      expect(
+        VerovioTransportSync.shouldSnapForRateZeroCrossing(
+          previousRate: 0,
+          currentRate: 0,
+        ),
+        isFalse,
       );
     });
   });

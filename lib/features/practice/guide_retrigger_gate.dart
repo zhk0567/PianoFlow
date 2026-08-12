@@ -1,3 +1,5 @@
+import 'practice_pitch_match.dart';
+
 /// Flowkey-style hit gate: after speaker guide of a pitch, accept a user hit
 /// only once the mic has gone quiet on that pitch (gap), then heard it again.
 ///
@@ -6,7 +8,7 @@
 class GuideRetriggerGate {
   GuideRetriggerGate({this.quietFramesNeeded = defaultQuietFramesNeeded});
 
-  /// Pitch frames (~40ms hop) of unbroken quiet required before [gapSeen].
+  /// Pitch frames (~30ms hop) of unbroken quiet required before [gapSeen].
   /// One empty frame after suppress ends is often estimator flicker, not a real gap.
   static const defaultQuietFramesNeeded = 2;
 
@@ -44,12 +46,21 @@ class GuideRetriggerGate {
   }
 
   /// True while we still need a quiet gap before this MIDI can count as a hit.
+  /// Neighbor bins (±1) of an awaiting pitch are blocked the same way — the
+  /// estimator often lands there on guide bleed.
   bool blocks(int midi) {
-    return _awaitingGap.contains(midi) && !_gapSeen.contains(midi);
+    for (final m in _awaitingGap) {
+      if (_gapSeen.contains(m)) continue;
+      if (PracticePitchMatch.isNear(m, midi)) return true;
+    }
+    return false;
   }
 
   /// Update gap state from current heard midis; return waiting pitches that
-  /// should register as user hits this frame.
+  /// should register as **post-guide re-strikes** this frame.
+  ///
+  /// Ungated / no-guide practice hits come from noteOn edges only — sustained
+  /// level in [heard] must not auto-advance (common tones / held notes).
   ///
   /// [stillSuppressed]: midis inside the speaker→mic suppress window — do **not**
   /// treat their absence from [heard] as a real quiet gap (filter hides them).
@@ -60,12 +71,17 @@ class GuideRetriggerGate {
   }) {
     final needed = quietFramesNeeded < 1 ? 1 : quietFramesNeeded;
     for (final m in [..._awaitingGap]) {
-      if (stillSuppressed.contains(m)) {
+      // Neighbor bins are also armed on suppress — treat ±1 as still suppressed.
+      final suppressedNear = stillSuppressed.any(
+        (s) => PracticePitchMatch.isNear(m, s),
+      );
+      if (suppressedNear) {
         // Suppress filter hides the pitch — reset streak; not a real gap.
         _quietFrames[m] = 0;
         continue;
       }
-      if (!heard.contains(m)) {
+      // Estimator often lands ±1 on guide bleed — still counts as "hearing".
+      if (!PracticePitchMatch.isHeardNear(m, heard)) {
         final n = (_quietFrames[m] ?? 0) + 1;
         _quietFrames[m] = n;
         if (n >= needed) {
@@ -77,15 +93,20 @@ class GuideRetriggerGate {
       }
     }
 
+    if (_awaitingGap.isEmpty) return {};
+
+    final matched = PracticePitchMatch.matchWaiting(
+      heard: heard,
+      waitingFor: waitingFor,
+    );
     final hits = <int>{};
-    for (final m in waitingFor) {
-      if (!heard.contains(m)) continue;
-      if (_awaitingGap.contains(m)) {
-        if (!_gapSeen.contains(m)) continue; // still guide bleed
-        _awaitingGap.remove(m);
-        _gapSeen.remove(m);
-        _quietFrames.remove(m);
-      }
+    for (final m in matched) {
+      // Only armed pitches after a quiet gap — never level-hold hits.
+      if (!_awaitingGap.contains(m)) continue;
+      if (!_gapSeen.contains(m)) continue;
+      _awaitingGap.remove(m);
+      _gapSeen.remove(m);
+      _quietFrames.remove(m);
       hits.add(m);
     }
     return hits;

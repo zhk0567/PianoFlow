@@ -26,7 +26,7 @@ void main() {
 /// Mirrors BasicPitchEstimator._selectNotes thresholds for unit coverage.
 Set<int> _selectLikeProduction(List<double> scores) {
   const frameThresh = 0.42;
-  const relativeThresh = 0.62;
+  const relativeThresh = 0.55;
   const midiOffset = 21;
   const minMidi = 21;
   const maxMidi = 108;

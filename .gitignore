@@ -46,6 +46,7 @@ app.*.map.json
 
 # Local tool downloads
 .tools/
+_tools/
 
 # Python
 __pycache__/
@@ -75,3 +76,10 @@ node_modules/
 
 # Debug symbols (too large for GitHub; not needed at runtime)
 *.pdb
+
+# Local scratch / OCR dumps (never commit)
+_tmp_*/
+_tmp_*.png
+docs/omr_audit/_*/
+third_party/nuget/
+/package-lock.json

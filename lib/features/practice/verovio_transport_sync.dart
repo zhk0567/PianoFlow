@@ -1,16 +1,7 @@
 /// Pure Verovio playhead sync decisions (seek / loop snap vs ease).
-///
-/// Used by [VerovioStaffLane] so seek/loop jumps hard-correct the cursor while
-/// normal ticks and rate-only updates ease without flash-scrolling.
 abstract final class VerovioTransportSync {
-  /// Ignore smaller beat moves unless play/rate also changed (slow tempos use heartbeat).
   static const posMinDelta = 0.01;
-
-  /// Ignore tiny rate noise.
   static const rateMinDelta = 0.01;
-
-  /// Absolute beat jump above this → hard snap (seek / loop wrap).
-  /// Equal to this value still eases (strict `>`), matching legacy lane behavior.
   static const seekSnapBeats = 0.35;
 
   static double positionDelta(double fromBeats, double toBeats) =>
@@ -19,7 +10,6 @@ abstract final class VerovioTransportSync {
   static double rateDelta(double fromBps, double toBps) =>
       (fromBps - toBps).abs();
 
-  /// True → do not call pushPosition (widget update is a no-op for transport).
   static bool shouldSkipPush({
     required double posDelta,
     required bool playChanged,
@@ -30,13 +20,33 @@ abstract final class VerovioTransportSync {
         rateDelta <= rateMinDelta;
   }
 
-  /// True → [pushPosition] with `snap: true` (seek / loop wrap).
-  static bool shouldSnapSeek(double posDelta) => posDelta > seekSnapBeats;
+  static bool shouldSnapSeek(
+    double posDelta, {
+    bool intentionalSeek = false,
+  }) {
+    if (intentionalSeek) return true;
+    return posDelta > seekSnapBeats;
+  }
 
-  /// While a score push holds the bridge, resize must not be dropped — defer.
+  static bool shouldSnapForEpoch({
+    required int previousEpoch,
+    required int currentEpoch,
+  }) =>
+      currentEpoch != previousEpoch;
+
+  /// Freeze ↔ free-advance toggles beatsPerSec through 0 — snap so staff
+  /// does not ease across the wait line with a stale throttle sample.
+  static bool shouldSnapForRateZeroCrossing({
+    required double previousRate,
+    required double currentRate,
+  }) {
+    final wasMoving = previousRate > rateMinDelta;
+    final isMoving = currentRate > rateMinDelta;
+    return wasMoving != isMoving;
+  }
+
   static bool shouldDeferResize({required bool pushing}) => pushing;
 
-  /// Console + UI dual-channel message prefixes (kept stable for grepping).
   static String resizeFallbackLog(Object error) =>
       'pfResize failed → full score push: $error';
 

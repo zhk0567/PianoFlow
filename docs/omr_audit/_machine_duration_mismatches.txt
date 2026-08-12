@@ -1,0 +1,18 @@
+# Machine voice-duration + type hygiene 2026-08-09
+# expect = beats * (4/beat-type) * divisions
+# All remain omrDraft — no formal.
+
+DURATION LAYER: all 15 omrDraft scores voice-sum bad = 0
+
+Last fixes:
+- haruhikage P0 m5: all typed notes were exact 2× type → halved + pad LH
+  (script: _fix_omr_type_duration_2x.py)
+- type/dot synced from duration on 1040 notes across drafts
+  (script: _fix_omr_type_from_duration.py; skips grace + tuplets)
+
+Prior:
+- spurious mid-score divisions, Christina exact-2x, pad/trim/clamp
+
+REMAINING (not duration):
+- pitch gaps needing authority (suzume end / Silence m11–14 / castle m21–24 / mid-scores)
+- same-hand leap OMR risk (esp. haruhikage) — do not auto-octave without PDF consensus

@@ -15,7 +15,8 @@ extension HandX on Hand {
 /// - [formal]: authored / textbook MusicXML（已校对或教材级）
 /// - [simplified]: JSON→MusicXML 简编（可读、跟进度，但非正式排版）
 /// - [omrDraft]: PDF→OMR 未逐音校对草稿（可练，但**不是**精确正式谱）
-enum ScoreKind { formal, simplified, omrDraft }
+/// - [userImport]: 工坊自导入 MusicXML（永远不是 formal）
+enum ScoreKind { formal, simplified, omrDraft, userImport }
 
 class SongSummary {
   const SongSummary({
@@ -44,7 +45,7 @@ class SongSummary {
 
   factory SongSummary.fromJson(Map<String, dynamic> json) {
     final kindRaw = json['scoreKind'] as String?;
-    final known = {'formal', 'simplified', 'omrDraft'};
+    final known = {'formal', 'simplified', 'omrDraft', 'userImport'};
     if (kindRaw != null && !known.contains(kindRaw)) {
       pianoFlowLog(
         'Catalog',
@@ -65,35 +66,92 @@ class SongSummary {
         'formal' => ScoreKind.formal,
         'omrDraft' => ScoreKind.omrDraft,
         'simplified' => ScoreKind.simplified,
+        'userImport' => ScoreKind.userImport,
         _ => ScoreKind.simplified,
       },
     );
   }
 
+  SongSummary copyWith({
+    String? id,
+    String? title,
+    String? artist,
+    String? genre,
+    int? difficulty,
+    int? bpm,
+    String? asset,
+    String? description,
+    int? durationHint,
+    ScoreKind? scoreKind,
+  }) {
+    return SongSummary(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      genre: genre ?? this.genre,
+      difficulty: difficulty ?? this.difficulty,
+      bpm: bpm ?? this.bpm,
+      asset: asset ?? this.asset,
+      description: description ?? this.description,
+      durationHint: durationHint ?? this.durationHint,
+      scoreKind: scoreKind ?? this.scoreKind,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'artist': artist,
+        'genre': genre,
+        'difficulty': difficulty,
+        'bpm': bpm,
+        'asset': asset,
+        'description': description,
+        if (durationHint != null) 'durationHint': durationHint,
+        'scoreKind': switch (scoreKind) {
+          ScoreKind.formal => 'formal',
+          ScoreKind.omrDraft => 'omrDraft',
+          ScoreKind.simplified => 'simplified',
+          ScoreKind.userImport => 'userImport',
+        },
+      };
+
   bool get isSimplifiedScore => scoreKind == ScoreKind.simplified;
 
   bool get isOmrDraft => scoreKind == ScoreKind.omrDraft;
 
-  /// True only for proofread / textbook MusicXML — never for OMR drafts.
+  bool get isUserImport => scoreKind == ScoreKind.userImport;
+
+  /// True only for proofread / textbook MusicXML — never for OMR / 自导入.
   bool get isFormalScore => scoreKind == ScoreKind.formal;
 
   String get scoreKindLabel => switch (scoreKind) {
         ScoreKind.formal => '正式谱',
         ScoreKind.omrDraft => 'OMR草稿',
         ScoreKind.simplified => '简编谱',
+        ScoreKind.userImport => '自导入',
       };
 
   /// Discover / practice honesty line — OMR always marked 未校对.
-  String get scoreKindLabelDetail =>
-      isOmrDraft ? '$scoreKindLabel（未校对）' : scoreKindLabel;
+  String get scoreKindLabelDetail => switch (scoreKind) {
+        ScoreKind.omrDraft => '$scoreKindLabel（未校对）',
+        ScoreKind.userImport => '$scoreKindLabel（非正式谱）',
+        _ => scoreKindLabel,
+      };
 
   /// Shared library + practice honesty copy (never claim OMR is formal).
   static const omrHonestyNotice =
       'OMR草稿未经逐音校对，可练但不保证与原谱完全一致';
 
-  /// Fixed practice-page banner when [isOmrDraft]; null for other kinds.
-  String? get practiceHonestyBanner =>
-      isOmrDraft ? omrHonestyNotice : null;
+  static const userImportHonestyNotice =
+      '自导入曲谱未做教材级校对，可练但不标为正式谱';
+
+  /// Fixed practice-page banner when [isOmrDraft]/[isUserImport]; null otherwise.
+  String? get practiceHonestyBanner {
+    if (isOmrDraft) return omrHonestyNotice;
+    if (isUserImport) return userImportHonestyNotice;
+    return null;
+  }
 
   /// Meta under「今日一首」title.
   String get homeTodayMetaLine =>
@@ -183,6 +241,20 @@ class ScoreNote {
         'duration': duration,
         'hand': hand == Hand.left ? 'left' : 'right',
       };
+
+  ScoreNote copyWith({
+    int? midi,
+    double? start,
+    double? duration,
+    Hand? hand,
+  }) {
+    return ScoreNote(
+      midi: midi ?? this.midi,
+      start: start ?? this.start,
+      duration: duration ?? this.duration,
+      hand: hand ?? this.hand,
+    );
+  }
 }
 
 class SongScore {
@@ -232,6 +304,35 @@ class SongScore {
       timeNum: timeNum,
       timeDen: timeDen,
       keySignature: (json['keySignature'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'bpm': bpm,
+        'timeSignature': {'num': timeNum, 'den': timeDen},
+        'keySignature': keySignature,
+        'notes': notes.map((n) => n.toJson()).toList(),
+      };
+
+  SongScore copyWith({
+    String? id,
+    String? title,
+    int? bpm,
+    List<ScoreNote>? notes,
+    int? timeNum,
+    int? timeDen,
+    int? keySignature,
+  }) {
+    return SongScore(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      bpm: bpm ?? this.bpm,
+      notes: notes ?? this.notes,
+      timeNum: timeNum ?? this.timeNum,
+      timeDen: timeDen ?? this.timeDen,
+      keySignature: keySignature ?? this.keySignature,
     );
   }
 

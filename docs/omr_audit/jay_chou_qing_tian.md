@@ -1,12 +1,12 @@
 # OMR audit — `jay_chou_qing_tian`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-09 11:54
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\jay_chou_qing_tian.pdf`
 - MusicXML: `assets\scores\musicxml\jay_chou_qing_tian.musicxml`
 - JSON: `assets\scores\jay_chou_qing_tian.json`
-- JSON ≡ reparse: **True** (1141/1141 notes)
-- BPM JSON/parse: 76 / 100
+- JSON ≡ reparse: **True** (1131/1131 notes)
+- BPM JSON/parse: 68 / 68
 - keySignature JSON/parse: 1 / 1
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -15,34 +15,25 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=76) — practice tempo may be a catalog default
-- 97 same-hand leap(s) ≥12 semitones (OMR risk)
+- 95 same-hand leap(s) ≥12 semitones (OMR risk)
+- 19 unusual duration value(s)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: True
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('4', '4')": 1}`
 
 ## Same-hand leaps ≥12st
+- right leap 19st @ beat 28.000: 74→55
 - right leap 12st @ beat 40.500: 62→74
-- left leap 12st @ beat 4.000: 55→43
-- left leap 12st @ beat 5.000: 50→62
-- left leap 12st @ beat 6.000: 55→43
-- left leap 19st @ beat 6.500: 43→62
-- left leap 20st @ beat 7.000: 62→42
-- left leap 20st @ beat 7.500: 42→62
+- left leap 19st @ beat 2.000: 59→40
+- left leap 19st @ beat 4.000: 55→36
+- left leap 14st @ beat 6.000: 52→38
+- left leap 19st @ beat 10.000: 59→40
 - left leap 12st @ beat 12.000: 55→43
-- left leap 12st @ beat 13.000: 50→62
-- left leap 12st @ beat 14.000: 55→43
-- left leap 19st @ beat 14.500: 43→62
-- left leap 20st @ beat 15.000: 62→42
-- left leap 19st @ beat 15.500: 43→62
-- left leap 22st @ beat 16.000: 62→40
-- left leap 12st @ beat 20.000: 55→43
-- left leap 17st @ beat 24.000: 57→40
-- left leap 12st @ beat 28.000: 55→43
+- left leap 16st @ beat 16.000: 59→43
 - left leap 12st @ beat 36.000: 55→43
 - left leap 12st @ beat 37.000: 50→62
 - left leap 12st @ beat 38.000: 55→43
@@ -56,6 +47,15 @@
 - left leap 20st @ beat 47.000: 62→42
 - left leap 12st @ beat 52.000: 55→43
 - left leap 12st @ beat 53.000: 50→62
+- left leap 12st @ beat 54.000: 55→43
+- left leap 19st @ beat 54.500: 43→62
+- left leap 20st @ beat 55.000: 62→42
+- left leap 20st @ beat 55.500: 42→62
+- left leap 12st @ beat 60.000: 55→43
+- left leap 12st @ beat 61.000: 50→62
+- left leap 12st @ beat 62.000: 55→43
+- left leap 19st @ beat 62.500: 43→62
+- left leap 20st @ beat 63.000: 62→42
 
 ## Promote blockers
 - Human visual proofread against PDF not automated (PDF is image-only).

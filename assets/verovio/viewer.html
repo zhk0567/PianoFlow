@@ -76,9 +76,9 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 8.75px;
+      width: 3px;
       height: 100%;
-      background: rgba(232, 119, 34, 0.55);
+      background: rgba(232, 119, 34, 0.42);
       pointer-events: none;
       z-index: 5;
       display: none;
@@ -120,7 +120,7 @@
      * + guide audio). JS may ease ≤ this many seconds between bridge ticks —
      * never free-run for minutes (that made staff feel like a second system).
      */
-    const MAX_EXTRAPOLATE_SEC = 0.12;
+    const MAX_EXTRAPOLATE_SEC = 0.08;
     /** Keep rAF only while Dart recently confirmed play (ms). */
     const DART_LIVE_MS = 500;
     /** Soft catch-up only when paused (rate==0); play always hard-tracks. */
@@ -394,7 +394,8 @@
     function paintPlayhead(ph, contentX, sx) {
       ph.style.display = 'block';
       ph.style.height = '100%';
-      ph.style.left = (contentX - sx) + 'px';
+      const viewX = (contentX - sx);
+      ph.style.left = viewX + 'px';
     }
 
     function applyScrollTransform(sx) {
@@ -563,15 +564,18 @@
       const cssH = (options && options.cssHeight) || wrap.clientHeight || window.innerHeight || 220;
       const scale = (options && options.scale) || 60;
       const measures = countMeasures(musicXml || '');
-      // One readable system width ≈ Flutter lane — NEVER crush the whole piece
-      // into a single capped pageWidth (that smashed late measures into illegible
-      // overlapping ink — user screenshot).
-      // Wider systems → dense 16ths keep readable px/beat (avoid turtle scroll).
+      // Flowkey-like continuous grand staff: ONE horizontal system for the whole
+      // piece. Cap-width + breaks:auto used to paginate mid-scroll and redraw the
+      // piano brace/clefs on every system — discontinuous middle. Width scales
+      // with measure count; adjustPageWidth expands further if ink needs room.
       const pageWidth = Math.max(
-        2000,
-        Math.min(3200, Math.floor(cssW * 120 / scale)),
+        4000,
+        Math.min(120000, Math.max(
+          Math.floor(cssW * 120 / scale),
+          measures * 240,
+        )),
       );
-      // Tall enough for one piano grand staff; Verovio paginates the rest.
+      // Tall enough for one piano grand staff only (no vertical wrap).
       const pageHeight = Math.max(
         560,
         Math.min(
@@ -587,19 +591,21 @@
         cssH,
         measures,
         rawWidth: pageWidth,
-        breaks: 'auto',
+        breaks: 'none',
       };
     }
 
     function applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode) {
+      const breaks = breaksMode || (lay && lay.breaks) || 'none';
       toolkit.setOptions({
         scale: scale,
         pageWidth: pageWidth,
         pageHeight: pageHeight,
         adjustPageHeight: true,
-        // Keep the chosen pageWidth — do not shrink systems back into a crush.
-        adjustPageWidth: false,
-        breaks: breaksMode || (lay && lay.breaks) || 'auto',
+        // With breaks:none, expand page to fit the single continuous system
+        // (never crush all measures into a viewport-sized strip).
+        adjustPageWidth: true,
+        breaks: breaks,
         footer: 'none',
         header: 'none',
         svgViewBox: true,
@@ -609,9 +615,13 @@
         pageMarginRight: 28,
         spacingStaff: 14,
         spacingSystem: 8,
-        // Prefer horizontal room for short notes (SongScore 16ths) over crush.
-        spacingLinear: 0.78,
-        spacingNonLinear: 0.30,
+        // Equal measure width (time-proportional): spacingNonLinear=1 makes
+        // space ∝ duration so same-meter bars share the same horizontal span
+        // (Flowkey-like follow-along). Pair with a small spacingLinear so the
+        // layout does not explode; noJustification avoids uneven last-system stretch.
+        spacingLinear: 0.05,
+        spacingNonLinear: 1.0,
+        noJustification: true,
         unit: 9,
         justifyVertically: false,
         mnumInterval: 1,
@@ -940,24 +950,23 @@
           let scale = (options && options.scale) || lay.scale;
           let pageHeight = lay.pageHeight;
           let pageWidth = lay.pageWidth;
-          let breaksMode = 'auto';
+          // Always continuous single system — never reintroduce mid-scroll braces.
+          const breaksMode = 'none';
           if (mode === 'safe') {
-            // Still paginate horizontally — readable width, slightly shorter page.
-            pageWidth = Math.max(1500, Math.min(2200, pageWidth));
+            // Keep breaks:none; slightly shorter page + modest width floor.
+            pageWidth = Math.max(4000, Math.min(pageWidth, Math.max(4000, lay.measures * 200)));
             pageHeight = Math.max(520, Math.min(pageHeight, 720));
-            breaksMode = 'auto';
             applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
-            logHost('engrave SAFE pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale);
+            logHost('engrave SAFE pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale + ' breaks=none');
           } else if (mode === 'narrow') {
-            pageWidth = Math.max(1400, Math.min(2000, pageWidth));
+            pageWidth = Math.max(4000, Math.min(pageWidth, Math.max(4000, lay.measures * 180)));
             pageHeight = Math.max(500, Math.min(pageHeight, 700));
             scale = Math.min(scale, 50);
-            breaksMode = 'auto';
             applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
-            logHost('engrave NARROW pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale);
+            logHost('engrave NARROW pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale + ' breaks=none');
           } else {
             applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
-            logHost('engrave NORM pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' measures=' + lay.measures + ' breaks=auto');
+            logHost('engrave NORM pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' measures=' + lay.measures + ' breaks=none');
           }
           const loaded = toolkit.loadData(lastMusicXml);
           if (loaded === false) {
@@ -983,7 +992,7 @@
           ok = engrave('safe');
         }
         if (!ok) {
-          logHost('retry engrave with narrow+auto');
+          logHost('retry engrave with narrow+none');
           ok = engrave('narrow');
         }
         if (!ok) {
@@ -1032,7 +1041,7 @@
       const wrap = document.getElementById('wrap');
       const keepBeats = lastBeats;
 
-      applyToolkitOptions(lay, scale, pageHeight, pageWidth, 'auto');
+      applyToolkitOptions(lay, scale, pageHeight, pageWidth, 'none');
       try {
         if (typeof toolkit.redoLayout === 'function') {
           toolkit.redoLayout();
@@ -1058,7 +1067,7 @@
 
     /**
      * @param beats quarter-note position (same as Dart positionBeats / waterfall)
-     * @param snap  jump scroll immediately (load / seek / pause)
+     * @param snap  jump scroll immediately (load / intentional seek)
      * @param rate  beats/sec from Dart (0 = paused). Omit → keep previous rate.
      */
     window.pfSetPosition = function (beats, snap, rate) {
@@ -1066,9 +1075,8 @@
       const raw = Number(beats);
       let b = Number.isFinite(raw) ? raw : 0;
       const now = performance.now();
-      const jump = Math.abs(b - lastBeats);
-      const seekSnap = !!snap || jump > SEEK_BEAT_EPS;
-      const prevRate = beatsPerSec;
+      // Trust Dart snap only — freeze/unfreeze/end-hang must ease.
+      const seekSnap = !!snap;
 
       if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0) {
         beatsPerSec = rate;
@@ -1076,13 +1084,10 @@
         beatsPerSec = 0;
       }
 
-      if (beatsPerSec > 0 && !(prevRate > 0)) {
-        forceSnap = true;
-      }
-
       lastBeats = b;
       lastSyncTime = now;
-      updatePlayhead(b, seekSnap || jump > 0.12 || forceSnap);
+      updatePlayhead(b, seekSnap || forceSnap);
+      if (seekSnap) forceSnap = false;
     };
 
     function onVisibilityResume() {

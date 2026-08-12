@@ -13,10 +13,13 @@ import '../library/user_library_store.dart';
 import 'keyboard_geometry.dart';
 import 'practice_constants.dart';
 import 'practice_engine.dart';
+import 'practice_stats_store.dart';
+import 'practice_weak_loop.dart';
 import 'verovio_runtime.dart';
 import 'widgets/falling_notes_lane.dart';
 import 'widgets/piano_keyboard.dart';
 import 'widgets/practice_controls.dart';
+import 'widgets/practice_settlement_sheet.dart';
 import 'widgets/verovio_staff_lane.dart';
 
 class PracticePage extends ConsumerStatefulWidget {
@@ -101,6 +104,8 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
     value: true,
   );
 
+  bool _settlementShowing = false;
+
   @override
   void initState() {
     super.initState();
@@ -116,6 +121,67 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
         'Practice',
         'omrDraft ${widget.summary.id}: ${SongSummary.omrHonestyNotice}',
       );
+    }
+  }
+
+  Future<void> _showSettlement({required bool leaveAfter}) async {
+    if (_settlementShowing || !mounted) return;
+    final score = widget.score;
+    final snap = ref.read(practiceProvider(score));
+    if (!snap.hasSessionActivity) {
+      if (leaveAfter && mounted) Navigator.of(context).pop();
+      return;
+    }
+    _settlementShowing = true;
+    final ctrl = ref.read(practiceProvider(score).notifier);
+    final sessions =
+        ref.read(practiceStatsProvider).bySong[widget.summary.id]?.sessions ??
+            0;
+    ctrl.clearSettlementReady();
+    var choseLeave = false;
+    var choseRetry = false;
+    var choseWeak = false;
+    final weak = snap.suggestedWeakLoop;
+    try {
+      await showPracticeSettlementSheet(
+        context: context,
+        snap: snap,
+        songSessions: sessions,
+        examRecordingPath: ctrl.lastExamRecordingPath,
+        weakLoopLabel: weak == null
+            ? null
+            : PracticeWeakLoopLogic.labelZh(weak),
+        onWeakLoop: weak == null
+            ? null
+            : () {
+                choseWeak = true;
+                unawaited(() async {
+                  await ctrl.flushStatsIfNeeded();
+                  ctrl.applyWeakLoopAndRestart(
+                    start: weak.start,
+                    end: weak.end,
+                  );
+                }());
+              },
+        onRetry: () {
+          choseRetry = true;
+          unawaited(() async {
+            await ctrl.flushStatsIfNeeded();
+            ctrl.resetSessionAndRestart();
+          }());
+        },
+        onLeave: () async {
+          choseLeave = true;
+          await ctrl.flushStatsIfNeeded();
+          if (mounted) Navigator.of(context).pop();
+        },
+      );
+      if (!choseLeave && !choseRetry && !choseWeak && leaveAfter && mounted) {
+        await ctrl.flushStatsIfNeeded();
+        if (mounted) Navigator.of(context).pop();
+      }
+    } finally {
+      _settlementShowing = false;
     }
   }
 
@@ -135,195 +201,240 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
         ? PracticeConstants.keyboardHCompact
         : PracticeConstants.keyboardHComfort;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          summary.title,
-                          style: AppTheme.body(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${summary.bpm} BPM · '
-                          '${s.mode.labelZh}'
-                          ' · ${summary.scoreKindLabelDetail}',
-                          style: AppTheme.body(
-                            fontSize: 12,
-                            color: summary.isOmrDraft
-                                ? AppColors.accent
-                                : AppColors.textSecondary,
-                            height: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (s.mode.isPractice &&
-                      (snap.sessionHits > 0 || snap.sessionMisses > 0))
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentSoft,
-                          borderRadius: BorderRadius.circular(AppRadii.sm),
-                        ),
-                        child: Text(
-                          snap.sessionMisses > 0
-                              ? '命中 ${snap.sessionHits} · 失误 ${snap.sessionMisses}'
-                              : '命中 ${snap.sessionHits}',
-                          style: AppTheme.body(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.accent,
-                          ),
-                        ),
+    if (snap.settlementReady && !_settlementShowing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_showSettlement(leaveAfter: false));
+      });
+    }
+
+    return PopScope(
+      canPop: !snap.hasSessionActivity,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_showSettlement(leaveAfter: true));
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          if (snap.hasSessionActivity) {
+                            unawaited(_showSettlement(leaveAfter: true));
+                          } else {
+                            Navigator.of(context).maybePop();
+                          }
+                        },
+                        icon: const Icon(Icons.arrow_back_rounded),
                       ),
-                    ),
-                  IconButton(
-                    tooltip: fav ? '取消收藏' : '收藏',
-                    onPressed: () => ref
-                        .read(userLibraryProvider.notifier)
-                        .toggleFavorite(summary.id),
-                    icon: Icon(
-                      fav ? Icons.star_rounded : Icons.star_border_rounded,
-                      color: fav ? AppColors.accent : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Fixed slot: runtime errors take priority; else OMR honesty banner.
-            // Keeps height stable so stage does not reflow when hints appear.
-            Builder(
-              builder: (context) {
-                final banner =
-                    snap.statusHint ?? summary.practiceHonestyBanner;
-                return SizedBox(
-                  height: 22,
-                  child: banner == null
-                      ? null
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              banner,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              summary.title,
+                              style: AppTheme.body(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${summary.bpm} BPM · '
+                              '${s.mode.labelZh}'
+                              ' · ${summary.scoreKindLabelDetail}',
                               style: AppTheme.body(
                                 fontSize: 12,
+                                color: summary.isOmrDraft
+                                    ? AppColors.accent
+                                    : AppColors.textSecondary,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (s.mode.isPractice && snap.hasSessionActivity)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.accentSoft,
+                              borderRadius: BorderRadius.circular(AppRadii.sm),
+                            ),
+                            child: Text(
+                              '命中 ${snap.sessionHits}',
+                              style: AppTheme.body(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.accent,
                               ),
                             ),
                           ),
                         ),
-                );
-              },
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final geo = KeyboardGeometry.stable(
-                      width: constraints.maxWidth,
-                      startMidi: PracticeConstants.startMidi,
-                      whiteKeyCount: PracticeConstants.whiteKeyCount,
-                    );
-                    const gap = PracticeConstants.stageLaneGap;
-                    const fkGap = PracticeConstants.stageFallingKeyboardGap;
-                    final usable = constraints.maxHeight -
-                        keyboardH -
-                        fkGap -
-                        gap;
-                    final lanes = PracticeConstants.splitStageLanes(
-                      usableHeight: usable,
-                      compact: compact,
-                    );
-                    final ppb = PracticeConstants.pixelsPerBeatForHeight(
-                      lanes.falling,
-                    );
-
-                    // Lock waterfall + keyboard to floored geo.width so bars
-                    // center on keys even when the parent has a fractional px.
-                    return Column(
-                      children: [
-                        SizedBox(
-                          height: lanes.falling,
-                          width: geo.width,
-                          child: FallingNotesLane(
-                            geometry: geo,
-                            notes: snap.filteredNotes,
-                            positionBeats: snap.positionBeats,
-                            pixelsPerBeat: ppb,
-                            waitingFor: snap.waitingFor,
-                            loopEnabled: s.loopEnabled,
-                            loopStart: s.loopStart,
-                            loopEnd: s.loopEnd,
-                          ),
+                      IconButton(
+                        tooltip: fav ? '取消收藏' : '收藏',
+                        onPressed: () => ref
+                            .read(userLibraryProvider.notifier)
+                            .toggleFavorite(summary.id),
+                        icon: Icon(
+                          fav
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          color: fav
+                              ? AppColors.accent
+                              : AppColors.textSecondary,
                         ),
-                        if (fkGap > 0) SizedBox(height: fkGap),
-                        SizedBox(
-                          height: keyboardH,
-                          width: geo.width,
-                          child: PianoKeyboard(
-                            geometry: geo,
-                            highlighted: snap.highlightByHand,
-                            // 自动播放不依赖 mic，不显示按下高亮（避免回声误亮）。
-                            pressed: s.mode.isAutoPlay
-                                ? const {}
-                                : snap.pressedMidi,
-                          ),
-                        ),
-                        SizedBox(height: gap),
-                        SizedBox(
-                          height: lanes.staff,
-                          child: VerovioStaffLane(
-                            score: score,
-                            positionBeats: snap.positionBeats,
-                            hand: s.hand,
-                            isPlaying: snap.isPlaying,
-                            // Wait free-advance (gaps/early window) must drive
-                            // staff rate; freeze only at wait onset hold.
-                            beatsPerSec: snap.staffBeatsPerSec,
-                          ),
-                        ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                Builder(
+                  builder: (context) {
+                    final banner =
+                        snap.statusHint ?? summary.practiceHonestyBanner;
+                    return SizedBox(
+                      height: 22,
+                      child: banner == null
+                          ? null
+                          : Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  banner,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTheme.body(
+                                    fontSize: 12,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                              ),
+                            ),
                     );
                   },
                 ),
-              ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final geo = KeyboardGeometry.stable(
+                          width: constraints.maxWidth,
+                          startMidi: PracticeConstants.startMidi,
+                          whiteKeyCount: PracticeConstants.whiteKeyCount,
+                        );
+                        const gap = PracticeConstants.stageLaneGap;
+                        const fkGap =
+                            PracticeConstants.stageFallingKeyboardGap;
+                        final usable = constraints.maxHeight -
+                            keyboardH -
+                            fkGap -
+                            gap;
+                        final lanes = PracticeConstants.splitStageLanes(
+                          usableHeight: usable,
+                          compact: compact,
+                        );
+                        final ppb =
+                            PracticeConstants.pixelsPerBeatForHeight(
+                          lanes.falling,
+                        );
+
+                        return Column(
+                          children: [
+                            SizedBox(
+                              height: lanes.falling,
+                              width: geo.width,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  RepaintBoundary(
+                                    child: ListenableBuilder(
+                                      listenable: ctrl.clock,
+                                      builder: (context, _) {
+                                        return FallingNotesLane(
+                                          geometry: geo,
+                                          notes: snap.filteredNotes,
+                                          positionBeats:
+                                              ctrl.clock.positionBeats,
+                                          pixelsPerBeat: ppb,
+                                          waitingFor: snap.waitingFor,
+                                          loopEnabled: s.loopEnabled,
+                                          loopStart: s.loopStart,
+                                          loopEnd: s.loopEnd,
+                                          visualFxEnabled:
+                                              s.visualFxEnabled,
+                                          ghostHits: snap.ghostHits,
+                                          showGhost: s.showGhost,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (fkGap > 0) SizedBox(height: fkGap),
+                            SizedBox(
+                              height: keyboardH,
+                              width: geo.width,
+                              child: RepaintBoundary(
+                                child: ListenableBuilder(
+                                  listenable: ctrl.clock,
+                                  builder: (context, _) {
+                                    return PianoKeyboard(
+                                      geometry: geo,
+                                      highlighted:
+                                          snap.highlightByHandAt(
+                                        ctrl.clock.positionBeats,
+                                      ),
+                                      pressed: s.mode.isAutoPlay
+                                          ? const {}
+                                          : snap.pressedMidi,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: gap),
+                            SizedBox(
+                              height: lanes.staff,
+                              child: RepaintBoundary(
+                                child: VerovioStaffLane(
+                                  score: score,
+                                  clock: ctrl.clock,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                PracticeControls(
+                  snap: snap,
+                  positionListenable: ctrl.clock,
+                  onPlay: ctrl.togglePlay,
+                  onRestart: ctrl.restart,
+                  onSettings: ctrl.updateSettings,
+                  onSeek: ctrl.seek,
+                ),
+              ],
             ),
-            PracticeControls(
-              snap: snap,
-              onPlay: ctrl.togglePlay,
-              onRestart: ctrl.restart,
-              onSettings: ctrl.updateSettings,
-              onSeek: ctrl.seek,
-            ),
-          ],
-        ),
+          ),
       ),
     );
   }

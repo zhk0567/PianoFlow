@@ -1,11 +1,11 @@
 # OMR audit — `hisaishi_castle_in_the_sky`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-09 11:54
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\hisaishi_castle_in_the_sky.pdf`
 - MusicXML: `assets\scores\musicxml\hisaishi_castle_in_the_sky.musicxml`
 - JSON: `assets\scores\hisaishi_castle_in_the_sky.json`
-- JSON ≡ reparse: **True** (219/219 notes)
+- JSON ≡ reparse: **True** (213/213 notes)
 - BPM JSON/parse: 80 / 80
 - keySignature JSON/parse: 0 / 0
 - Promote to formal? **NO** (automated audits never promote)
@@ -15,7 +15,8 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- 1 same-hand leap(s) ≥12 semitones (OMR risk)
+- 2 same-hand leap(s) ≥12 semitones (OMR risk)
+- 1 unusual duration value(s)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
@@ -25,7 +26,8 @@
 - times: `{"('4', '4')": 1}`
 
 ## Same-hand leaps ≥12st
-- left leap 15st @ beat 65.000: 45→60
+- left leap 16st @ beat 80.000: 57→41
+- left leap 14st @ beat 84.000: 41→55
 
 ## Promote blockers
 - Human visual proofread against PDF not automated (PDF is image-only).

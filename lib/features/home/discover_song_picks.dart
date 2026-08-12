@@ -9,7 +9,8 @@ abstract final class DiscoverSongPicks {
   static int scoreKindRank(ScoreKind kind) => switch (kind) {
         ScoreKind.formal => 0,
         ScoreKind.simplified => 1,
-        ScoreKind.omrDraft => 2,
+        ScoreKind.userImport => 2,
+        ScoreKind.omrDraft => 3,
       };
 
   static int compareForEntry(SongSummary a, SongSummary b) {

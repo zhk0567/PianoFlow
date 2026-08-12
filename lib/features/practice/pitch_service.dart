@@ -48,16 +48,18 @@ class PitchService {
   PitchService();
 
   static const sampleRate = 44100;
-  /// ~0.32s capture — padded to Basic Pitch's 2s input (zeros on the left).
-  /// Shorter than 0.4s to cut end-to-end wait latency; still enough for BP.
-  static const _window = 14112;
-  /// ~40ms hop for snappier updates.
-  static const _hop = 1764;
+  /// 0.25s capture — padded to Basic Pitch's 2s input (zeros on the left).
+  /// Was ~0.32s; shortened for 跟弹体感 (docs/前沿Idea-本地实时一条龙.md).
+  static const _window = 11025;
+  /// ~30ms hop (was ~40ms / 1764) — snappier noteOn / frame ticks.
+  static const _hop = 1323;
 
   static const rmsGate = 0.005;
-  /// 1 frame lock: with ~40ms hops, 2-frame lock added ~80ms+ before noteOn.
+  /// 1 frame lock: with ~30ms hops, keep lock immediate.
   static const _lockFrames = 1;
-  static const _releaseFrames = 2;
+  /// 1 miss frame unlock (~30ms). Was 2 (~80ms@40ms hop) — same-pitch rehits
+  /// while BP stays locked never got a second noteOn edge.
+  static const _releaseFrames = 1;
 
   final _recorder = AudioRecorder();
   final _yin = YinPitch(sampleRate: sampleRate, threshold: 0.15);
@@ -78,6 +80,9 @@ class PitchService {
   final Map<int, int> _missCount = {};
   Set<int> _locked = {};
   final Set<int> _emitted = {};
+
+  /// Optional PCM16 tee (exam recording).
+  void Function(Uint8List pcm)? pcmTee;
   DateTime? _lastHeard;
   Timer? _clearTimer;
   bool _running = false;
@@ -208,6 +213,9 @@ class PitchService {
     _emitted.removeAll(midis);
   }
 
+  /// Whether [midi] already produced a noteOn edge while still locked.
+  bool isEmitted(int midi) => _emitted.contains(midi);
+
   void dispose() {
     unawaited(() async {
       await stop();
@@ -223,6 +231,7 @@ class PitchService {
 
   void _onPcm(Uint8List data) {
     if (data.isEmpty) return;
+    pcmTee?.call(data);
     _pending.add(data);
     final windowBytes = _window * 2;
     final hopBytes = _hop * 2;

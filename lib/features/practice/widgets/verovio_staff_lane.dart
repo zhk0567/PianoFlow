@@ -6,31 +6,26 @@ import 'package:webview_windows/webview_windows.dart';
 
 import '../../../shared/models/song.dart';
 import '../../../shared/piano_flow_log.dart';
+import '../practice_clock.dart';
 import '../verovio_runtime.dart';
 import '../verovio_transport_sync.dart';
 
 /// Verovio-engraved staff (MusicXML). Falls back to generated MusicXML from [SongScore].
 ///
+/// Always engraves **both** hands. Practice hand filter (左/右/双手) only affects
+/// waterfall / matching / guide audio — not staff visibility.
+///
 /// Relies on [VerovioRuntime] singleton — does not recreate WebView/WASM per visit.
+/// Transport follows [clock] so the parent scaffold is not rebuilt at ~60 Hz.
 class VerovioStaffLane extends StatefulWidget {
   const VerovioStaffLane({
     super.key,
     required this.score,
-    required this.positionBeats,
-    required this.hand,
-    this.isPlaying = false,
-    this.beatsPerSec = 0,
+    required this.clock,
   });
 
   final SongScore score;
-  final double positionBeats;
-  final Hand hand;
-
-  /// When false, viewer must freeze (rate 0) even if [positionBeats] is unchanged.
-  final bool isPlaying;
-
-  /// Transport rate in quarter-notes per second (bpm/60*speed while playing).
-  final double beatsPerSec;
+  final PracticeClock clock;
 
   @override
   State<VerovioStaffLane> createState() => _VerovioStaffLaneState();
@@ -63,12 +58,17 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   static const _resizeSlop = 16.0;
   static const _resizeDebounceMs = 450;
   /// Shared clock with waterfall/audio: push positionBeats often enough that the
-  /// viewer only eases ≤~120ms (see viewer MAX_EXTRAPOLATE_SEC), never free-runs alone.
-  static const _posThrottleMs = 50;
-  static const _playHeartbeatMs = 80;
+  /// viewer only eases ≤~80ms (see viewer MAX_EXTRAPOLATE_SEC), never free-runs alone.
+  /// Aligned with practice tick (~16ms) for 三路不明显漂 (was 50ms).
+  static const _posThrottleMs = 16;
+  static const _playHeartbeatMs = 33;
 
   double get _transportRate =>
-      widget.isPlaying ? widget.beatsPerSec.clamp(0.0, 40.0) : 0.0;
+      widget.clock.isPlaying
+          ? widget.clock.beatsPerSec.clamp(0.0, 40.0)
+          : 0.0;
+
+  double get _positionBeats => widget.clock.positionBeats;
 
   @override
   void initState() {
@@ -78,14 +78,20 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       return;
     }
     _runtime.controller.addListener(_onController);
+    widget.clock.addListener(_onClock);
+    _lastClockPos = widget.clock.positionBeats;
+    _lastClockPlaying = widget.clock.isPlaying;
+    _lastClockRate = widget.clock.beatsPerSec;
+    _lastSeekEpoch = widget.clock.seekEpoch;
     // Parallel: MusicXML read + toolkit ensure (often already prewarmed).
-    _xmlFuture = _runtime.resolveMusicXml(widget.score, widget.hand);
+    // Staff always uses both hands so L/R practice mode never hides a stave.
+    _xmlFuture = _runtime.resolveMusicXml(widget.score, Hand.both);
     if (_runtime.isToolkitReady) {
       _bound = true;
-      if (_runtime.hasScoreFor(widget.score, widget.hand)) {
+      if (_runtime.hasScoreFor(widget.score, Hand.both)) {
         unawaited(
           _runtime.pushPosition(
-            widget.positionBeats,
+            _positionBeats,
             snap: true,
             beatsPerSec: _transportRate,
           ),
@@ -96,17 +102,58 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     _syncPlayHeartbeat();
   }
 
+  void _onClock() {
+    if (_disposed || !mounted) return;
+    final pos = _positionBeats;
+    final playing = widget.clock.isPlaying;
+    final rate = _transportRate;
+    final epoch = widget.clock.seekEpoch;
+    final seek = VerovioTransportSync.shouldSnapForEpoch(
+      previousEpoch: _lastSeekEpoch,
+      currentEpoch: epoch,
+    );
+    final rateZeroCross = VerovioTransportSync.shouldSnapForRateZeroCrossing(
+      previousRate: _lastClockRate,
+      currentRate: rate,
+    );
+    final posDelta = VerovioTransportSync.positionDelta(_lastClockPos, pos);
+    final playChanged = playing != _lastClockPlaying;
+    final rateDelta = VerovioTransportSync.rateDelta(_lastClockRate, rate);
+    _lastClockPos = pos;
+    _lastClockPlaying = playing;
+    _lastClockRate = rate;
+    _lastSeekEpoch = epoch;
+
+    if (!seek &&
+        !rateZeroCross &&
+        VerovioTransportSync.shouldSkipPush(
+          posDelta: posDelta,
+          playChanged: playChanged,
+          rateDelta: rateDelta,
+        )) {
+      return;
+    }
+
+    _syncPlayHeartbeat();
+    _schedulePosition(pos, snap: seek || rateZeroCross, rate: rate);
+  }
+
+  double _lastClockPos = 0;
+  bool _lastClockPlaying = false;
+  double _lastClockRate = 0;
+  int _lastSeekEpoch = 0;
+
   void _syncPlayHeartbeat() {
     _playHeartbeat?.cancel();
     _playHeartbeat = null;
-    if (!widget.isPlaying || _transportRate <= 0 || _disposed) return;
+    if (!widget.clock.isPlaying || _transportRate <= 0 || _disposed) return;
     _playHeartbeat = Timer.periodic(
       const Duration(milliseconds: _playHeartbeatMs),
       (_) {
-        if (_disposed || !mounted || !widget.isPlaying) return;
+        if (_disposed || !mounted || !widget.clock.isPlaying) return;
         unawaited(
           _runtime.pushPosition(
-            widget.positionBeats,
+            _positionBeats,
             snap: false,
             beatsPerSec: _transportRate,
           ),
@@ -122,7 +169,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   Future<void> _bind() async {
     try {
       final xmlFuture = _xmlFuture ??=
-          _runtime.resolveMusicXml(widget.score, widget.hand);
+          _runtime.resolveMusicXml(widget.score, Hand.both);
       final results = await Future.wait<Object?>([
         _runtime.ensureReady(),
         xmlFuture,
@@ -134,10 +181,10 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
         _error = null;
       });
 
-      final sameScore = _runtime.hasScoreFor(widget.score, widget.hand);
+      final sameScore = _runtime.hasScoreFor(widget.score, Hand.both);
       if (sameScore) {
         await _runtime.pushPosition(
-          widget.positionBeats,
+          _positionBeats,
           snap: true,
           beatsPerSec: _transportRate,
         );
@@ -157,12 +204,11 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   Future<void> _pushScore({String? musicXml, bool force = false}) async {
     if (!_runtime.isToolkitReady || _disposed) return;
     if (_pushing) {
-      // Never drop a song/hand switch — keep the latest request.
+      // Never drop a song switch — keep the latest request.
       _pendingScorePush = _PendingScorePush(
         musicXml: musicXml,
         force: force,
         score: widget.score,
-        hand: widget.hand,
       );
       return;
     }
@@ -172,19 +218,18 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
         final pending = _pendingScorePush;
         _pendingScorePush = null;
         final score = pending?.score ?? widget.score;
-        final hand = pending?.hand ?? widget.hand;
         final xml = pending?.musicXml ?? musicXml;
         final doForce = pending?.force ?? force;
         await _runtime.pushScore(
           score: score,
-          hand: hand,
+          hand: Hand.both,
           viewport: _viewport,
           musicXml: xml,
           force: doForce,
         );
         if (_disposed) return;
         await _runtime.pushPosition(
-          widget.positionBeats,
+          _positionBeats,
           snap: true,
           beatsPerSec: _transportRate,
         );
@@ -230,7 +275,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       await _runtime.pushResize(_viewport);
       if (_disposed) return;
       await _runtime.pushPosition(
-        widget.positionBeats,
+        _positionBeats,
         snap: true,
         beatsPerSec: _transportRate,
       );
@@ -299,15 +344,22 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   @override
   void didUpdateWidget(covariant VerovioStaffLane oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.score.id != widget.score.id ||
-        oldWidget.hand != widget.hand) {
+    if (oldWidget.clock != widget.clock) {
+      oldWidget.clock.removeListener(_onClock);
+      widget.clock.addListener(_onClock);
+      _lastClockPos = widget.clock.positionBeats;
+      _lastClockPlaying = widget.clock.isPlaying;
+      _lastClockRate = widget.clock.beatsPerSec;
+    }
+    // Hand filter changes must NOT reload / hide staves — only song switches.
+    if (oldWidget.score.id != widget.score.id) {
       _posThrottle?.cancel();
       _posThrottle = null;
       _pendingPosBeats = null;
       _pendingPosRate = null;
       _pendingPosSnap = false;
       _posGateOpen = true;
-      _xmlFuture = _runtime.resolveMusicXml(widget.score, widget.hand);
+      _xmlFuture = _runtime.resolveMusicXml(widget.score, Hand.both);
       setState(() {
         _switching = true;
         _error = null;
@@ -321,39 +373,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
           await _pushScore(musicXml: xml, force: true);
         }
       }());
-      return;
     }
-
-    final posDelta = VerovioTransportSync.positionDelta(
-      oldWidget.positionBeats,
-      widget.positionBeats,
-    );
-    final playChanged = oldWidget.isPlaying != widget.isPlaying;
-    final rateDelta = VerovioTransportSync.rateDelta(
-      oldWidget.beatsPerSec,
-      widget.beatsPerSec,
-    );
-
-    // Pause/resume must push even when positionBeats is unchanged — otherwise
-    // the viewer keeps extrapolating (or stays frozen) after transport stops.
-    if (VerovioTransportSync.shouldSkipPush(
-      posDelta: posDelta,
-      playChanged: playChanged,
-      rateDelta: rateDelta,
-    )) {
-      return;
-    }
-
-    _syncPlayHeartbeat();
-
-    // Snap only on real seeks / large jumps — not on play/pause alone.
-    // Rate-only updates must ease so start does not flash scroll.
-    final seek = VerovioTransportSync.shouldSnapSeek(posDelta);
-    _schedulePosition(
-      widget.positionBeats,
-      snap: seek,
-      rate: _transportRate,
-    );
   }
 
   void _schedulePosition(
@@ -402,6 +422,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     _resizeDebounce?.cancel();
     _posThrottle?.cancel();
     _playHeartbeat?.cancel();
+    widget.clock.removeListener(_onClock);
     _runtime.controller.removeListener(_onController);
     // Do NOT dispose shared WebviewController — kept warm for next visit.
     super.dispose();
@@ -483,13 +504,11 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
 class _PendingScorePush {
   const _PendingScorePush({
     required this.score,
-    required this.hand,
     this.musicXml,
     this.force = false,
   });
 
   final SongScore score;
-  final Hand hand;
   final String? musicXml;
   final bool force;
 }

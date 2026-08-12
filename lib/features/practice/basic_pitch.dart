@@ -12,7 +12,7 @@ class BasicPitchEstimator {
   BasicPitchEstimator._(
     this._session, {
     this.frameThresh = 0.42,
-    this.relativeThresh = 0.62,
+    this.relativeThresh = 0.55,
   });
 
   static const assetPath = 'assets/models/basic_pitch.onnx';
@@ -37,7 +37,7 @@ class BasicPitchEstimator {
 
   static Future<BasicPitchEstimator> create({
     double frameThresh = 0.42,
-    double relativeThresh = 0.62,
+    double relativeThresh = 0.55,
   }) async {
     pianoFlowLog('Pitch', 'loading Basic Pitch ONNX ($assetPath)…');
     final ort = OnnxRuntime();
@@ -98,7 +98,8 @@ class BasicPitchEstimator {
       if (frames.isEmpty) return {};
 
       // Short tail — emphasize newest frames (less lag from left-pad silence).
-      final scores = _tailMeanScores(frames, tail: 6);
+      // 6→4 with 0.25s capture window (跟弹体感).
+      final scores = _tailMeanScores(frames, tail: 4);
       return _selectNotes(scores);
     } catch (e, st) {
       pianoFlowLog('Pitch', 'BasicPitch infer failed: $e\n$st');

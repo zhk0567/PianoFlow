@@ -363,9 +363,17 @@ def parse_musicxml(root: ET.Element) -> dict:
 
             # Advance absolute time by written measure length (max cursor / divisions)
             # Prefer time signature length when measure is empty of notes.
+            # For multi-voice piano OMR, written cursor can exceed the bar (bad backups);
+            # clamp to the notated meter so downstream beats stay on the bar grid.
             beats_per_measure = time_num * (4.0 / time_den)
             written = measure_max / float(divisions) if divisions else 0.0
-            abs_beat += written if written > 0.01 else beats_per_measure
+            if written > 0.01:
+                # Allow short pickups; do not let a bloated voice cursor stretch the bar.
+                if beats_per_measure > 0 and written > beats_per_measure * 1.01:
+                    written = beats_per_measure
+                abs_beat += written
+            else:
+                abs_beat += beats_per_measure
 
     if direction_tempo:
         bpm = direction_tempo
@@ -468,6 +476,7 @@ def resolve_catalog_meta(
         "formal": "正式谱",
         "omrDraft": "OMR草稿",
         "simplified": "简编谱",
+        "userImport": "自导入",
     }.get(kind, kind)
     default_desc = f"MusicXML 导入（{kind_zh}；{score_id}）。"
     return {
@@ -481,8 +490,15 @@ def resolve_catalog_meta(
     }
 
 
-def write_score(score_id: str, parsed: dict, title_override: str | None = None) -> Path:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+def write_score(
+    score_id: str,
+    parsed: dict,
+    title_override: str | None = None,
+    *,
+    out_dir: Path | None = None,
+) -> Path:
+    dest_dir = out_dir or OUT_DIR
+    dest_dir.mkdir(parents=True, exist_ok=True)
     meta = CATALOG_META.get(score_id, {})
     title = title_override or meta.get("title") or parsed["title"]
     payload = {
@@ -493,7 +509,7 @@ def write_score(score_id: str, parsed: dict, title_override: str | None = None) 
         "keySignature": parsed["keySignature"],
         "notes": parsed["notes"],
     }
-    out = OUT_DIR / f"{score_id}.json"
+    out = dest_dir / f"{score_id}.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return out
 
@@ -607,6 +623,73 @@ def update_catalog(
     print(f"[catalog] {'updated' if replaced else 'added'} {score_id} scoreKind={kind}")
 
 
+def update_user_catalog(
+    user_dir: Path,
+    score_id: str,
+    parsed: dict,
+    json_path: Path,
+    meta_overrides: dict | None = None,
+) -> None:
+    """Upsert ApplicationDocuments-style user_catalog.json (never formal)."""
+    catalog_path = user_dir / "user_catalog.json"
+    if catalog_path.exists():
+        data = json.loads(catalog_path.read_text(encoding="utf-8"))
+    else:
+        data = {"songs": []}
+    songs = data.get("songs") or []
+    existing = next((s for s in songs if s.get("id") == score_id), None)
+    meta = resolve_catalog_meta(
+        score_id,
+        parsed=parsed,
+        overrides={
+            **(meta_overrides or {}),
+            "scoreKind": "userImport",
+        },
+        existing=existing,
+    )
+    if meta is None:
+        meta = {
+            "title": parsed.get("title") or score_id,
+            "artist": "自导入",
+            "genre": "Classical",
+            "difficulty": 3,
+            "description": "工坊 MusicXML 自导入（非正式谱）。",
+            "scoreKind": "userImport",
+        }
+    meta["scoreKind"] = "userImport"
+    duration_beats = 0.0
+    for n in parsed["notes"]:
+        duration_beats = max(duration_beats, n["start"] + n["duration"])
+    bpm = int(parsed["bpm"])
+    duration_hint = max(8, int(round(duration_beats * 60 / max(bpm, 1))))
+    entry = {
+        "id": score_id,
+        "title": meta["title"],
+        "artist": meta["artist"],
+        "genre": meta["genre"],
+        "difficulty": int(meta["difficulty"]),
+        "bpm": bpm,
+        "asset": str(json_path.resolve()),
+        "description": meta.get("description")
+        or "工坊 MusicXML 自导入（非正式谱）。",
+        "durationHint": duration_hint,
+        "scoreKind": "userImport",
+    }
+    replaced = False
+    for i, s in enumerate(songs):
+        if s.get("id") == score_id:
+            songs[i] = entry
+            replaced = True
+            break
+    if not replaced:
+        songs.append(entry)
+    data["songs"] = songs
+    catalog_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"[user-catalog] {'updated' if replaced else 'added'} {score_id} scoreKind=userImport")
+
+
 def convert_one(
     score_id: str,
     *,
@@ -614,12 +697,14 @@ def convert_one(
     update_catalog_flag: bool,
     meta_overrides: dict | None = None,
     sync_assets: bool = True,
+    user_import_dir: Path | None = None,
 ) -> int:
     path = resolve_input(score_id, input_path)
     print(f"[{score_id}] reading {path}")
-    # Always land on third_party/{id}.musicxml (expands .mxl).
-    path = install_source_musicxml(score_id, path)
-    print(f"[{score_id}] source {path}")
+    if user_import_dir is None:
+        # Always land on third_party/{id}.musicxml (expands .mxl).
+        path = install_source_musicxml(score_id, path)
+        print(f"[{score_id}] source {path}")
     root = load_xml_root(path)
     parsed = parse_musicxml(root)
     if not parsed["notes"]:
@@ -627,6 +712,31 @@ def convert_one(
         return 1
     _apply_preserved_bpm(score_id, parsed)
     title_ov = (meta_overrides or {}).get("title")
+
+    if user_import_dir is not None:
+        user_dir = Path(user_import_dir)
+        user_dir.mkdir(parents=True, exist_ok=True)
+        xml_dir = user_dir / "musicxml"
+        xml_dir.mkdir(parents=True, exist_ok=True)
+        # Expand mxl into user musicxml folder
+        src = path
+        if src.suffix.lower() == ".mxl":
+            # reuse install logic into temp then copy
+            src = install_source_musicxml(score_id, src)
+        dest_xml = xml_dir / f"{score_id}.musicxml"
+        shutil.copy2(src, dest_xml)
+        overrides = dict(meta_overrides or {})
+        overrides["scoreKind"] = "userImport"
+        out = write_score(
+            score_id, parsed, title_override=title_ov, out_dir=user_dir
+        )
+        update_user_catalog(user_dir, score_id, parsed, out, meta_overrides=overrides)
+        print(
+            f"[{score_id}] user-import wrote {out}  notes={len(parsed['notes'])}  "
+            f"bpm={parsed['bpm']}  scoreKind=userImport"
+        )
+        return 0
+
     out = write_score(score_id, parsed, title_override=title_ov)
     print(
         f"[{score_id}] wrote {out}  notes={len(parsed['notes'])}  "
@@ -676,8 +786,13 @@ def main() -> int:
     ap.add_argument(
         "--score-kind",
         dest="score_kind",
-        choices=("formal", "simplified", "omrDraft"),
+        choices=("formal", "simplified", "omrDraft", "userImport"),
         help="Catalog scoreKind (use omrDraft for unproofread PDF→OMR imports)",
+    )
+    ap.add_argument(
+        "--user-import-dir",
+        type=Path,
+        help="Write JSON + user_catalog.json here (forces scoreKind=userImport; no assets sync)",
     )
     ap.add_argument(
         "--no-sync-assets",
@@ -685,6 +800,9 @@ def main() -> int:
         help="Do not copy MusicXML into assets/scores/musicxml/",
     )
     args = ap.parse_args()
+
+    if args.user_import_dir is not None and args.score_kind == "formal":
+        raise SystemExit("[user-import] refusing scoreKind=formal for self-import")
 
     if args.all:
         ids = catalog_score_ids()
@@ -701,7 +819,9 @@ def main() -> int:
         "genre": args.genre,
         "difficulty": args.difficulty,
         "description": args.description,
-        "scoreKind": args.score_kind,
+        "scoreKind": (
+            "userImport" if args.user_import_dir is not None else args.score_kind
+        ),
     }
 
     SRC_DIR.mkdir(parents=True, exist_ok=True)
@@ -715,7 +835,8 @@ def main() -> int:
                 input_path=inp,
                 update_catalog_flag=args.update_catalog,
                 meta_overrides=meta_overrides,
-                sync_assets=not args.no_sync_assets,
+                sync_assets=not args.no_sync_assets and args.user_import_dir is None,
+                user_import_dir=args.user_import_dir,
             )
             rc = rc or code
         except FileNotFoundError as e:

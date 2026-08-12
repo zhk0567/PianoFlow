@@ -44,8 +44,8 @@
       "difficulty": 3,
       "bpm": 80,
       "asset": "assets/scores/hisaishi_castle_in_the_sky.json",
-      "description": "OMR draft from PDF via Audiveris; partial PDF proofread 2026-07-30 (tempo q=80, bars1-6 LH bass corrected to F3/C3/G3/A2/C3/G2). Still omrDraft — full PDF checklist not complete. Not MIDI. Local practice only.",
-      "durationHint": 142,
+      "description": "OMR draft from PDF via Audiveris. Partial proofread: opening durations fixed + PDF m49=A4/A2 (2026-08-07); m21-24 still uncertain. Still omrDraft — open/mid/end SOP not signed. Not MIDI. Local practice only.",
+      "durationHint": 150,
       "scoreKind": "omrDraft"
     },
     {
@@ -54,10 +54,10 @@
       "artist": "RADWIMPS",
       "genre": "Anime",
       "difficulty": 3,
-      "bpm": 90,
+      "bpm": 80,
       "asset": "assets/scores/radwimps_suzume.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/radwimps_suzume.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 78,
+      "description": "OMR draft from PDF via Audiveris. 2026-08-09: m8-15 restored; m16-26 rewritten vs PDF systems (_fix_suzume_m16_end.py). m27-29 end unsigned — still omrDraft.",
+      "durationHint": 90,
       "scoreKind": "omrDraft"
     },
     {
@@ -66,10 +66,10 @@
       "artist": "王菲",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 72,
+      "bpm": 66,
       "asset": "assets/scores/ru_yuan.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/ru_yuan.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 111,
+      "description": "OMR draft from PDF via Audiveris. Proofread 2026-08-05: injected key=1 (G major per PDF). Opening melody vs PDF still mismatched — pending manual. omrDraft.",
+      "durationHint": 126,
       "scoreKind": "omrDraft"
     },
     {
@@ -78,10 +78,10 @@
       "artist": "Christina Perri",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 78,
+      "bpm": 50,
       "asset": "assets/scores/christina_perri_a_thousand_years.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/christina_perri_a_thousand_years.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 247,
+      "durationHint": 385,
       "scoreKind": "omrDraft"
     },
     {
@@ -90,10 +90,10 @@
       "artist": "MyGO!!!!!",
       "genre": "Anime",
       "difficulty": 4,
-      "bpm": 92,
+      "bpm": 97,
       "asset": "assets/scores/haruhikage.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/haruhikage.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 126,
+      "durationHint": 115,
       "scoreKind": "omrDraft"
     },
     {
@@ -104,8 +104,8 @@
       "difficulty": 5,
       "bpm": 160,
       "asset": "assets/scores/rimsky_flight_of_the_bumblebee.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/rimsky_flight_of_the_bumblebee.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 78,
+      "description": "OMR draft from PDF via Audiveris. Proofread 2026-08-05: injected key=0. Opening register/pitch vs this PDF edition may diverge (dense chromatic). omrDraft.",
+      "durationHint": 76,
       "scoreKind": "omrDraft"
     },
     {
@@ -114,11 +114,11 @@
       "artist": "Ludwig van Beethoven",
       "genre": "Classical",
       "difficulty": 4,
-      "bpm": 54,
+      "bpm": 44,
       "asset": "assets/scores/beethoven_moonlight_sonata.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/beethoven_moonlight_sonata.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 441,
-      "scoreKind": "omrDraft"
+      "description": "Beethoven Piano Sonata No.14 Op.27/2 mvt.1. Formal MusicXML: repo PDF (q=44, C# minor) open/mid/end SOP 2026-08-07 + DCMLab 14-1 pitch table (m1-69 MIDI-exact, 4/4). Not MIDI.",
+      "durationHint": 376,
+      "scoreKind": "formal"
     },
     {
       "id": "jay_chou_qing_tian",
@@ -126,10 +126,10 @@
       "artist": "周杰伦",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 76,
+      "bpm": 68,
       "asset": "assets/scores/jay_chou_qing_tian.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/jay_chou_qing_tian.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 240,
+      "durationHint": 270,
       "scoreKind": "omrDraft"
     },
     {
@@ -141,7 +141,7 @@
       "bpm": 72,
       "asset": "assets/scores/clayderman_reve_damour.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/clayderman_reve_damour.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 167,
+      "durationHint": 168,
       "scoreKind": "omrDraft"
     },
     {
@@ -150,10 +150,10 @@
       "artist": "Hiroyuki Sawano",
       "genre": "Anime",
       "difficulty": 3,
-      "bpm": 70,
+      "bpm": 60,
       "asset": "assets/scores/sawano_call_of_silence.json",
-      "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/sawano_call_of_silence.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 157,
+      "description": "OMR draft from PDF via Audiveris. Proofread 2026-08-07: m1-10+m15-19 vs PDF; m20 duration orphan removed; m11-14/8va/end SOP incomplete. Still omrDraft — not formal. Not MIDI.",
+      "durationHint": 180,
       "scoreKind": "omrDraft"
     },
     {
@@ -162,10 +162,10 @@
       "artist": "老狼 / 张碧晨",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 80,
+      "bpm": 70,
       "asset": "assets/scores/xiang_yun_duan.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/xiang_yun_duan.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 212,
+      "durationHint": 240,
       "scoreKind": "omrDraft"
     },
     {
@@ -174,10 +174,142 @@
       "artist": "Unknown",
       "genre": "Pop",
       "difficulty": 3,
-      "bpm": 80,
+      "bpm": 96,
       "asset": "assets/scores/jue_bie_shu.json",
       "description": "OMR draft from PDF via Audiveris (auto-imported; BPM is a practice default, not inferred from score). Proofread against third_party/scores_pdf/jue_bie_shu.pdf when possible. Not MIDI. Local practice only — not claimed 100% accurate.",
-      "durationHint": 324,
+      "durationHint": 271,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "rush_e",
+      "title": "Rush E",
+      "artist": "Sheet Music Boss / Andrew Wrangell",
+      "genre": "Classical",
+      "difficulty": 5,
+      "bpm": 40,
+      "asset": "assets/scores/rush_e.json",
+      "description": "OMR draft from staff PDF via Audiveris. Proofread 2026-08-05: tempo q=40; m1 RH fixed to 4x E4; key=0 injected. Dense later bars still high risk. omrDraft.",
+      "durationHint": 219,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "xiao_xing_xing",
+      "title": "小星星",
+      "artist": "Traditional / Twinkle Twinkle Little Star",
+      "genre": "Classical",
+      "difficulty": 1,
+      "bpm": 68,
+      "asset": "assets/scores/xiao_xing_xing.json",
+      "description": "Twinkle Twinkle Little Star. Jianpu PDF (1=C, q=68, 4/4) open/mid/end SOP 2026-08-07 → formal MusicXML. Not MIDI.",
+      "durationHint": 42,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "fen_shua_jiang",
+      "title": "粉刷匠",
+      "artist": "Traditional / Polish folk",
+      "genre": "Pop",
+      "difficulty": 1,
+      "bpm": 120,
+      "asset": "assets/scores/fen_shua_jiang.json",
+      "description": "The House Painter (Polish folk). Jianpu PDF (1=C, q=120, 4/4) open/mid/end SOP 2026-08-07 → formal MusicXML. Not MIDI.",
+      "durationHint": 32,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "blowin_in_the_wind",
+      "title": "Blowin' In The Wind",
+      "artist": "Bob Dylan",
+      "genre": "Pop",
+      "difficulty": 2,
+      "bpm": 120,
+      "asset": "assets/scores/blowin_in_the_wind.json",
+      "description": "Blowin' In The Wind (Bob Dylan). Jianpu PDF melody (1=C, q=120, 4/4) open/mid/end SOP 2026-08-07 → formal MusicXML. Not MIDI.",
+      "durationHint": 46,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "bella_ciao",
+      "title": "Bella Ciao",
+      "artist": "Traditional / Italian folk",
+      "genre": "Pop",
+      "difficulty": 2,
+      "bpm": 120,
+      "asset": "assets/scores/bella_ciao.json",
+      "description": "Bella Ciao (Italian folk). Jianpu PDF (1=G, q=120, 2/4) open/mid/end SOP 2026-08-07 → formal MusicXML. Not MIDI.",
+      "durationHint": 88,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "when_you_wish_upon_a_star",
+      "title": "When You Wish Upon a Star",
+      "artist": "Leigh Harline / Ned Washington",
+      "genre": "Pop",
+      "difficulty": 2,
+      "bpm": 120,
+      "asset": "assets/scores/when_you_wish_upon_a_star.json",
+      "description": "Jianpu PDF transcribed to MusicXML (draft). Not Audiveris. omrDraft.",
+      "durationHint": 32,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "whistle",
+      "title": "Whistle",
+      "artist": "Flo Rida",
+      "genre": "Pop",
+      "difficulty": 3,
+      "bpm": 120,
+      "asset": "assets/scores/whistle.json",
+      "description": "Whistle (Flo Rida). Jianpu PDF (1=C, q=120, 4/4) open/mid/end SOP 2026-08-07 → formal MusicXML. Not MIDI.",
+      "durationHint": 56,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "pure_imagination",
+      "title": "Pure Imagination",
+      "artist": "Leslie Bricusse / Anthony Newley",
+      "genre": "Pop",
+      "difficulty": 3,
+      "bpm": 120,
+      "asset": "assets/scores/pure_imagination.json",
+      "description": "Jianpu PDF transcribed to MusicXML (draft). Not Audiveris. omrDraft.",
+      "durationHint": 32,
+      "scoreKind": "omrDraft"
+    },
+    {
+      "id": "ju_hua_tai",
+      "title": "菊花台",
+      "artist": "周杰伦",
+      "genre": "Pop",
+      "difficulty": 3,
+      "bpm": 76,
+      "asset": "assets/scores/ju_hua_tai.json",
+      "description": "Chrysanthemum Terrace (Jay Chou). Jianpu PDF (1=F, q=76, 4/4) open/mid/end SOP 2026-08-07 → formal MusicXML. Not MIDI.",
+      "durationHint": 76,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "ye_de_gang_qin_qu_5",
+      "title": "夜的钢琴曲五",
+      "artist": "石进",
+      "genre": "Classical",
+      "difficulty": 3,
+      "bpm": 120,
+      "asset": "assets/scores/ye_de_gang_qin_qu_5.json",
+      "description": "夜的钢琴曲五 (石进). Jianpu PDF (1=C, q=120, 4/4, 2 pages) open/mid/end SOP 2026-08-07 → formal MusicXML. Not MIDI.",
+      "durationHint": 98,
+      "scoreKind": "formal"
+    },
+    {
+      "id": "an_he_qiao",
+      "title": "安和桥",
+      "artist": "宋冬野",
+      "genre": "Pop",
+      "difficulty": 2,
+      "bpm": 120,
+      "asset": "assets/scores/an_he_qiao.json",
+      "description": "Jianpu PDF transcribed to MusicXML (draft). Not Audiveris. omrDraft.",
+      "durationHint": 32,
       "scoreKind": "omrDraft"
     }
   ]

@@ -1,12 +1,12 @@
 # OMR audit — `haruhikage`
 
-- Generated: 2026-07-30 16:53
+- Generated: 2026-08-09 11:56
 - scoreKind: **omrDraft**
 - PDF: `third_party\scores_pdf\haruhikage.pdf`
 - MusicXML: `assets\scores\musicxml\haruhikage.musicxml`
 - JSON: `assets\scores\haruhikage.json`
-- JSON ≡ reparse: **True** (1161/1161 notes)
-- BPM JSON/parse: 92 / 100
+- JSON ≡ reparse: **True** (1204/1204 notes)
+- BPM JSON/parse: 97 / 97
 - keySignature JSON/parse: 5 / 5
 - Promote to formal? **NO** (automated audits never promote)
 
@@ -15,47 +15,47 @@
 
 ## Warnings
 - omrDraft: PDF image proofreading required before scoreKind=formal
-- MusicXML has no tempo; parser default bpm=100 (JSON bpm=92) — practice tempo may be a catalog default
-- 334 same-hand leap(s) ≥12 semitones (OMR risk)
+- 380 same-hand leap(s) ≥12 semitones (OMR risk)
+- 7 unusual duration value(s)
 
 ## MusicXML structure
 - clefs: `[('F', '4', None), ('G', '2', None)]`
 - has_key: True
-- has_tempo: False
+- has_tempo: True
 - octave_changes: `{}`
 - times: `{"('6', '8')": 3}`
 
 ## Same-hand leaps ≥12st
-- right leap 12st @ beat 36.000: 66→78
-- right leap 12st @ beat 36.500: 71→83
-- right leap 12st @ beat 37.000: 83→71
-- right leap 12st @ beat 39.500: 83→71
-- right leap 14st @ beat 51.250: 78→64
-- right leap 15st @ beat 56.750: 78→63
-- right leap 19st @ beat 61.250: 73→54
-- right leap 12st @ beat 68.250: 83→71
-- right leap 12st @ beat 68.250: 71→83
-- right leap 12st @ beat 71.250: 83→71
-- right leap 12st @ beat 71.250: 71→83
-- right leap 12st @ beat 72.250: 83→71
-- right leap 12st @ beat 75.250: 66→78
-- right leap 12st @ beat 75.750: 71→83
-- right leap 12st @ beat 76.250: 83→71
-- right leap 12st @ beat 77.750: 83→71
-- right leap 14st @ beat 88.250: 78→64
-- right leap 15st @ beat 93.750: 78→63
-- right leap 16st @ beat 97.250: 70→54
-- right leap 14st @ beat 108.250: 73→59
-- right leap 12st @ beat 112.250: 59→71
-- right leap 13st @ beat 112.500: 71→58
-- right leap 12st @ beat 125.500: 71→83
-- right leap 16st @ beat 136.000: 70→54
-- right leap 22st @ beat 139.000: 73→51
-- right leap 12st @ beat 139.000: 51→63
-- right leap 14st @ beat 139.250: 63→49
-- right leap 12st @ beat 139.250: 49→61
-- right leap 12st @ beat 139.500: 51→63
-- right leap 12st @ beat 140.000: 63→51
+- right leap 16st @ beat 1.500: 75→59
+- right leap 16st @ beat 2.000: 59→75
+- right leap 16st @ beat 2.500: 75→59
+- right leap 12st @ beat 2.500: 59→71
+- right leap 12st @ beat 3.000: 71→59
+- right leap 19st @ beat 4.500: 59→78
+- right leap 19st @ beat 5.000: 78→59
+- right leap 21st @ beat 5.250: 59→80
+- right leap 21st @ beat 5.500: 80→59
+- right leap 19st @ beat 5.500: 59→78
+- right leap 19st @ beat 6.000: 78→59
+- right leap 19st @ beat 7.500: 78→59
+- right leap 12st @ beat 8.000: 59→71
+- right leap 12st @ beat 8.500: 71→59
+- right leap 16st @ beat 8.500: 59→75
+- right leap 16st @ beat 9.000: 75→59
+- right leap 19st @ beat 10.500: 78→59
+- right leap 28st @ beat 10.500: 59→87
+- right leap 28st @ beat 11.000: 87→59
+- right leap 29st @ beat 11.250: 59→88
+- right leap 29st @ beat 11.500: 88→59
+- right leap 28st @ beat 11.500: 59→87
+- right leap 28st @ beat 12.000: 87→59
+- right leap 16st @ beat 13.500: 75→59
+- right leap 12st @ beat 13.500: 59→71
+- right leap 12st @ beat 14.000: 71→59
+- right leap 17st @ beat 16.500: 76→59
+- right leap 12st @ beat 16.500: 59→71
+- right leap 12st @ beat 17.000: 71→59
+- right leap 12st @ beat 17.000: 59→71
 
 ## Promote blockers
 - Human visual proofread against PDF not automated (PDF is image-only).

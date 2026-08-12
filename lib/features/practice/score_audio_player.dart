@@ -428,6 +428,26 @@ class ScoreAudioPlayer {
     _triggerNote(midi, level, balance);
   }
 
+  /// Silence one-shot voices (e.g. soft guide cue when echo-suppress ends).
+  /// Same MIDI pool as [playOneShot] — next press retriggers normally.
+  void stopOneShots(Iterable<int> midis) {
+    for (final raw in midis) {
+      final midi = raw.clamp(
+        PracticeConstants.midiMin,
+        PracticeConstants.midiMax,
+      );
+      final player = _notePlayers[midi];
+      if (player == null) continue;
+      unawaited(() async {
+        try {
+          await player.stop();
+        } catch (e) {
+          pianoFlowLog('Audio', 'stopOneShot midi=$midi failed: $e');
+        }
+      }());
+    }
+  }
+
   void _triggerNote(int midi, double volume, double balance) {
     final player = _notePlayers[midi.clamp(
       PracticeConstants.midiMin,

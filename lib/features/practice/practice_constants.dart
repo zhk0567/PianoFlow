@@ -8,15 +8,17 @@ abstract final class PracticeConstants {
 
   /// Soft practice guide cue → mic bleed window (shorter so user can re-hit
   /// the same pitch after a quiet gap; see [GuideRetriggerGate]).
-  static const echoSuppressGuide = Duration(milliseconds: 480);
+  /// Aligned with ~0.25s pitch capture + ~30ms hop (was 300ms).
+  static const echoSuppressGuide = Duration(milliseconds: 250);
 
   /// Pitch-frame quiet streak after guide before [GuideRetriggerGate] opens
-  /// (~40ms hop × 2 ≈ 80ms). One empty frame is often estimator flicker.
+  /// (~30ms hop × 2 ≈ 60ms). One empty frame is often estimator flicker /
+  /// residual guide ring — keep 2 to avoid false advance.
   static const guideQuietFramesNeeded = 2;
 
   /// Soft cue level for guide tones while the mic is live (practice mode).
-  /// Auto-play still uses full level (mic is off).
-  static const guideVolumeWithMic = 0.28;
+  /// Auto-play still uses full level (mic is off). Slightly softer → less bleed.
+  static const guideVolumeWithMic = 0.22;
 
   /// Practice engine ticker (~60 Hz).
   static const tickPeriod = Duration(milliseconds: 16);
@@ -215,4 +217,20 @@ abstract final class PracticeConstants {
   /// After a correct chord: nudge past the onset by this amount so transport
   /// free-advances through gaps (do **not** teleport to the next note start).
   static const waitAdvanceEpsilonBeats = 0.04;
+
+  // —— Hit grading (跟弹 / 考试判定) ——————————————————————————
+
+  /// `|pos - onset| ≤ this` → Perfect; else within [waitEarlyHitBeats] → Good.
+  static const judgePerfectBeats = 0.08;
+
+  // —— Lightweight visual FX ————————————————————————————————
+
+  /// Hold last chord visuals before settlement sheet (末音悬停).
+  static const endHangMs = 1400;
+
+  /// Hands-dialogue arc: both hands graded within this window.
+  static const handsDialogueMs = 220;
+
+  /// Flowkey-style daily practice goal (minutes).
+  static const dailyPracticeGoalMinutes = 20;
 }

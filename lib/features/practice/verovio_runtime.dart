@@ -266,8 +266,8 @@ class VerovioRuntime {
       );
     }
 
-    // v48: practice staff = SongScore JSON (same clock as audio/waterfall).
-    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v48';
+    // v51: thinner/dimmer Flowkey-style playhead; no firefly overlay.
+    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v51';
     final marker = File('${dir.path}${Platform.pathSeparator}.asset_stamp');
     final htmlOut = File('${dir.path}${Platform.pathSeparator}viewer.html');
     final wasmOut = File(

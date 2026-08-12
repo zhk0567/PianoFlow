@@ -137,15 +137,15 @@ Docs: docs\曲谱导入SOP.md
   if ($Artist) { $argsList += @("--artist", $Artist) }
   if ($Description) { $argsList += @("--description", $Description) }
   elseif ($Pdf -or $Title) {
-    $kindZh = switch ($ScoreKind) {
-      "formal" { "正式谱" }
-      "omrDraft" { "OMR草稿" }
-      "simplified" { "简编谱" }
+    $kindEn = switch ($ScoreKind) {
+      "formal" { "formal" }
+      "omrDraft" { "omrDraft" }
+      "simplified" { "simplified" }
       default { $ScoreKind }
     }
     $argsList += @(
       "--description",
-      "MusicXML 导入（$kindZh；$Id）。见 docs/曲谱导入SOP.md。"
+      "MusicXML import ($kindEn; $Id). See docs/score-import SOP."
     )
   }
 

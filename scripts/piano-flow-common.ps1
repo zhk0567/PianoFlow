@@ -6,9 +6,36 @@ $script:PianoFlowFlutterBin = "F:\Other\flutter\bin"
 $script:PianoFlowDebugExe = Join-Path $script:PianoFlowRoot "build\windows\x64\runner\Debug\piano_flow.exe"
 $script:PianoFlowReleaseExe = Join-Path $script:PianoFlowRoot "build\windows\x64\runner\Release\piano_flow.exe"
 
+function Ensure-PianoFlowNuget {
+    # audioplayers_windows / webview_windows CMake call nuget install during configure.
+    # FetchContent download of nuget.exe often fails offline/flaky; keep a local copy.
+    $tools = Join-Path $script:PianoFlowRoot "_tools"
+    $nuget = Join-Path $tools "nuget.exe"
+    if (Test-Path $nuget) {
+        return $nuget
+    }
+    New-Item -ItemType Directory -Force -Path $tools | Out-Null
+    $url = "https://dist.nuget.org/win-x86-commandline/v6.5.0/nuget.exe"
+    Write-Host "Downloading nuget.exe for Windows plugin CMake..." -ForegroundColor Yellow
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $nuget -UseBasicParsing
+    } catch {
+        Write-Host ("WARN: nuget download failed: {0}" -f $_.Exception.Message) -ForegroundColor Red
+        return $null
+    }
+    if (-not (Test-Path $nuget)) {
+        return $null
+    }
+    Write-Host "OK: $nuget" -ForegroundColor Green
+    return $nuget
+}
+
 function Initialize-PianoFlowEnv {
     Set-Location $script:PianoFlowRoot
-    $env:PATH = "$script:PianoFlowFlutterBin;$env:PATH"
+    $tools = Join-Path $script:PianoFlowRoot "_tools"
+    $null = Ensure-PianoFlowNuget
+    # Prefer local nuget.exe so CMake find_program succeeds (WIL / WebView2 packages).
+    $env:PATH = "$tools;$script:PianoFlowFlutterBin;$env:PATH"
     if (-not (Test-Path "$script:PianoFlowFlutterBin\flutter.bat")) {
         Write-Host "Flutter not found: $script:PianoFlowFlutterBin" -ForegroundColor Red
         return $false

@@ -97,6 +97,20 @@ void main() {
     expect(formal.practiceHonestyBanner, isNull);
     expect(
       SongSummary(
+        id: 'u',
+        title: 'u',
+        artist: 'a',
+        genre: 'g',
+        difficulty: 3,
+        bpm: 100,
+        asset: 'a',
+        description: '自导入；仅前 45 秒预览（完整曲目未转录）',
+        scoreKind: ScoreKind.userImport,
+      ).practiceHonestyBanner,
+      contains('前 45 秒音频预览'),
+    );
+    expect(
+      SongSummary(
         id: 'x',
         title: 'x',
         artist: 'a',

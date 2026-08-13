@@ -150,4 +150,17 @@ void main() {
       );
     });
   });
+
+  group('metronomeShouldAdvance', () {
+    test('freeze (rate 0) stops metro; positive rate advances', () {
+      expect(
+        PracticeLoopLogic.metronomeShouldAdvance(transportBeatsPerSec: 0),
+        isFalse,
+      );
+      expect(
+        PracticeLoopLogic.metronomeShouldAdvance(transportBeatsPerSec: 2),
+        isTrue,
+      );
+    });
+  });
 }

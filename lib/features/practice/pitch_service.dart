@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,14 @@ import 'pitch_yin.dart';
 import 'swift_f0.dart';
 
 enum PitchEngineKind { basicPitch, swiftf0, yin }
+
+/// noteOn edge with capture time (end of PCM hop that produced the lock).
+class PitchNoteOn {
+  const PitchNoteOn({required this.midi, required this.captureAt});
+
+  final int midi;
+  final DateTime captureAt;
+}
 
 class PitchFrame {
   const PitchFrame({
@@ -24,6 +33,7 @@ class PitchFrame {
     this.label,
     this.clarity,
     this.confirmed = false,
+    this.captureAt,
   });
 
   final double rms;
@@ -41,6 +51,9 @@ class PitchFrame {
   final String? label;
   final double? clarity;
   final bool confirmed;
+
+  /// End of the PCM hop that produced this frame (for capture-time grading).
+  final DateTime? captureAt;
 }
 
 /// Microphone → Basic Pitch (poly) / SwiftF0 / YIN → stable MIDI set.
@@ -48,11 +61,15 @@ class PitchService {
   PitchService();
 
   static const sampleRate = 44100;
-  /// 0.25s capture — padded to Basic Pitch's 2s input (zeros on the left).
+  /// 0.25s hop window for gate / YIN / SwiftF0 (snappy noteOn).
   /// Was ~0.32s; shortened for 跟弹体感 (docs/前沿Idea-本地实时一条龙.md).
   static const _window = 11025;
   /// ~30ms hop (was ~40ms / 1764) — snappier noteOn / frame ticks.
   static const _hop = 1323;
+  /// Basic Pitch model rate / length — maintain a rolling ring at this rate
+  /// so each hop only resamples ~30ms, not the full ~2s window.
+  static const _bpRate = BasicPitchEstimator.sampleRate; // 22050
+  static const _bpContextSamples = BasicPitchEstimator.audioNSamples; // 43844
 
   static const rmsGate = 0.005;
   /// 1 frame lock: with ~30ms hops, keep lock immediate.
@@ -63,7 +80,7 @@ class PitchService {
 
   final _recorder = AudioRecorder();
   final _yin = YinPitch(sampleRate: sampleRate, threshold: 0.15);
-  final _noteController = StreamController<int>.broadcast();
+  final _noteController = StreamController<PitchNoteOn>.broadcast();
   final _frameController = StreamController<PitchFrame>.broadcast();
 
   StreamSubscription<Uint8List>? _sub;
@@ -74,7 +91,7 @@ class PitchService {
   PitchEngineKind _engine = PitchEngineKind.yin;
   bool _inferBusy = false;
   /// When infer is busy, keep only the newest PCM window (drop stale hops).
-  Uint8List? _latestWhileBusy;
+  ({Uint8List pcm, DateTime captureAt})? _latestWhileBusy;
 
   final Map<int, int> _hitCount = {};
   final Map<int, int> _missCount = {};
@@ -90,7 +107,14 @@ class PitchService {
   int _chunkCount = 0;
   int _droppedStale = 0;
 
-  Stream<int> get noteOnStream => _noteController.stream;
+  /// Ring of recent PCM @22.05kHz for Basic Pitch (true audio, incremental).
+  final Float64List _bpRing = Float64List(_bpContextSamples);
+  int _bpWrite = 0;
+  int _bpFilled = 0;
+  /// First window seeds the ring; later hops append only new [_hop] samples.
+  bool _bpPrimed = false;
+
+  Stream<PitchNoteOn> get noteOnStream => _noteController.stream;
   Stream<PitchFrame> get frameStream => _frameController.stream;
   bool get isRunning => _running;
   PitchEngineKind get engine => _engine;
@@ -108,6 +132,9 @@ class PitchService {
     _inferBusy = false;
     _latestWhileBusy = null;
     _droppedStale = 0;
+    _bpWrite = 0;
+    _bpFilled = 0;
+    _bpPrimed = false;
 
     await _initEngine();
 
@@ -202,6 +229,52 @@ class PitchService {
     _emitted.clear();
     _inferBusy = false;
     _latestWhileBusy = null;
+    _bpWrite = 0;
+    _bpFilled = 0;
+    _bpPrimed = false;
+  }
+
+  void _appendBp22k(Float32List samples22050) {
+    for (var i = 0; i < samples22050.length; i++) {
+      _bpRing[_bpWrite] = samples22050[i];
+      _bpWrite++;
+      if (_bpWrite >= _bpContextSamples) _bpWrite = 0;
+      if (_bpFilled < _bpContextSamples) _bpFilled++;
+    }
+  }
+
+  /// Feed BP ring: first window full; thereafter only the newly advanced hop.
+  void _feedBpFrom44100Window(Float64List window441) {
+    if (window441.isEmpty) return;
+    if (!_bpPrimed) {
+      _appendBp22k(resampleLinear(window441, sampleRate, _bpRate));
+      _bpPrimed = true;
+      return;
+    }
+    final hopStart = math.max(0, window441.length - _hop);
+    final hop = Float64List.sublistView(window441, hopStart);
+    _appendBp22k(resampleLinear(hop, sampleRate, _bpRate));
+  }
+
+  /// Chronological view of the rolling BP context @22.05kHz (oldest → newest).
+  Float32List _bpContextLinear22k() {
+    if (_bpFilled <= 0) return Float32List(0);
+    if (_bpFilled < _bpContextSamples) {
+      final out = Float32List(_bpFilled);
+      for (var i = 0; i < _bpFilled; i++) {
+        out[i] = _bpRing[i];
+      }
+      return out;
+    }
+    final out = Float32List(_bpContextSamples);
+    final head = _bpContextSamples - _bpWrite;
+    for (var i = 0; i < head; i++) {
+      out[i] = _bpRing[_bpWrite + i];
+    }
+    for (var i = 0; i < _bpWrite; i++) {
+      out[head + i] = _bpRing[i];
+    }
+    return out;
   }
 
   /// Allow [midis] to re-fire on [noteOnStream] after guide echo / suppress.
@@ -215,6 +288,24 @@ class PitchService {
 
   /// Whether [midi] already produced a noteOn edge while still locked.
   bool isEmitted(int midi) => _emitted.contains(midi);
+
+  /// After [clearEmitted]: if still locked, fire noteOn immediately (held tones
+  /// after guide suppress — do not wait for the next hop / key re-strike).
+  void reedgeIfLocked([Iterable<int>? midis]) {
+    final targets = midis == null
+        ? _locked
+        : midis.where(_locked.contains).toSet();
+    final now = DateTime.now();
+    for (final m in targets) {
+      if (_emitted.add(m)) {
+        _noteController.add(PitchNoteOn(midi: m, captureAt: now));
+        pianoFlowLogVerbose(
+          'Pitch',
+          'reedge ${YinPitch.midiLabel(m)}',
+        );
+      }
+    }
+  }
 
   void dispose() {
     unawaited(() async {
@@ -241,31 +332,35 @@ class PitchService {
       if (all.length > hopBytes) {
         _pending.add(Uint8List.sublistView(all, hopBytes));
       }
-      unawaited(_analyze(chunk));
+      // Feed BP @22.05k ring incrementally (even hops dropped while infer busy).
+      if (_engine == PitchEngineKind.basicPitch) {
+        _feedBpFrom44100Window(pcm16ToFloat(chunk));
+      }
+      unawaited(_analyze(chunk, DateTime.now()));
     }
   }
 
-  Future<void> _analyze(Uint8List pcm16) async {
+  Future<void> _analyze(Uint8List pcm16, DateTime captureAt) async {
     if (_inferBusy) {
       if (_latestWhileBusy != null) _droppedStale++;
-      _latestWhileBusy = pcm16;
+      _latestWhileBusy = (pcm: pcm16, captureAt: captureAt);
       return;
     }
     _inferBusy = true;
     _chunkCount++;
     try {
-      await _analyzeBody(pcm16);
+      await _analyzeBody(pcm16, captureAt);
     } finally {
       _inferBusy = false;
       final next = _latestWhileBusy;
       _latestWhileBusy = null;
       if (next != null) {
-        unawaited(_analyze(next));
+        unawaited(_analyze(next.pcm, next.captureAt));
       }
     }
   }
 
-  Future<void> _analyzeBody(Uint8List pcm16) async {
+  Future<void> _analyzeBody(Uint8List pcm16, DateTime captureAt) async {
     try {
       final samples = pcm16ToFloat(pcm16);
       final level = measureLevel(samples);
@@ -277,7 +372,8 @@ class PitchService {
 
       if (above) {
         if (_engine == PitchEngineKind.basicPitch && _basic != null) {
-          raw = await _basic!.estimateFrom44100(samples);
+          // Incremental 22.05kHz rolling context — no full-window resample.
+          raw = await _basic!.estimateActiveMidi(_bpContextLinear22k());
         } else if (_engine == PitchEngineKind.swiftf0 && _swift != null) {
           final est = await _swift!.estimateFrom44100(samples);
           if (est != null) {
@@ -318,10 +414,14 @@ class PitchService {
           label: label,
           clarity: clarity,
           confirmed: locked.isNotEmpty,
+          captureAt: captureAt,
         ),
       );
 
       if (locked.isEmpty) {
+        // Unlock must free noteOn edges immediately — delaying _emitted clear
+        // by ~280ms left cue bleed blocking the first post-cue attack.
+        _emitted.clear();
         _scheduleClear();
         return;
       }
@@ -331,7 +431,7 @@ class PitchService {
 
       for (final m in locked) {
         if (_emitted.add(m)) {
-          _noteController.add(m);
+          _noteController.add(PitchNoteOn(midi: m, captureAt: captureAt));
           pianoFlowLogVerbose(
             'Pitch',
             '+${YinPitch.midiLabel(m)} '

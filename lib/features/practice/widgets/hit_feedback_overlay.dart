@@ -4,7 +4,6 @@ import '../../../shared/theme/app_theme.dart';
 import '../practice_judge_logic.dart';
 
 /// Brief grade flash above the hit line — event-driven, kept quiet.
-@Deprecated('练习页已卸载；判定文案不再实时抢注意力')
 class HitFeedbackOverlay extends StatefulWidget {
   const HitFeedbackOverlay({
     super.key,

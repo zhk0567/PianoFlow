@@ -31,7 +31,7 @@ class PitchTestPage extends ConsumerStatefulWidget {
 
 class _PitchTestPageState extends ConsumerState<PitchTestPage> {
   StreamSubscription<PitchFrame>? _frameSub;
-  StreamSubscription<int>? _noteSub;
+  StreamSubscription<PitchNoteOn>? _noteSub;
   PitchFrame? _frame;
   final Set<int> _lit = {};
   final Map<int, Timer> _clearTimers = {};
@@ -85,7 +85,7 @@ class _PitchTestPageState extends ConsumerState<PitchTestPage> {
       if (!mounted) return;
       setState(() => _frame = f);
     });
-    _noteSub = pitch.noteOnStream.listen(_onDetected);
+    _noteSub = pitch.noteOnStream.listen((e) => _onDetected(e.midi));
 
     setState(() {
       _listening = true;

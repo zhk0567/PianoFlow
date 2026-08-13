@@ -5,22 +5,89 @@ import 'package:path/path.dart' as p;
 
 import '../../shared/piano_flow_log.dart';
 import '../library/user_import_store.dart';
+import 'workshop_audio_draft_worker.dart';
 import 'workshop_import_common.dart';
 
-/// Audio → basic-pitch → MIDI draft → userImport (never formal).
+/// Audio → basic-pitch → practice draft → userImport (never formal).
 ///
-/// Seconds-level for short piano clips; see scripts/audio_to_practice_draft.py.
+/// Prefers a warm ORT worker; falls back to one-shot Process if worker fails.
 abstract final class WorkshopAudioImporter {
   static const honestyDescription =
-      '工坊音频转录草稿（非正式精确谱；本地 Basic Pitch ONNX→练习 JSON，'
-      '可选钢琴频段强调——不是真分轨。禁止冒充正式谱）。短片段目标秒级。';
+      '工坊音频转录草稿（非正式精确谱；本地 Basic Pitch ONNX→练习 JSON；'
+      '可选 Demucs 分轨，无 demucs 时直转录并诚实标注。禁止冒充正式谱）。'
+      '短片段目标秒级。';
 
   static Future<WorkshopImportResult> importFile({
     required String inputPath,
     String? title,
     /// 默认关：纯 Python STFT 强调会拖慢秒级链路；混音曲可手动开。
     bool emphasizePiano = false,
+    /// 默认开：本机有 demucs 则先分轨；无则日志跳过并直转录。
+    bool useDemucs = true,
     void Function(String line)? onProgress,
+  }) async {
+    final userDir = await UserImportPaths.rootDir();
+    final id = WorkshopImportCommon.slugFromPath(
+      inputPath,
+      prefix: 'user_audio_',
+    );
+
+    pianoFlowLog('Workshop', 'audio draft convert id=$id demucs=$useDemucs …');
+    final sw = Stopwatch()..start();
+    try {
+      final out = await WorkshopAudioDraftWorker.instance.transcribe(
+        inputPath: inputPath,
+        userImportDir: userDir.path,
+        scoreId: id,
+        title: title,
+        emphasizePiano: emphasizePiano,
+        useDemucs: useDemucs,
+        onProgress: onProgress,
+      );
+      sw.stop();
+      if (out['ok'] != true) {
+        throw StateError(
+          out['error']?.toString() ??
+              '音频转草稿失败。详情见控制台 [PianoFlow/Workshop]',
+        );
+      }
+      final elapsed = out['elapsed_ms'] is int
+          ? out['elapsed_ms'] as int
+          : sw.elapsedMilliseconds;
+      final demucsOk = out['demucs'] == true;
+      pianoFlowLog(
+        'Workshop',
+        'audio draft done (worker) elapsedMs=$elapsed demucs=$demucsOk',
+      );
+      return WorkshopImportResult(
+        scoreId: id,
+        message:
+            '已入库「自导入·音频草稿」：$id（${elapsed}ms·暖会话·'
+            '${demucsOk ? '含Demucs分轨' : '未分轨直转录'}）— '
+            '非正式精确谱，可去曲库练习',
+      );
+    } catch (e, st) {
+      pianoFlowLog('Workshop', 'worker path failed, one-shot fallback: $e\n$st');
+      return _importOneShot(
+        inputPath: inputPath,
+        title: title,
+        emphasizePiano: emphasizePiano,
+        useDemucs: useDemucs,
+        onProgress: onProgress,
+        id: id,
+        userDir: userDir,
+      );
+    }
+  }
+
+  static Future<WorkshopImportResult> _importOneShot({
+    required String inputPath,
+    String? title,
+    required bool emphasizePiano,
+    required bool useDemucs,
+    void Function(String line)? onProgress,
+    required String id,
+    required Directory userDir,
   }) async {
     final repo = await WorkshopImportCommon.findRepoRoot();
     if (repo == null) {
@@ -32,12 +99,6 @@ abstract final class WorkshopAudioImporter {
     if (python == null) {
       throw StateError('未找到 Python，请安装并加入 PATH 后重试');
     }
-
-    final userDir = await UserImportPaths.rootDir();
-    final id = WorkshopImportCommon.slugFromPath(
-      inputPath,
-      prefix: 'user_audio_',
-    );
     final script = p.join(repo.path, 'scripts', 'audio_to_practice_draft.py');
     final args = <String>[
       ...WorkshopImportCommon.pythonArgPrefix(python),
@@ -48,17 +109,15 @@ abstract final class WorkshopAudioImporter {
       id,
       '--user-import-dir',
       userDir.path,
-      // 练习草稿默认更大 hop：秒级优先（短音更糊可接受）
       '--hop-sec',
       '0.4',
-      // 长曲只取前 45s，避免掉出「秒级」叙事
       '--max-sec',
       '45',
       if (title != null && title.trim().isNotEmpty) ...['--title', title.trim()],
       if (emphasizePiano) '--emphasize-piano',
+      if (useDemucs) '--demucs',
     ];
 
-    pianoFlowLog('Workshop', 'audio draft convert id=$id …');
     final sw = Stopwatch()..start();
     final proc = await Process.start(
       python,

@@ -588,6 +588,7 @@ class VerovioRuntime {
       while (true) {
         final rateArg = r != null ? ', $r' : '';
         var delivered = false;
+        final sw = Stopwatch()..start();
         try {
           await controller.executeScript(
             'pfSetPosition($b, ${s ? 'true' : 'false'}$rateArg);',
@@ -600,6 +601,13 @@ class VerovioRuntime {
               snap: s,
               error: e,
             ),
+          );
+        }
+        sw.stop();
+        if (sw.elapsedMilliseconds >= 25) {
+          _verovioLog(
+            'pushPosition rttMs=${sw.elapsedMilliseconds} '
+            'beats=${b.toStringAsFixed(3)} snap=$s',
           );
         }
         if (delivered) {

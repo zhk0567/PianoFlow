@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import '../../shared/piano_flow_log.dart';
 import '../../shared/theme/app_theme.dart';
 import '../library/library_repository.dart';
 import '../library/user_import_store.dart';
+import 'workshop_audio_draft_worker.dart';
 import 'workshop_audio_import.dart';
 import 'workshop_external_editor.dart';
 import 'workshop_import_common.dart';
@@ -157,6 +160,8 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
   List<WorkshopOmrCandidate> _omrCandidates = const [];
   List<SongSummary> _userSongs = const [];
   bool _userSongsLoaded = false;
+  /// 音频：默认尝试 Demucs；无 demucs 时脚本会跳过并诚实标「未分轨」。
+  bool _useDemucs = true;
 
   @override
   void initState() {
@@ -295,6 +300,19 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
       _status = '选择音频…';
       _lastScoreId = null;
     });
+    // Warm ORT while the user picks a file (first import pays less cold start).
+    unawaited(
+      WorkshopAudioDraftWorker.instance.ensureStarted(
+        onProgress: (line) {
+          if (!mounted || !_busy) return;
+          if (line.contains('ORT')) {
+            setState(() => _status = '预热转录引擎… $line');
+          }
+        },
+      ).catchError((Object e) {
+        pianoFlowLog('Workshop', 'audio worker prewarm: $e');
+      }),
+    );
     try {
       final path = await _pickPath(
         extensions: const ['wav', 'mp3', 'flac', 'ogg', 'm4a'],
@@ -304,13 +322,16 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
       setState(() => _status = '正在本地转录（Basic Pitch ONNX，短片段约数秒）…');
       final result = await WorkshopAudioImporter.importFile(
         inputPath: path,
+        useDemucs: _useDemucs,
         onProgress: (line) {
           if (!mounted) return;
           if (line.startsWith('progress=') || line.contains('progress=')) {
             setState(() => _status = '正在本地转录… $line');
           } else if (line.contains('dur=') ||
               line.contains('notes=') ||
-              line.contains('truncate')) {
+              line.contains('truncate') ||
+              line.contains('ORT') ||
+              line.contains('demucs')) {
             setState(() => _status = '正在本地转录… $line');
           }
         },
@@ -356,6 +377,62 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
     } catch (e, st) {
       pianoFlowLog('Workshop', 'PDF stage UI failed: $e\n$st');
       final msg = e is StateError ? e.message : '暂存失败：$e';
+      setState(() => _status = msg);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// One-shot: pick PDF → OMR → poll → import → practice (draft only).
+  Future<void> _pdfOneShotToPractice() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _status = '选择 PDF…';
+      _pdfStage = null;
+      _omrCandidates = const [];
+      _lastScoreId = null;
+    });
+    try {
+      final path = await _pickPath(
+        extensions: const ['pdf'],
+        dialogTitle: 'PDF 一键成谱并练习',
+        fallbackName: 'score.pdf',
+      );
+      final result = await WorkshopPdfGuide.runOneShotPipeline(
+        pdfPath: path,
+        onProgress: (s) {
+          if (!mounted) return;
+          setState(() => _status = s);
+        },
+      );
+      setState(() {
+        _pdfStage = result.staged;
+        _omrCandidates = result.candidates;
+        _status = result.message;
+      });
+      if (!result.ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message)),
+          );
+        }
+        return;
+      }
+      final preferred = result.preferred;
+      if (preferred == null) return;
+      await _importMusicXml(
+        presetPath: preferred.path,
+        preferredId: result.staged.scoreIdHint,
+      );
+    } on _Cancelled {
+      setState(() => _status = '已取消');
+    } catch (e, st) {
+      pianoFlowLog('Workshop', 'PDF one-shot failed: $e\n$st');
+      final msg = e is StateError ? e.message : 'PDF 一键成谱失败：$e';
       setState(() => _status = msg);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -626,6 +703,28 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
               ),
             ),
           ],
+          if (tool.id == WorkshopToolId.importAudio) ...[
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                '尝试 Demucs 分轨',
+                style: AppTheme.body(fontSize: 14, color: AppColors.textPrimary),
+              ),
+              subtitle: Text(
+                '默认开：本机有 demucs 则先取伴奏轨再转录；无则跳过并标「未分轨直转录」',
+                style: AppTheme.body(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  height: 1.35,
+                ),
+              ),
+              value: _useDemucs,
+              onChanged: _busy
+                  ? null
+                  : (v) => setState(() => _useDemucs = v),
+            ),
+          ],
           if (tool.id == WorkshopToolId.pdfToScore) ...[
             const SizedBox(height: 12),
             ...WorkshopPdfGuide.chineseSteps.map(
@@ -668,6 +767,12 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
                   onPressed: _busy ? null : _reloadUserSongs,
                   child: const Text('刷新列表'),
                 ),
+              if (tool.id == WorkshopToolId.pdfToScore) ...[
+                TextButton(
+                  onPressed: _busy ? null : _stagePdf,
+                  child: const Text('仅暂存 PDF（分步）'),
+                ),
+              ],
               if (tool.id == WorkshopToolId.pdfToScore && _pdfStage != null) ...[
                 OutlinedButton(
                   onPressed: _busy ? null : _launchOmr,
@@ -828,7 +933,7 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
       case WorkshopToolId.importAudio:
         _importAudio();
       case WorkshopToolId.pdfToScore:
-        _stagePdf();
+        _pdfOneShotToPractice();
       case WorkshopToolId.editScore:
         _reloadUserSongs();
       case WorkshopToolId.importOther:
@@ -845,7 +950,7 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
       case WorkshopToolId.importAudio:
         return '选择音频（草稿）';
       case WorkshopToolId.pdfToScore:
-        return '选择 PDF 并暂存';
+        return 'PDF 一键成谱并练习';
       case WorkshopToolId.editScore:
         return '刷新自导入列表';
       case WorkshopToolId.importOther:
@@ -875,9 +980,9 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
   static String _detailBody(WorkshopToolId id) {
     switch (id) {
       case WorkshopToolId.pdfToScore:
-        return '流程：选 PDF 暂存 →（可选）启动仓库 OMR 脚本 / 自用 Audiveris → '
-            '「扫描 OMR 输出」一键导入，或手动「导入 MusicXML」。'
-            '未校对结果禁止冒充正式谱。';
+        return '流程：选 PDF → 启动本机 OMR（omr-from-pdf.ps1 / Audiveris）→ '
+            '自动扫描导入 → 进练习。结果为草稿，禁止冒充正式谱。'
+            '也可下方分步：仅暂存 / 启动 OMR / 扫描。';
       case WorkshopToolId.editScore:
         return '管理本机自导入：改元数据、打开「编辑音符表」改 MIDI/拍/手并保存、'
             '外部打开 MusicXML、删除、打开练习。正式谱/OMR 草稿不可在此改。';

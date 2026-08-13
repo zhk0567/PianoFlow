@@ -41,4 +41,11 @@ abstract final class PracticeLoopLogic {
     if (!isPlaying || !metronomeEnabled) return false;
     return speedChanged || metronomeJustEnabled;
   }
+
+  /// Metronome may click only while the practice playhead is advancing
+  /// (not wait-mode freeze / end hang).
+  static bool metronomeShouldAdvance({
+    required double transportBeatsPerSec,
+  }) =>
+      transportBeatsPerSec > 0;
 }

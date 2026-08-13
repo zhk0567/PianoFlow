@@ -59,4 +59,21 @@ void main() {
       isEmpty,
     );
   });
+
+  test('soft cue skips already satisfied early hits', () {
+    expect(
+      PracticeGuideHitPolicy.midisToSoftCue(
+        expected: {60, 64, 67},
+        satisfied: {60},
+      ),
+      {64, 67},
+    );
+    expect(
+      PracticeGuideHitPolicy.midisToSoftCue(
+        expected: {60},
+        satisfied: {60},
+      ),
+      isEmpty,
+    );
+  });
 }

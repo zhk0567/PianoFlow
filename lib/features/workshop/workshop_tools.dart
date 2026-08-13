@@ -37,7 +37,7 @@ class WorkshopTool {
     WorkshopTool(
       id: WorkshopToolId.pdfToScore,
       title: 'PDF → 曲谱',
-      subtitle: '引导：暂存 PDF → OMR → 校对后导入 MusicXML（自导入草稿）',
+      subtitle: '一键：暂存 → 本机 OMR → 扫描导入 → 练习（草稿；非正式谱）',
       icon: Icons.picture_as_pdf_outlined,
       available: true,
       statusLabel: '引导可用',
@@ -68,7 +68,7 @@ class WorkshopTool {
     WorkshopTool(
       id: WorkshopToolId.importAudio,
       title: '导入音频',
-      subtitle: '本地 Basic Pitch ONNX 转录→草稿→自动进练习（短片段秒级；非正式谱）',
+      subtitle: '可选 Demucs 分轨→Basic Pitch ONNX→草稿→自动进练习（短片段秒级；非正式谱）',
       icon: Icons.audio_file_outlined,
       available: true,
       statusLabel: '草稿可用',

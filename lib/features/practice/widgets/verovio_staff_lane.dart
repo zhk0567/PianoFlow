@@ -43,12 +43,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   Size _heldSize = const Size(800, 340);
   Size? _pendingViewport;
   Timer? _resizeDebounce;
-  Timer? _posThrottle;
-  Timer? _playHeartbeat;
-  double? _pendingPosBeats;
-  double? _pendingPosRate;
-  bool _pendingPosSnap = false;
-  bool _posGateOpen = true;
   Future<String>? _xmlFuture;
   int? _scheduledConstraintHash;
   _PendingScorePush? _pendingScorePush;
@@ -57,11 +51,8 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
 
   static const _resizeSlop = 16.0;
   static const _resizeDebounceMs = 450;
-  /// Shared clock with waterfall/audio: push positionBeats often enough that the
-  /// viewer only eases ≤~80ms (see viewer MAX_EXTRAPOLATE_SEC), never free-runs alone.
-  /// Aligned with practice tick (~16ms) for 三路不明显漂 (was 50ms).
-  static const _posThrottleMs = 16;
-  static const _playHeartbeatMs = 33;
+  /// Shared clock with waterfall/audio: push only from PracticeClock.
+  /// Runtime already coalesces in-flight pushes — no Timer gate here.
 
   double get _transportRate =>
       widget.clock.isPlaying
@@ -99,7 +90,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       }
     }
     unawaited(_bind());
-    _syncPlayHeartbeat();
   }
 
   void _onClock() {
@@ -134,7 +124,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       return;
     }
 
-    _syncPlayHeartbeat();
     _schedulePosition(pos, snap: seek || rateZeroCross, rate: rate);
   }
 
@@ -142,25 +131,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   bool _lastClockPlaying = false;
   double _lastClockRate = 0;
   int _lastSeekEpoch = 0;
-
-  void _syncPlayHeartbeat() {
-    _playHeartbeat?.cancel();
-    _playHeartbeat = null;
-    if (!widget.clock.isPlaying || _transportRate <= 0 || _disposed) return;
-    _playHeartbeat = Timer.periodic(
-      const Duration(milliseconds: _playHeartbeatMs),
-      (_) {
-        if (_disposed || !mounted || !widget.clock.isPlaying) return;
-        unawaited(
-          _runtime.pushPosition(
-            _positionBeats,
-            snap: false,
-            beatsPerSec: _transportRate,
-          ),
-        );
-      },
-    );
-  }
 
   void _onController() {
     if (mounted) setState(() {});
@@ -353,12 +323,6 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     }
     // Hand filter changes must NOT reload / hide staves — only song switches.
     if (oldWidget.score.id != widget.score.id) {
-      _posThrottle?.cancel();
-      _posThrottle = null;
-      _pendingPosBeats = null;
-      _pendingPosRate = null;
-      _pendingPosSnap = false;
-      _posGateOpen = true;
       _xmlFuture = _runtime.resolveMusicXml(widget.score, Hand.both);
       setState(() {
         _switching = true;
@@ -381,47 +345,16 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     required bool snap,
     required double rate,
   }) {
-    if (snap) {
-      _posThrottle?.cancel();
-      _posThrottle = null;
-      _pendingPosBeats = null;
-      _pendingPosRate = null;
-      _pendingPosSnap = false;
-      _posGateOpen = true;
-      unawaited(
-        _runtime.pushPosition(beats, snap: true, beatsPerSec: rate),
-      );
-      return;
-    }
-    if (!_posGateOpen) {
-      _pendingPosBeats = beats;
-      _pendingPosRate = rate;
-      _pendingPosSnap = _pendingPosSnap || snap;
-      return;
-    }
-    _posGateOpen = false;
+    // VerovioRuntime.pushPosition already queues latest while in-flight.
     unawaited(
-      _runtime.pushPosition(beats, snap: false, beatsPerSec: rate),
+      _runtime.pushPosition(beats, snap: snap, beatsPerSec: rate),
     );
-    _posThrottle = Timer(const Duration(milliseconds: _posThrottleMs), () {
-      if (_disposed) return;
-      _posGateOpen = true;
-      final b = _pendingPosBeats;
-      final r = _pendingPosRate ?? _transportRate;
-      final s = _pendingPosSnap;
-      _pendingPosBeats = null;
-      _pendingPosRate = null;
-      _pendingPosSnap = false;
-      if (b != null) _schedulePosition(b, snap: s, rate: r);
-    });
   }
 
   @override
   void dispose() {
     _disposed = true;
     _resizeDebounce?.cancel();
-    _posThrottle?.cancel();
-    _playHeartbeat?.cancel();
     widget.clock.removeListener(_onClock);
     _runtime.controller.removeListener(_onController);
     // Do NOT dispose shared WebviewController — kept warm for next visit.

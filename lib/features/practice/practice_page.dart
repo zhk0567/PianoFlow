@@ -17,6 +17,7 @@ import 'practice_stats_store.dart';
 import 'practice_weak_loop.dart';
 import 'verovio_runtime.dart';
 import 'widgets/falling_notes_lane.dart';
+import 'widgets/hit_feedback_overlay.dart';
 import 'widgets/piano_keyboard.dart';
 import 'widgets/practice_controls.dart';
 import 'widgets/practice_settlement_sheet.dart';
@@ -383,6 +384,11 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
                                       },
                                     ),
                                   ),
+                                  if (s.mode.isPractice)
+                                    HitFeedbackOverlay(
+                                      grade: snap.lastGrade,
+                                      nonce: snap.feedbackNonce,
+                                    ),
                                 ],
                               ),
                             ),

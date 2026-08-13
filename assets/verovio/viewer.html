@@ -118,9 +118,9 @@
     /**
      * Unified transport: Dart positionBeats is the only clock (same as waterfall
      * + guide audio). JS may ease ≤ this many seconds between bridge ticks —
-     * never free-run for minutes (that made staff feel like a second system).
+     * never free-run. Sized to cover typical WebView executeScript RTT.
      */
-    const MAX_EXTRAPOLATE_SEC = 0.08;
+    const MAX_EXTRAPOLATE_SEC = 0.10;
     /** Keep rAF only while Dart recently confirmed play (ms). */
     const DART_LIVE_MS = 500;
     /** Soft catch-up only when paused (rate==0); play always hard-tracks. */

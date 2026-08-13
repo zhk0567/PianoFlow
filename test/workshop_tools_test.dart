@@ -29,6 +29,7 @@ void main() {
     expect(audio.subtitle, contains('自动进练习'));
     expect(pdf!.available, isTrue);
     expect(pdf.badge, '引导可用');
+    expect(pdf.subtitle, contains('一键'));
     expect(edit!.available, isTrue);
     expect(edit.badge, '音符表可用');
     expect(edit.subtitle, contains('音符表'));

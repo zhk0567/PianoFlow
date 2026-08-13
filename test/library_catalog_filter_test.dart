@@ -84,10 +84,10 @@ void main() {
   });
 
   test('scoreKindChips cover all + each kind', () {
-    expect(LibraryCatalogFilter.scoreKindChips.length, 4);
+    expect(LibraryCatalogFilter.scoreKindChips.length, 5);
     expect(
       LibraryCatalogFilter.scoreKindChips.map((e) => e.$2).toList(),
-      ['全部谱种', '正式谱', 'OMR草稿', '简编谱'],
+      ['全部谱种', '正式谱', 'OMR草稿', '简编谱', '自导入'],
     );
   });
 

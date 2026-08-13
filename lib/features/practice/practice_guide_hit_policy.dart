@@ -38,4 +38,11 @@ abstract final class PracticeGuideHitPolicy {
     }
     return out;
   }
+
+  /// Soft-cue only pitches still owed (skip early-hit / already satisfied).
+  static Set<int> midisToSoftCue({
+    required Set<int> expected,
+    required Set<int> satisfied,
+  }) =>
+      expected.difference(satisfied);
 }

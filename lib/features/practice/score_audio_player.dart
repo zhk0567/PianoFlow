@@ -74,6 +74,8 @@ class ScoreAudioPlayer {
   bool _transportPlaying = false;
   bool _metronome = false;
   double _metroBpm = 100;
+  /// When false (wait-mode freeze), stop clicks even if transport is "playing".
+  bool _metroAdvancing = true;
   SongScore? _score;
   Hand _hand = Hand.both;
   final Set<String> _fired = {};
@@ -320,7 +322,21 @@ class ScoreAudioPlayer {
   /// click timer so accents stay locked to the new playhead — not the old phase.
   void alignMetronomeToPosition(double positionBeats) {
     _metroBeat = PracticeLoopLogic.metronomeBeatIndexForPosition(positionBeats);
-    if (_metronome && (_playing || _transportPlaying)) {
+    if (_metronome &&
+        (_playing || _transportPlaying) &&
+        _metroAdvancing) {
+      _restartMetronome(preserveBeat: true);
+    }
+  }
+
+  /// Wait-mode freeze: playhead rate 0 → pause metro; resume when advancing.
+  void setMetronomeAdvancing(bool advancing) {
+    if (_metroAdvancing == advancing) return;
+    _metroAdvancing = advancing;
+    if (!advancing) {
+      _metro?.cancel();
+      _metro = null;
+    } else {
       _restartMetronome(preserveBeat: true);
     }
   }
@@ -514,7 +530,7 @@ class ScoreAudioPlayer {
     final wasRunning = _metro != null;
     _metro?.cancel();
     _metro = null;
-    final active = _playing || _transportPlaying;
+    final active = (_playing || _transportPlaying) && _metroAdvancing;
     if (!_metronome || !active) return;
     final bpm = (_score?.bpm ?? _metroBpm) * _speed;
     final periodMs = (60000 / bpm).round().clamp(120, 2000);
@@ -531,7 +547,9 @@ class ScoreAudioPlayer {
   }
 
   void _emitMetronomeTick(Duration period) {
-    if (!_metronome || !(_playing || _transportPlaying)) return;
+    if (!_metronome || !(_playing || _transportPlaying) || !_metroAdvancing) {
+      return;
+    }
     final accent = _metroBeat % 4 == 0;
     final tick = MetronomeTick(
       beatIndex: _metroBeat,

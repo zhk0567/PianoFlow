@@ -146,10 +146,19 @@ class SongSummary {
   static const userImportHonestyNotice =
       '自导入曲谱未做教材级校对，可练但不标为正式谱';
 
+  /// Parses「仅前 N 秒预览」from audio-draft descriptions.
+  static final _previewSecRe = RegExp(r'仅前\s*(\d+)\s*秒');
+
   /// Fixed practice-page banner when [isOmrDraft]/[isUserImport]; null otherwise.
   String? get practiceHonestyBanner {
     if (isOmrDraft) return omrHonestyNotice;
-    if (isUserImport) return userImportHonestyNotice;
+    if (isUserImport) {
+      final m = _previewSecRe.firstMatch(description);
+      if (m != null) {
+        return '$userImportHonestyNotice；本曲仅为前 ${m.group(1)} 秒音频预览';
+      }
+      return userImportHonestyNotice;
+    }
     return null;
   }
 

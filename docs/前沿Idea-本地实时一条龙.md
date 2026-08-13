@@ -78,7 +78,15 @@
 | 成谱 | **秒级**出可练谱并进入练习 | 可补：按曲长的秒数上限、机型 |
 | 三路同步 | 正常播放肉眼不明显漂 | 可补：漂移上限（拍 / ms） |
 
-未标定前，迭代仍以本节「方向 + 优先级」为准，避免无目标空转。
+### 5.1 本战役证明范围（2026-08-13 · 体系通关已冻结）
+
+与 [产品定位 · 体系通关](./产品定位-一条龙体系.md) 对齐：
+
+- **已通关证明**：曲库 + 音频（可选 Demucs）+ PDF 一键成谱进练；跟弹/三路可用可观测；短片段秒级。
+- **仍战役外**：formal 人眼校对生产线、跨平台 Verovio、实验室误推进仪表盘、云私教。
+- 草稿诚实；未校对禁止升 formal。
+
+通关冻结后默认不再自动演进；未标定的「可更好」只进 backlog。
 
 ### 落地进度（实现备忘）
 
@@ -106,6 +114,24 @@
 | 2026-08-12 | 跟弹·多音门限 | BP `relativeThresh` 0.62→**0.55**（弱键少被吃） |
 | 2026-08-12 | 跟弹·停声竞态 | `_resetGuideRetrigger` 先 `stopOneShots`（命中推进不取消停声） |
 | 2026-08-12 | 成谱·同进程入库 | ONNX events 直写 JSON+catalog，去掉 MIDI/双 Python 子进程 |
+| 2026-08-12 | 跟弹·cue 未满足 | 冻结 soft-cue 只播/arm `expected−satisfied`（不重 cue 早命中） |
+| 2026-08-12 | 跟弹·unlock 清边沿 | `locked` 空时立刻 `_emitted.clear`（不等 280ms 定时器） |
+| 2026-08-12 | 跟弹·按下反馈 | 恢复 `HitFeedbackOverlay`；`hit-latency` 控制台可观测 |
+| 2026-08-12 | 成谱·解码诚实 | 非 WAV/无 soundfile 时明确报错；音频草稿写盘冒烟测 |
+| 2026-08-12 | 跟弹·BP 真上下文 | PitchService ~2s 滚动环；稳态不再「静音垫 + 0.25s」 |
+| 2026-08-12 | 成谱·ffmpeg | `audio_to_practice_draft` soundfile→PCM WAV→ffmpeg；`progress=decode=` |
+| 2026-08-12 | 三路·单时钟 | 去掉 Verovio 33ms heartbeat；`MAX_EXTRAPOLATE_SEC` 0.08→0.032 |
+| 2026-08-12 | 跟弹·reedge | suppress 后 `clearEmitted` + `reedgeIfLocked`（按住共有音立刻出边） |
+| 2026-08-12 | 跟弹·capture延迟 | `PitchNoteOn.captureAt`；日志 `hit-capture-ms` / `hit-wait-ms` |
+| 2026-08-12 | 成谱·截断诚实 | `--max-sec` 写入 description「仅前 N 秒预览」+ 练习页 banner |
+| 2026-08-12 | 三路·节拍器 | 冻结 rate=0 停 metro；恢复 align 再开（跟 PracticeClock） |
+| 2026-08-12 | 跟弹·capture判定 | `PracticePosHistory` 插值；grade 用 capture 拍点 |
+| 2026-08-12 | 三路·Staff冲刷 | 去掉 lane 16ms Timer；靠 Runtime in-flight 队列 |
+| 2026-08-12 | 成谱·ORT暖会话 | `--serve` worker + 选文件预热；失败回退 one-shot |
+| 2026-08-12 | 跟弹·BP增量环 | 22.05kHz 环；每 hop 只重采样 ~30ms（修重叠灌窗） |
+| 2026-08-12 | 成谱·启动预热 | `main` post-frame 启 worker（对齐 Verovio） |
+| 2026-08-12 | 三路·外推/RTT | `MAX_EXTRAPOLATE`→0.10；`pushPosition rttMs≥25` 日志 |
+| 2026-08-12 | 成谱·静音跳ORT | 低 RMS hop 不跑 `_infer_window` |
 
 ---
 

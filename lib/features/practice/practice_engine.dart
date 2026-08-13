@@ -11,10 +11,12 @@ import 'practice_clock.dart';
 import 'practice_constants.dart';
 import 'practice_ghost_store.dart';
 import 'practice_guide_hit_policy.dart';
+import 'practice_hit_latency.dart';
 import 'practice_judge_logic.dart';
 import 'practice_loop_logic.dart';
 import 'practice_models.dart';
 import 'practice_pitch_match.dart';
+import 'practice_pos_history.dart';
 import 'practice_stats_store.dart';
 import 'practice_wait_logic.dart';
 import 'score_audio_player.dart';
@@ -30,7 +32,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   final PracticeClock clock = PracticeClock();
 
   Timer? _ticker;
-  StreamSubscription<int>? _pitchSub;
+  StreamSubscription<PitchNoteOn>? _pitchSub;
   StreamSubscription<PitchFrame>? _pitchFrameSub;
   DateTime? _lastTick;
   DateTime? _sessionStarted;
@@ -54,6 +56,11 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   /// Chord midis soft-cued; stopped on suppress end or early advance.
   Set<int> _guideCuedMidis = {};
 
+  /// When the playhead last froze waiting for a chord (hit-latency probe).
+  DateTime? _freezeSince;
+  bool _lastMetroAdvancing = true;
+  final PracticePosHistory _posHistory = PracticePosHistory();
+
   bool _allowExamSeek = false;
   bool _statsFlushed = false;
   Timer? _endHangTimer;
@@ -74,7 +81,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     final pitch = ref.read(pitchServiceProvider);
     unawaited(_bootstrapAudioAndPitch(pitch));
     _pitchSub =
-        pitch.noteOnStream.listen((midi) => _onNoteOn(midi, playSound: false));
+        pitch.noteOnStream.listen((e) => _onNoteOn(e, playSound: false));
     _pitchFrameSub = pitch.frameStream.listen(_onPitchFrame);
     ref.onDispose(() {
       _ticker?.cancel();
@@ -136,7 +143,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       stillSuppressed: stillSuppressed,
     );
     for (final m in hits) {
-      _registerWaitHit(m);
+      _registerWaitHit(m, captureAt: f.captureAt);
     }
   }
 
@@ -532,7 +539,8 @@ class PracticeController extends Notifier<PracticeSnapshot> {
         );
   }
 
-  void _onNoteOn(int midi, {bool playSound = true}) {
+  void _onNoteOn(PitchNoteOn edge, {bool playSound = true}) {
+    final midi = edge.midi;
     // 自动播放：mic 应已停；迟到事件也不更新高亮/命中。
     if (state.settings.mode.isAutoPlay) return;
     // Mic echo of our own speaker (guide/demo) — ignore delayed second hit.
@@ -570,7 +578,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       // Continuous guide bleed is usually consumed as noteOn during suppress
       // (_emitted) and will not re-edge after suppress ends.
       _guideGate.disarm([matched]);
-      _registerWaitHit(matched);
+      _registerWaitHit(matched, captureAt: edge.captureAt);
       return;
     }
 
@@ -605,7 +613,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     }
   }
 
-  void _registerWaitHit(int midi) {
+  void _registerWaitHit(int midi, {DateTime? captureAt}) {
     if (!state.waitingFor.contains(midi)) return;
     if (_satisfied.contains(midi)) return;
 
@@ -615,7 +623,29 @@ class PracticeController extends Notifier<PracticeSnapshot> {
           pos: _pos,
         ) ??
         _pos;
-    final grade = PracticeJudgeLogic.gradeFromDelta(_pos - chordStart);
+    final gradePos = captureAt != null
+        ? _posHistory.beatsAt(captureAt, fallback: _pos)
+        : _pos;
+    final grade = PracticeJudgeLogic.gradeFromDelta(gradePos - chordStart);
+    final now = DateTime.now();
+    if (captureAt != null) {
+      final ms = PracticeHitLatency.record(
+        now.difference(captureAt).inMilliseconds,
+      );
+      pianoFlowLog(
+        'Practice',
+        'hit-capture-ms=$ms grade=${grade.name} midi=$midi '
+        'gradePos=${gradePos.toStringAsFixed(3)}',
+      );
+    }
+    final freezeAt = _freezeSince;
+    if (freezeAt != null) {
+      pianoFlowLog(
+        'Practice',
+        'hit-wait-ms=${now.difference(freezeAt).inMilliseconds} '
+        'grade=${grade.name} midi=$midi',
+      );
+    }
     final nextCombo = state.combo + 1;
     final nextMax = nextCombo > state.maxCombo ? nextCombo : state.maxCombo;
     final perfects =
@@ -630,7 +660,6 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       }
     }
 
-    final now = DateTime.now();
     var dialogueNonce = state.handsDialogueNonce;
     int? dlgL = state.handsDialogueLeftMidi;
     int? dlgR = state.handsDialogueRightMidi;
@@ -687,6 +716,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       return;
     }
     final now = DateTime.now();
+    _posHistory.record(now, _pos);
     final last = _lastTick ?? now;
     _lastTick = now;
     final dtSec = now.difference(last).inMicroseconds / 1e6;
@@ -708,13 +738,22 @@ class PracticeController extends Notifier<PracticeSnapshot> {
           pos: _pos,
           chordStart: chordStart,
         );
-        final waiting = expected.difference(_satisfied);
+        final waiting = PracticeGuideHitPolicy.midisToSoftCue(
+          expected: expected,
+          satisfied: _satisfied,
+        );
         _publishDiscrete(waitingFor: waiting, activeMidi: expected);
         _syncClock();
         if (freeze) {
-          _cueGuideIfNeeded(chordStart, expected);
+          _freezeSince ??= DateTime.now();
+          // Only soft-cue pitches still owed — early-hit notes must not
+          // re-arm suppress / gate (that re-buries the remaining chord).
+          if (waiting.isNotEmpty) {
+            _cueGuideIfNeeded(chordStart, waiting);
+          }
           return;
         }
+        _freezeSince = null;
         // Early-hit window: keep waterfall moving toward the hit line.
         _advance(beatDelta);
         return;
@@ -733,17 +772,19 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   }
 
   /// Soft guide once when the playhead freezes on a chord (Flowkey cue).
-  void _cueGuideIfNeeded(double chordStart, Set<int> expected) {
+  /// [stillWaiting] = expected − satisfied (never re-cue early hits).
+  void _cueGuideIfNeeded(double chordStart, Set<int> stillWaiting) {
     if (_guideCuedChordStart != null &&
         (_guideCuedChordStart! - chordStart).abs() < 0.001) {
       return;
     }
     _guideCuedChordStart = chordStart;
     if (!state.settings.guideAudio) return;
+    if (stillWaiting.isEmpty) return;
     final volume = PracticeConstants.guideVolumeWithMic;
     final cued = <int>{};
     for (final n in state.filteredNotes) {
-      if (!expected.contains(n.midi)) continue;
+      if (!stillWaiting.contains(n.midi)) continue;
       if ((n.start - chordStart).abs() >=
           PracticeConstants.waitChordClusterBeats) {
         continue;
@@ -786,9 +827,10 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       _stopGuideCueAudio(cued);
       if (already.isNotEmpty) {
         _pitch.clearEmitted(already);
+        _pitch.reedgeIfLocked(already);
         pianoFlowLog(
           'Practice',
-          'deferred clearEmitted ${already.join(",")}',
+          'deferred clearEmitted+reedge ${already.join(",")}',
         );
       }
     });
@@ -868,6 +910,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     final nextPos = PracticeWaitLogic.nudgePastChord(notes: notes, pos: pos);
     _satisfied = {};
     _guideCuedChordStart = null;
+    _freezeSince = null;
     _resetGuideRetrigger();
     _armGuideThrough(pos);
     _applyPosition(nextPos);
@@ -1011,6 +1054,17 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       isPlaying: playing,
       intentionalSeek: intentionalSeek,
     );
+    _posHistory.record(DateTime.now(), _pos);
+    // Metronome follows PracticeClock: freeze (rate 0) must stop clicks.
+    final advancing =
+        PracticeLoopLogic.metronomeShouldAdvance(transportBeatsPerSec: rate);
+    if (advancing != _lastMetroAdvancing) {
+      _lastMetroAdvancing = advancing;
+      if (advancing) {
+        _audio.alignMetronomeToPosition(_pos);
+      }
+      _audio.setMetronomeAdvancing(advancing);
+    }
   }
 
   bool _isWaitFrozenAt(double pos) {

@@ -1,0 +1,38 @@
+package com.pianoflow.android
+
+import android.os.Bundle
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import com.pianoflow.android.practice.MicPitchTracker
+
+/** 音高识别测试（YIN） */
+class PitchTestActivity : AppCompatActivity() {
+    private var mic: MicPitchTracker? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val label = TextView(this).apply {
+            text = "对着麦克风演奏…"
+            textSize = 18f
+            setTextColor(0xFFF5F2EB.toInt())
+            setPadding(48, 48, 48, 48)
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF0B0E13.toInt())
+            addView(label)
+        }
+        setContentView(layout)
+        mic = MicPitchTracker(
+            onMidis = { midis -> runOnUiThread { label.text = "识别: ${midis.sorted().joinToString(", ")}" } },
+            onError = { msg -> runOnUiThread { label.text = msg } },
+        )
+        mic?.start()
+    }
+
+    override fun onDestroy() {
+        mic?.stop()
+        super.onDestroy()
+    }
+}

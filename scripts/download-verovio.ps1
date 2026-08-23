@@ -1,6 +1,6 @@
 # Download Verovio WASM toolkit into this repository (manual OK).
 # Usage:
-#   Set-Location F:\commercial\Piano
+#   Set-Location F:\commercial\PianoFlow
 #   .\scripts\download-verovio.ps1
 #
 # Links (if auto-download fails, save manually):

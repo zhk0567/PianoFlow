@@ -19,6 +19,83 @@ void main() {
       expect(PracticeLoopLogic.withStartLeadIn(2), 2);
       expect(PracticeLoopLogic.withStartLeadIn(-0.5), -0.5);
     });
+
+    test('late first onset parks relative to that onset', () {
+      expect(
+        PracticeLoopLogic.withStartLeadIn(0, firstOnset: 4),
+        closeTo(3.0, 1e-9),
+      );
+      expect(
+        PracticeLoopLogic.withStartLeadIn(4.0, firstOnset: 4),
+        closeTo(3.0, 1e-9),
+      );
+      expect(
+        PracticeLoopLogic.withStartLeadIn(3.2, firstOnset: 4),
+        closeTo(3.2, 1e-9),
+      );
+      expect(
+        PracticeLoopLogic.withStartLeadIn(5.0, firstOnset: 4),
+        5.0,
+      );
+    });
+
+    test('firstOnsetBeats picks earliest start', () {
+      expect(PracticeLoopLogic.firstOnsetBeats(const []), 0);
+      expect(PracticeLoopLogic.firstOnsetBeats(const [2.0, 4.0, 2.5]), 2.0);
+    });
+  });
+
+  group('seekSlider mapping', () {
+    test('early onset: park (−lead) shows thumb at 0', () {
+      const onset = 0.0;
+      final park = PracticeLoopLogic.startParkBeats(firstOnset: onset);
+      expect(
+        PracticeLoopLogic.seekSliderValue(
+          positionBeats: park,
+          durationBeats: 32,
+          firstOnset: onset,
+        ),
+        0,
+      );
+      expect(
+        PracticeLoopLogic.seekBeatsFromSlider(
+          sliderValue: 0,
+          firstOnset: onset,
+        ),
+        park,
+      );
+    });
+
+    test('late onset: start park shows thumb at 0 (not mid-track)', () {
+      const onset = 4.0;
+      final park = PracticeLoopLogic.startParkBeats(firstOnset: onset);
+      expect(park, closeTo(3.0, 1e-9));
+      expect(
+        PracticeLoopLogic.seekSliderValue(
+          positionBeats: park,
+          durationBeats: 32,
+          firstOnset: onset,
+        ),
+        0,
+      );
+      // Absolute clamp(0, dur) would have shown 3/32 — the old bug.
+      expect(park.clamp(0, 32), greaterThan(0));
+      expect(
+        PracticeLoopLogic.seekBeatsFromSlider(
+          sliderValue: 0,
+          firstOnset: onset,
+        ),
+        park,
+      );
+      expect(
+        PracticeLoopLogic.seekSliderValue(
+          positionBeats: 32,
+          durationBeats: 32,
+          firstOnset: onset,
+        ),
+        closeTo(29.0, 1e-9),
+      );
+    });
   });
 
   group('wrapIfPastEnd', () {
@@ -161,6 +238,16 @@ void main() {
         PracticeLoopLogic.metronomeShouldAdvance(transportBeatsPerSec: 2),
         isTrue,
       );
+    });
+  });
+
+  group('easeInOutCubic', () {
+    test('endpoints and midpoint', () {
+      expect(PracticeLoopLogic.easeInOutCubic(0), 0);
+      expect(PracticeLoopLogic.easeInOutCubic(1), 1);
+      expect(PracticeLoopLogic.easeInOutCubic(0.5), closeTo(0.5, 1e-9));
+      expect(PracticeLoopLogic.easeInOutCubic(0.25), lessThan(0.25));
+      expect(PracticeLoopLogic.easeInOutCubic(0.75), greaterThan(0.75));
     });
   });
 }

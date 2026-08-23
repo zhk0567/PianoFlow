@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0E13">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="我的"
+            android:textColor="#F5F2EB"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="#141920"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="18dp">
+
+            <TextView
+                android:id="@+id/profileAvatar"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="#33E8A849"
+                android:gravity="center"
+                android:text="访"
+                android:textColor="#E8A849"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/profileName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="访客"
+                    android:textColor="#F5F2EB"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/profileSub"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="本地练习"
+                    android:textColor="#9AA3B2"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <Button android:id="@+id/btnLogin" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="登录" />
+            <Button android:id="@+id/btnLogout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="退出" android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="20dp" android:text="今日练习" android:textColor="#F5F2EB" android:textStyle="bold" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#141920"
+            android:orientation="vertical"
+            android:padding="16dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/todayLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="今日 0 / 20 分钟"
+                    android:textColor="#9AA3B2" />
+                <TextView
+                    android:id="@+id/todayPct"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0%"
+                    android:textColor="#E8A849"
+                    android:textStyle="bold" />
+            </LinearLayout>
+            <ProgressBar
+                android:id="@+id/todayProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:layout_marginTop="8dp"
+                android:max="100"
+                android:progress="0"
+                android:progressTint="#E8A849" />
+        </LinearLayout>
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="16dp" android:text="练习概览" android:textColor="#F5F2EB" android:textStyle="bold" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#141920"
+            android:orientation="horizontal"
+            android:padding="16dp">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                <TextView android:id="@+id/statSessions" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#F5F2EB" android:textSize="22sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="练习次数" android:textColor="#6E7686" android:textSize="12sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                <TextView android:id="@+id/statMinutes" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#F5F2EB" android:textSize="22sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="累计分钟" android:textColor="#6E7686" android:textSize="12sp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                <TextView android:id="@+id/statSongs" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#F5F2EB" android:textSize="22sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="曲目数" android:textColor="#6E7686" android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView android:id="@+id/statsLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:textColor="#9AA3B2" android:visibility="gone" />
+
+        <Button android:id="@+id/btnConstellation" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="练习星座" />
+        <Button android:id="@+id/btnSandbox" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="节拍器 · 试音" />
+        <Button android:id="@+id/btnPitchTest" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="音高识别测试" />
+        <Button android:id="@+id/btnSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="设置" />
+    </LinearLayout>
+</ScrollView>

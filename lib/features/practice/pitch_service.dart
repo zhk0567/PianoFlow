@@ -162,7 +162,7 @@ class PitchService {
           lastError = '麦克风异常（详情见控制台 [PianoFlow/Pitch]）';
         },
         onDone: () {
-          pianoFlowLog('Pitch', 'stream done');
+          pianoFlowLogVerbose('Pitch', 'stream done');
           _running = false;
         },
       );

@@ -8,8 +8,8 @@ import 'practice_weak_loop.dart';
 
 export 'practice_judge_logic.dart' show HitGrade, HitGradeX;
 
-/// 练习页模式：[wait] 跟弹；[exam] 考试（禁 scrub，由练习页「考试模式」开关开启）；[autoPlay] 自动示范。
-/// UI 顶层分段为「自动 | 练习」；考试不是并列分段。
+/// 练习页模式：[wait] 跟弹；[exam] 考试（由 /exam 大厅进入；禁 scrub / 循环）；[autoPlay] 自动示范。
+/// UI 顶层分段为「自动 | 练习」；考试不是练习页内开关。
 enum PracticeMode { wait, exam, autoPlay }
 
 extension PracticeModeX on PracticeMode {
@@ -17,7 +17,7 @@ extension PracticeModeX on PracticeMode {
   bool get isExam => this == PracticeMode.exam;
   bool get isAutoPlay => this == PracticeMode.autoPlay;
   bool get allowsSeek => this != PracticeMode.exam;
-  bool get allowsLoop => this != PracticeMode.exam;
+  // Loop UI removed — end-of-piece always rewinds to start.
 
   String get labelZh => switch (this) {
         PracticeMode.wait => '练习',
@@ -32,11 +32,11 @@ class PracticeSettings {
     this.speed = 1.0,
     this.volume = PracticeConstants.volumeDefault,
     this.hand = Hand.both,
-    this.mode = PracticeMode.wait,
+    this.mode = PracticeMode.autoPlay,
     this.loopEnabled = false,
     this.loopStart = 0.0,
     this.loopEnd = 4.0,
-    this.guideAudio = false,
+    this.guideAudio = true,
     this.metronome = false,
     this.visualFxEnabled = false,
     this.examRecordAudio = false,
@@ -53,10 +53,24 @@ class PracticeSettings {
   final bool guideAudio;
   final bool metronome;
 
-  /// 装饰层（残影 / 极轻条高光），非教学必需；默认关。
+  /// 视觉特效：整条下落瀑布 + 命中爆发等；关则舞台只留琴键与五线谱。默认关。
   final bool visualFxEnabled;
   final bool examRecordAudio;
   final bool showGhost;
+
+  /// 恢复速度/音量/特效等默认值；保留 [mode] 与考试录制偏好。
+  PracticeSettings restoredDefaults() {
+    return PracticeSettings(
+      mode: mode,
+      examRecordAudio: examRecordAudio,
+      // Exam keeps locked rules; non-exam restores hands + guide defaults.
+      hand: mode.isExam ? hand : Hand.both,
+      guideAudio: mode.isExam ? false : true,
+      loopEnabled: false,
+      loopStart: loopStart,
+      loopEnd: loopEnd,
+    );
+  }
 
   PracticeSettings copyWith({
     double? speed,

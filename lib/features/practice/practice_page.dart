@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,22 +10,37 @@ import '../../shared/widgets/breakpoint_latch.dart';
 import '../library/library_repository.dart';
 import '../library/user_library_store.dart';
 import 'keyboard_geometry.dart';
+import 'practice_clock.dart';
 import 'practice_constants.dart';
+import 'practice_stage_theme.dart';
 import 'practice_engine.dart';
 import 'practice_stats_store.dart';
 import 'practice_weak_loop.dart';
 import 'verovio_runtime.dart';
+import 'verovio_web_host_factory.dart';
 import 'widgets/falling_notes_lane.dart';
 import 'widgets/hit_feedback_overlay.dart';
 import 'widgets/piano_keyboard.dart';
 import 'widgets/practice_controls.dart';
 import 'widgets/practice_settlement_sheet.dart';
+import 'widgets/practice_visual_fx_overlay.dart';
 import 'widgets/verovio_staff_lane.dart';
 
 class PracticePage extends ConsumerStatefulWidget {
-  const PracticePage({super.key, required this.songId});
+  const PracticePage({
+    super.key,
+    required this.songId,
+    this.examMode = false,
+    this.examRecord = false,
+    this.examHand,
+  });
 
   final String songId;
+
+  /// Entered from /exam lobby.
+  final bool examMode;
+  final bool examRecord;
+  final Hand? examHand;
 
   @override
   ConsumerState<PracticePage> createState() => _PracticePageState();
@@ -80,7 +94,13 @@ class _PracticePageState extends ConsumerState<PracticePage> {
               ),
             );
           },
-          data: (score) => _PracticeScaffold(summary: summary, score: score),
+          data: (score) => _PracticeScaffold(
+            summary: summary,
+            score: score,
+            examMode: widget.examMode,
+            examRecord: widget.examRecord,
+            examHand: widget.examHand,
+          ),
         );
       },
     );
@@ -88,10 +108,19 @@ class _PracticePageState extends ConsumerState<PracticePage> {
 }
 
 class _PracticeScaffold extends ConsumerStatefulWidget {
-  const _PracticeScaffold({required this.summary, required this.score});
+  const _PracticeScaffold({
+    required this.summary,
+    required this.score,
+    this.examMode = false,
+    this.examRecord = false,
+    this.examHand,
+  });
 
   final SongSummary summary;
   final SongScore score;
+  final bool examMode;
+  final bool examRecord;
+  final Hand? examHand;
 
   @override
   ConsumerState<_PracticeScaffold> createState() => _PracticeScaffoldState();
@@ -106,12 +135,13 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
   );
 
   bool _settlementShowing = false;
+  bool _examBootstrapped = false;
 
   @override
   void initState() {
     super.initState();
     // Prefetch MusicXML as soon as practice opens (was on song-detail preview).
-    if (Platform.isWindows) {
+    if (verovioPlatformSupported) {
       VerovioRuntime.instance.prewarm();
       unawaited(
         VerovioRuntime.instance.prefetchMusicXml(widget.score),
@@ -123,6 +153,31 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
         'omrDraft ${widget.summary.id}: ${SongSummary.omrHonestyNotice}',
       );
     }
+    if (widget.examMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _applyExamEntry());
+    }
+  }
+
+  void _applyExamEntry() {
+    if (!mounted || _examBootstrapped) return;
+    _examBootstrapped = true;
+    final ctrl = ref.read(practiceProvider(widget.score).notifier);
+    final cur = ref.read(practiceProvider(widget.score)).settings;
+    ctrl.updateSettings(
+      cur.copyWith(
+        mode: PracticeMode.exam,
+        guideAudio: false,
+        loopEnabled: false,
+        examRecordAudio: widget.examRecord,
+        hand: widget.examHand ?? cur.hand,
+        showGhost: false,
+      ),
+    );
+    pianoFlowLog(
+      'Practice',
+      'exam entry id=${widget.score.id} record=${widget.examRecord} '
+      'hand=${widget.examHand?.name ?? 'default'}',
+    );
   }
 
   Future<void> _showSettlement({required bool leaveAfter}) async {
@@ -195,6 +250,7 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
     final fav =
         ref.watch(userLibraryProvider).favorites.contains(summary.id);
     final s = snap.settings;
+    final stage = PracticeStageTheme.of(visualFxEnabled: s.visualFxEnabled);
     final screen = MediaQuery.sizeOf(context);
     final tall = _tallLatch.update(screen.height);
     final compact = !tall;
@@ -209,19 +265,29 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
       });
     }
 
+    final baseTheme = Theme.of(context);
     return PopScope(
       canPop: !snap.hasSessionActivity,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         unawaited(_showSettlement(leaveAfter: true));
       },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
+      child: Theme(
+        data: stage.applyTo(baseTheme),
+        child: Scaffold(
+        backgroundColor: stage.pageBg,
         body: SafeArea(
           child: Column(
             children: [
-                Padding(
+                Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+                  decoration: BoxDecoration(
+                    color: stage.panelBg,
+                    border: Border(
+                      bottom: BorderSide(color: stage.panelBorder, width: 1),
+                    ),
+                  ),
                   child: Row(
                     children: [
                       IconButton(
@@ -254,7 +320,7 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
                               style: AppTheme.body(
                                 fontSize: 12,
                                 color: summary.isOmrDraft
-                                    ? AppColors.accent
+                                    ? stage.accent
                                     : AppColors.textSecondary,
                                 height: 1.2,
                               ),
@@ -262,28 +328,34 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
                           ],
                         ),
                       ),
-                      if (s.mode.isPractice && snap.hasSessionActivity)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.accentSoft,
-                              borderRadius: BorderRadius.circular(AppRadii.sm),
-                            ),
-                            child: Text(
-                              '命中 ${snap.sessionHits}',
-                              style: AppTheme.body(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.accent,
-                              ),
-                            ),
-                          ),
-                        ),
+                      // Reserve width so auto↔practice does not reflow the title row.
+                      SizedBox(
+                        width: 92,
+                        child: s.mode.isPractice && snap.hasSessionActivity
+                            ? Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: stage.accentSoft,
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadii.sm),
+                                  ),
+                                  child: Text(
+                                    '命中 ${snap.sessionHits}',
+                                    style: AppTheme.body(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: stage.accent,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
                       IconButton(
                         tooltip: fav ? '取消收藏' : '收藏',
                         onPressed: () => ref
@@ -294,7 +366,7 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
                               ? Icons.star_rounded
                               : Icons.star_border_rounded,
                           color: fav
-                              ? AppColors.accent
+                              ? stage.accent
                               : AppColors.textSecondary,
                         ),
                       ),
@@ -320,7 +392,7 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTheme.body(
                                     fontSize: 12,
-                                    color: AppColors.accent,
+                                    color: stage.accent,
                                   ),
                                 ),
                               ),
@@ -341,76 +413,105 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
                         const gap = PracticeConstants.stageLaneGap;
                         const fkGap =
                             PracticeConstants.stageFallingKeyboardGap;
-                        final usable = constraints.maxHeight -
-                            keyboardH -
-                            fkGap -
-                            gap;
-                        final lanes = PracticeConstants.splitStageLanes(
-                          usableHeight: usable,
-                          compact: compact,
-                        );
-                        final ppb =
-                            PracticeConstants.pixelsPerBeatForHeight(
-                          lanes.falling,
-                        );
+                        // 瀑布=特效显示层。谱区按「不挤占」切分（boostFalling:false），
+                        // 保证五线谱高度；华丽只靠绘制，不靠抢高度。
+                        final showFalling = s.visualFxEnabled;
+                        final usable = (constraints.maxHeight -
+                                keyboardH -
+                                fkGap -
+                                gap)
+                            .clamp(0.0, double.infinity);
+                        final lanes = showFalling
+                            ? PracticeConstants.splitStageLanes(
+                                usableHeight: usable,
+                                compact: compact,
+                                boostFalling: false,
+                              )
+                            : (falling: 0.0, staff: usable);
+                        final ppb = showFalling
+                            ? PracticeConstants.pixelsPerBeatForHeight(
+                                lanes.falling,
+                              )
+                            : 1.0;
 
                         return Column(
                           children: [
-                            SizedBox(
-                              height: lanes.falling,
-                              width: geo.width,
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  RepaintBoundary(
-                                    child: ListenableBuilder(
-                                      listenable: ctrl.clock,
-                                      builder: (context, _) {
-                                        return FallingNotesLane(
-                                          geometry: geo,
-                                          notes: snap.filteredNotes,
-                                          positionBeats:
-                                              ctrl.clock.positionBeats,
-                                          pixelsPerBeat: ppb,
-                                          waitingFor: snap.waitingFor,
-                                          loopEnabled: s.loopEnabled,
-                                          loopStart: s.loopStart,
-                                          loopEnd: s.loopEnd,
-                                          visualFxEnabled:
-                                              s.visualFxEnabled,
-                                          ghostHits: snap.ghostHits,
-                                          showGhost: s.showGhost,
-                                        );
-                                      },
+                            if (showFalling)
+                              SizedBox(
+                                height: lanes.falling,
+                                width: geo.width,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    RepaintBoundary(
+                                      child: ListenableBuilder(
+                                        listenable: ctrl.clock,
+                                        builder: (context, _) {
+                                          return FallingNotesLane(
+                                            geometry: geo,
+                                            notes: snap.filteredNotes,
+                                            positionBeats:
+                                                ctrl.clock.positionBeats,
+                                            pixelsPerBeat: ppb,
+                                            waitingFor: snap.waitingFor,
+                                            visualFxEnabled: true,
+                                            ghostHits: snap.ghostHits,
+                                            showGhost: s.showGhost,
+                                          );
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                  if (s.mode.isPractice)
-                                    HitFeedbackOverlay(
+                                    PracticeVisualFxOverlay(
+                                      enabled: true,
+                                      geometry: geo,
                                       grade: snap.lastGrade,
+                                      midi: snap.lastHitMidi,
                                       nonce: snap.feedbackNonce,
+                                      combo: snap.combo,
+                                      notes: snap.filteredNotes,
+                                      clock: ctrl.clock,
+                                      autoplayVisual: s.mode.isAutoPlay,
+                                      hitLineYFraction: lanes.falling > 1
+                                          ? (lanes.falling -
+                                                  PracticeConstants
+                                                      .fallingHitLineInset) /
+                                              lanes.falling
+                                          : 0.98,
                                     ),
-                                ],
+                                    if (s.mode.isPractice)
+                                      HitFeedbackOverlay(
+                                        grade: snap.lastGrade,
+                                        nonce: snap.feedbackNonce,
+                                        enhanced: true,
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
                             if (fkGap > 0) SizedBox(height: fkGap),
                             SizedBox(
                               height: keyboardH,
                               width: geo.width,
-                              child: RepaintBoundary(
-                                child: ListenableBuilder(
-                                  listenable: ctrl.clock,
-                                  builder: (context, _) {
-                                    return PianoKeyboard(
-                                      geometry: geo,
-                                      highlighted:
-                                          snap.highlightByHandAt(
-                                        ctrl.clock.positionBeats,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: stage.panelBg,
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: stage.panelBorder.withValues(
+                                        alpha: 0.65,
                                       ),
-                                      pressed: s.mode.isAutoPlay
-                                          ? const {}
-                                          : snap.pressedMidi,
-                                    );
-                                  },
+                                    ),
+                                  ),
+                                ),
+                                child: RepaintBoundary(
+                                  child: _HighlightGatedKeyboard(
+                                    clock: ctrl.clock,
+                                    geometry: geo,
+                                    highlightAt: snap.highlightByHandAt,
+                                    pressed: s.mode.isAutoPlay
+                                        ? const {}
+                                        : snap.pressedMidi,
+                                    visualFxEnabled: false,
+                                  ),
                                 ),
                               ),
                             ),
@@ -442,6 +543,84 @@ class _PracticeScaffoldState extends ConsumerState<_PracticeScaffold> {
             ),
           ),
       ),
+      ),
+    );
+  }
+}
+
+
+/// Rebuilds the piano only when highlight / press sets change (not every clock tick).
+class _HighlightGatedKeyboard extends StatefulWidget {
+  const _HighlightGatedKeyboard({
+    required this.clock,
+    required this.geometry,
+    required this.highlightAt,
+    required this.pressed,
+    required this.visualFxEnabled,
+  });
+
+  final PracticeClock clock;
+  final KeyboardGeometry geometry;
+  final Map<int, Hand> Function(double pos) highlightAt;
+  final Set<int> pressed;
+  final bool visualFxEnabled;
+
+  @override
+  State<_HighlightGatedKeyboard> createState() =>
+      _HighlightGatedKeyboardState();
+}
+
+class _HighlightGatedKeyboardState extends State<_HighlightGatedKeyboard> {
+  late Map<int, Hand> _highlighted;
+
+  @override
+  void initState() {
+    super.initState();
+    _highlighted = widget.highlightAt(widget.clock.positionBeats);
+    widget.clock.addListener(_onClock);
+  }
+
+  @override
+  void didUpdateWidget(covariant _HighlightGatedKeyboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.clock != widget.clock) {
+      oldWidget.clock.removeListener(_onClock);
+      widget.clock.addListener(_onClock);
+    }
+    if (oldWidget.pressed != widget.pressed ||
+        oldWidget.highlightAt != widget.highlightAt) {
+      _highlighted = widget.highlightAt(widget.clock.positionBeats);
+    }
+  }
+
+  void _onClock() {
+    final next = widget.highlightAt(widget.clock.positionBeats);
+    if (_mapsEqual(_highlighted, next)) return;
+    setState(() => _highlighted = next);
+  }
+
+  static bool _mapsEqual(Map<int, Hand> a, Map<int, Hand> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (final e in a.entries) {
+      if (b[e.key] != e.value) return false;
+    }
+    return true;
+  }
+
+  @override
+  void dispose() {
+    widget.clock.removeListener(_onClock);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PianoKeyboard(
+      geometry: widget.geometry,
+      highlighted: _highlighted,
+      pressed: widget.pressed,
+      visualFxEnabled: widget.visualFxEnabled,
     );
   }
 }

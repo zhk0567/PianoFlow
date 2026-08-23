@@ -1,0 +1,30 @@
+{
+  "songs": [
+    {
+      "id": "fur_elise_woo59",
+      "title": "Fur Elise",
+      "artist": "Ludwig van Beethoven",
+      "genre": "Classical",
+      "difficulty": 3,
+      "bpm": 72,
+      "durationHint": 130,
+      "description": "Clavierstuck in A Minor - WoO 59. Public Domain. Formal MusicXML.",
+      "scoreKind": "formal",
+      "musicXml": "musicxml/fur_elise_woo59.musicxml",
+      "asset": "assets/scores/fur_elise_woo59.json"
+    },
+    {
+      "id": "hisaishi_castle_in_the_sky",
+      "title": "天空之城",
+      "artist": "Joe Hisaishi",
+      "genre": "Anime",
+      "difficulty": 3,
+      "bpm": 80,
+      "durationHint": 150,
+      "description": "OMR draft — not formal. Local practice only.",
+      "scoreKind": "omrDraft",
+      "musicXml": "musicxml/hisaishi_castle_in_the_sky.musicxml",
+      "asset": "assets/scores/hisaishi_castle_in_the_sky.json"
+    }
+  ]
+}

@@ -37,18 +37,29 @@ alwaysApply: true
 
 ### 当前状态
 
-**体系通关已冻结**（见 `docs/战役终态验收勾选.md`）。默认不再自动找刀；「可更好」只写 backlog。
+**体系通关已冻结**（见 `docs/战役终态验收勾选.md`）。
+
+**四端独立最优交付已冻结**（见 `docs/四端收工验收勾选.md`）。
+
+**Android 原生对齐 Windows 已冻结**（见 `docs/Android原生对齐Windows-验收勾选.md`）。  
+手机主路径 = `clients/android`；禁止以 Flutter APK 冒充。
+
+无 Fail 时「可更好」只写 `docs/战役外-backlog.md`。
 
 ### 出局（禁止主动开干）
 
 - 云私教 / 大模型聊天老师
 - MIDI 设备主路径
 - 未校对升 `formal` / formal 批量校对生产线
-- 跨平台 Verovio（Windows 优先已锁定）
 - 无 Fail 时再拧 `quiet` / `hop` / `echoSuppress`
 - 实验室级误推进率仪表盘（非通关前置）
+- iOS；Windows WinUI 推倒重写；小程序完整低延迟跟弹
+- 四端像素级 UI 统一
+- 无 Fail 时再打磨四端（Oboe、Compose 迁移等仅 backlog）
 
-**本战役已完成**：PDF 一键 OMR 流水线（结果仍草稿）、音频可选 Demucs 分轨接线。
+**体系通关已完成**：PDF 一键 OMR 流水线（结果仍草稿）、音频可选 Demucs 分轨接线。
+
+**四端战役已完成**：P0 契约 → P1 Android → P2 Web → P3 Windows → P4 微信降级。
 
 ## 进化循环（仅无战役表 / 通关冻结后的日常）
 

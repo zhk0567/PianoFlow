@@ -1,0 +1,39 @@
+<view class="page">
+  <view class="banner">微信降级版：预渲染谱节选 + 节拍器。完整跟弹（瀑布/五线谱/麦克风）请用 Windows 或 Android。</view>
+
+  <view class="title">{{song.title}}</view>
+  <view class="meta">{{song.artist}} · {{song.scoreKindLabel}}</view>
+
+  <view class="staff-card">
+    <view class="staff-label">预渲染谱（可横滑）</view>
+    <scroll-view scroll-x class="staff-scroll" enable-flex="{{true}}">
+      <view class="staff-canvas" style="width: {{staffWidth}}px;">
+        <view class="line" style="top: 40px;"></view>
+        <view class="line" style="top: 56px;"></view>
+        <view class="line" style="top: 72px;"></view>
+        <view class="line" style="top: 88px;"></view>
+        <view class="line" style="top: 104px;"></view>
+        <view class="line" style="top: 120px;"></view>
+        <view class="line" style="top: 136px;"></view>
+        <view
+          wx:for="{{staffNotes}}"
+          wx:key="id"
+          class="note"
+          style="left: {{item.left}}px; top: {{item.top}}px; width: {{item.w}}px;"
+        >{{item.name}}</view>
+      </view>
+    </scroll-view>
+    <view class="preview">音名预览：{{notePreview}}</view>
+    <view class="hint">{{staffDisclaimer}}</view>
+  </view>
+
+  <view class="metro {{beatFlash ? 'flash' : ''}}">
+    <view class="metro-title">节拍器 · {{bpm}} BPM</view>
+    <view class="row">
+      <button size="mini" data-delta="-4" bindtap="bumpBpm">−4</button>
+      <button size="mini" data-delta="4" bindtap="bumpBpm">+4</button>
+      <button type="primary" bindtap="toggleMetro">{{metroOn ? '停止' : '开始节拍'}}</button>
+    </view>
+    <view class="hint">开启后每拍震动 + 闪烁（简易练习）。无麦克风跟弹、无瀑布。</view>
+  </view>
+</view>

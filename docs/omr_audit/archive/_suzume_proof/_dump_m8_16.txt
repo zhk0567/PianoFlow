@@ -1,0 +1,21 @@
+# Suzume proof dump 2026-08-09
+# Action: restore MusicXML m8–15 from git 7615330 (initial OMR)
+# Reason: 2026-08-09 theme rewrite (half-note dyads / G4–C5 pat) contradicted PDF
+#         m13 LH (fingering 5-2-1 broken chord F2–C3–F3 / E2–B2–E3) and E5. motif.
+# Still omrDraft — m16+ dense 16ths not re-pitched (no MuseScore sign-off).
+
+m8 RH A4:d12 E5:d9 E5:d3 C5:d3 B4:d3 A4:d6 G4:d6 E4:d3 G4:d3
+m8 LH A2:d24 +E3:d24 G2:d24 +D3:d24
+m12 RH E5:d9 D5:d3 C5:d3 D5:d3 E5:d6 E5:d12 C5:d6 D5:d6
+m12 LH A2:d6 E3:d6 A3:d12 G2:d6 D3:d6 G3:d12
+m13 RH E5:d9 D5:d3 C5:d3 D5:d3 E5:d6 E5:d12 C5:d6 D5:d6
+m13 LH F2:d6 C3:d6 F3:d12 E2:d6 B2:d6 E3:d12
+m15 RH E5:d9 D5:d3 C5:d3 D5:d3 E5:d6 E5:d24
+m15 LH F2:d6 C3:d6 F3:d12 E2:d6 B2:d6 E3:d12
+m16 RH G5… (OMR dense; duration grid kept; pitch SOP open)
+
+# 2026-08-09 cont — m17/m19 RH rewrite vs PDF auto_p1_sys4
+m17 RH A5 G5 F5 F5 E5 D5×4 C5×4 D5 E5 D5  (16×16th)
+m19 RH same as m17
+m18 RH unchanged G5-run this round
+LH m17/m19 kept F2 | C3+F3 | E2 | B2+E3 quarters

@@ -5,13 +5,14 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:webview_windows/webview_windows.dart';
 
 import '../../shared/models/song.dart';
 import '../../shared/piano_flow_log.dart';
 import 'practice_constants.dart';
 import 'staff/score_to_musicxml.dart';
 import 'verovio_transport_sync.dart';
+import 'verovio_web_host.dart';
+import 'verovio_web_host_factory.dart';
 
 void _verovioLog(String message) => pianoFlowLog('Verovio', message);
 
@@ -42,15 +43,15 @@ bool _jsMessageWorthLogging(String raw) {
 }
 
 
-/// Process-wide Verovio WebView2 + WASM runtime.
+/// Process-wide Verovio WebView + WASM runtime (Windows WebView2 / Android System WebView).
 ///
-/// Serves viewer assets + MusicXML over localhost HTTP (WebView2 file:// XHR is
+/// Serves viewer assets + MusicXML over localhost HTTP (file:// XHR is
 /// unreliable). Practice pages call [pushScore] / [pushResize] / [pushPosition].
 class VerovioRuntime {
   VerovioRuntime._();
   static final VerovioRuntime instance = VerovioRuntime._();
 
-  final WebviewController controller = WebviewController();
+  final VerovioWebHost host = createVerovioWebHost();
 
   Future<void>? _readyFuture;
   bool _toolkitReady = false;
@@ -75,18 +76,20 @@ class VerovioRuntime {
   String? _viewerDir;
   HttpServer? _httpServer;
   int? _httpPort;
-  StreamSubscription<dynamic>? _webMessageSub;
+  StreamSubscription<String>? _webMessageSub;
 
   bool get isToolkitReady => _toolkitReady;
 
   void prewarm() {
-    if (!Platform.isWindows) return;
+    if (!verovioPlatformSupported) return;
     unawaited(ensureReady());
   }
 
   Future<void> ensureReady() {
-    if (!Platform.isWindows) {
-      return Future.error(StateError('Verovio 仅支持 Windows'));
+    if (!verovioPlatformSupported) {
+      return Future.error(
+        StateError('Verovio 仅支持 Windows / Android'),
+      );
     }
     return _readyFuture ??= () async {
       try {
@@ -129,7 +132,7 @@ class VerovioRuntime {
       _verovioLogVerbose('beginScoreSwitch epoch=$_loadEpoch ${reason ?? ""}');
     if (!_toolkitReady) return;
     try {
-      await controller.executeScript(
+      await host.runJs(
         'typeof pfClearScore==="function"&&pfClearScore();',
       );
     } catch (e) {
@@ -193,15 +196,11 @@ class VerovioRuntime {
   }
 
   Future<void> _init() async {
-    if (!controller.value.isInitialized) {
-      await controller.initialize();
-      await controller.setPopupWindowPolicy(WebviewPopupWindowPolicy.deny);
-      await controller.setBackgroundColor(const Color(0xFFFFFBF5));
-    }
+    await host.initialize();
 
-    _webMessageSub ??= controller.webMessage.listen(
+    _webMessageSub ??= host.messages.listen(
       (msg) {
-        final s = msg?.toString() ?? '';
+        final s = msg;
         if (_jsMessageWorthLogging(s)) {
           _verovioLog('JS: $s');
         }
@@ -220,7 +219,7 @@ class VerovioRuntime {
       final url =
           'http://127.0.0.1:$_httpPort/viewer.html?v=${Uri.encodeQueryComponent(stamp)}';
       _verovioLogVerbose('Loading viewer $url');
-      await controller.loadUrl(url);
+      await host.loadUrl(url);
       _toolkitReady = false;
       scoreLoaded = false;
       lastScoreKey = null;
@@ -230,8 +229,10 @@ class VerovioRuntime {
     for (var i = 0; i < 120; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       try {
-        final ready = await controller.executeScript('window.pfReady()');
-        if (ready == true || ready == 'true') {
+        final ready = await host.runJs('window.pfReady()');
+        if (ready == true ||
+            ready == 'true' ||
+            ready?.toString() == 'true') {
           _toolkitReady = true;
           _verovioLogVerbose('toolkit ready');
           return;
@@ -266,8 +267,8 @@ class VerovioRuntime {
       );
     }
 
-    // v51: thinner/dimmer Flowkey-style playhead; no firefly overlay.
-    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v51';
+    // v55: end playhead travels to staff right edge (past last note).
+    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v57';
     final marker = File('${dir.path}${Platform.pathSeparator}.asset_stamp');
     final htmlOut = File('${dir.path}${Platform.pathSeparator}viewer.html');
     final wasmOut = File(
@@ -483,7 +484,7 @@ class VerovioRuntime {
     // Async fetch path (preferred over sync XHR). Never let a missing JS
     // helper abort before the sync fallback.
     try {
-      final result = await controller.executeScript(
+      final result = await host.runJs(
         'pfLoadFromUrlAsync(${jsonEncode(url)}, $optsJson)',
       );
       _verovioLogVerbose('pfLoadFromUrlAsync scheduled result=$result');
@@ -513,7 +514,7 @@ class VerovioRuntime {
 
     // Sync fallback.
     try {
-      final sync = await controller.executeScript(
+      final sync = await host.runJs(
         'pfLoadFromUrl(${jsonEncode(url)}, $optsJson);',
       );
       _verovioLogVerbose('pfLoadFromUrl sync result=$sync');
@@ -524,7 +525,7 @@ class VerovioRuntime {
 
   Future<Map<String, dynamic>?> _scoreInfo() async {
     try {
-      final raw = await controller.executeScript('window.pfScoreInfo()');
+      final raw = await host.runJs('window.pfScoreInfo()');
       if (raw == null) return null;
       var s = raw is String ? raw : raw.toString();
       if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
@@ -551,7 +552,7 @@ class VerovioRuntime {
     }
     final opts = jsonEncode(layoutOpts(viewport));
     try {
-      await controller.executeScript('pfResize($opts);');
+      await host.runJs('pfResize($opts);');
       lastViewport = viewport;
     } catch (e) {
       _verovioLog('pfResize script failed: $e');
@@ -590,7 +591,7 @@ class VerovioRuntime {
         var delivered = false;
         final sw = Stopwatch()..start();
         try {
-          await controller.executeScript(
+          await host.runJs(
             'pfSetPosition($b, ${s ? 'true' : 'false'}$rateArg);',
           );
           delivered = true;
@@ -605,7 +606,7 @@ class VerovioRuntime {
         }
         sw.stop();
         if (sw.elapsedMilliseconds >= 25) {
-          _verovioLog(
+          _verovioLogVerbose(
             'pushPosition rttMs=${sw.elapsedMilliseconds} '
             'beats=${b.toStringAsFixed(3)} snap=$s',
           );

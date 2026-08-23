@@ -76,12 +76,13 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 3px;
+      width: 8px;
       height: 100%;
-      background: rgba(232, 119, 34, 0.42);
+      background: rgba(232, 168, 73, 0.92);
       pointer-events: none;
       z-index: 5;
       display: none;
+      box-shadow: 0 0 0 1px rgba(232, 168, 73, 0.35);
     }
   </style>
 </head>
@@ -105,10 +106,10 @@
     let lastMusicXml = '';
     /** Sorted {q,x} onset samples for continuous beat→X (content coords). */
     let beatXPoints = [];
-    /** Playhead locked near 30% of viewport; score scrolls underneath. */
+    /** Playhead locked near 30% of viewport during playback; score scrolls underneath. */
     const ANCHOR = 0.30;
-    /** At beat≈0 / pre-roll, sit this many px before the first note (clef/key). */
-    const START_LEAD_PX = 36;
+    /** At piece start / lead-in, pin playhead near the left edge of the viewport. */
+    const START_ANCHOR = 0.02;
     /**
      * Keep in sync with PracticeConstants.playbackLeadInBeats.
      * Negative transport beats ease the playhead from lead-in toward the first note.
@@ -130,6 +131,14 @@
     /** Cached leftmost note X — lead-in floor uses measure left when available. */
     let firstNoteX = null;
     let startLeadFloorX = 0;
+    /**
+     * First *sounding* onset q (before seedStartBeatX may unshift q=0).
+     * Lead-in / START_ANCHOR must use this — not beatXPoints[0].q — so late-onset
+     * pieces parked at onset−lead still show the playhead at the staff left.
+     */
+    let firstSoundingQ = 0;
+    /** Right edge of engraved score (last measure) for end-of-piece playhead travel. */
+    let scoreEndX = null;
 
     let targetContentX = 0;
     let lastBeats = 0;
@@ -141,10 +150,51 @@
     let beatsPerSec = 0;
     let lastSyncTime = 0;
     let liveUntil = 0;
+    /** Queued when pfLoadFromUrlAsync runs before WASM toolkit is ready. */
+    let pendingLoad = null;
+
+    function postToHost(payload) {
+      var s = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      try {
+        if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {
+          window.chrome.webview.postMessage(s);
+          return;
+        }
+      } catch (_) {}
+      try {
+        if (window.PianoFlowHost && window.PianoFlowHost.postMessage) {
+          window.PianoFlowHost.postMessage(s);
+        }
+      } catch (_) {}
+    }
 
     window.pfReady = function () {
       return !!(toolkit && typeof verovio !== 'undefined');
     };
+
+    window.pfToolkitReady = function () {
+      return !!toolkit;
+    };
+
+    function ensureToolkit() {
+      if (toolkit) return true;
+      if (typeof verovio === 'undefined' || !verovio.toolkit) return false;
+      try {
+        toolkit = new verovio.toolkit();
+        setStatus('谱面引擎就绪');
+        postToHost({ type: 'ready' });
+        if (pendingLoad) {
+          const p = pendingLoad;
+          pendingLoad = null;
+          pfLoadFromUrlAsync(p.url, p.options);
+        }
+        return true;
+      } catch (e) {
+        setStatus('谱面引擎初始化失败: ' + e);
+        logHost('ensureToolkit fail ' + e);
+        return false;
+      }
+    }
 
     function logHost(msg) {
       try { console.log('[PianoFlow]', msg); } catch (_) {}
@@ -160,11 +210,7 @@
         s.indexOf('为空') >= 0 ||
         s.indexOf('缺少') >= 0;
       if (!important) return;
-      try {
-        if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {
-          window.chrome.webview.postMessage(s);
-        }
-      } catch (_) {}
+      postToHost(s);
     }
 
     function setStatus(t) {
@@ -222,6 +268,36 @@
       return scrollX + (box.left - wbox.left);
     }
 
+    /** Right edge of the last engraved measure (五线谱最右). */
+    function lastMeasureContentRightX() {
+      const wrap = document.getElementById('wrap');
+      if (!wrap) return null;
+      const wbox = wrap.getBoundingClientRect();
+      const measures = document.querySelectorAll('#svg g.measure');
+      let best = null;
+      for (let i = 0; i < measures.length; i++) {
+        const box = measures[i].getBoundingClientRect();
+        if (!(box.width > 0 || box.height > 0)) continue;
+        const right = scrollX + (box.right - wbox.left);
+        if (best == null || right > best) best = right;
+      }
+      if (best != null && isFinite(best)) return best;
+      const host = document.getElementById('svg');
+      if (!host) return null;
+      let contentW = 0;
+      rootPageSvgs(host).forEach((pageSvg) => {
+        const cssW = parseFloat(pageSvg.style.width);
+        if (cssW > 0) contentW += cssW;
+        else {
+          try {
+            const vb = pageSvg.viewBox && pageSvg.viewBox.baseVal;
+            if (vb && vb.width > 0) contentW += vb.width;
+          } catch (_) { /* ignore */ }
+        }
+      });
+      return contentW > 0 ? contentW : null;
+    }
+
     /** Ensure beat 0 maps to the true start (not a late first-resolved onset). */
     function seedStartBeatX() {
       const startX = leftmostNoteContentX();
@@ -247,24 +323,66 @@
     }
 
     /**
-     * Near / before beat 0, pull focus slightly before the first note so the
-     * playhead sits on clef/key lead-in and meets the note when it should sound.
-     * During negative pre-roll, ease from full lead-in toward the onset.
+     * After the last note onset, keep traveling to the staff's right edge so the
+     * playhead does not freeze on the final notehead (曲终到五线谱最右).
+     */
+    function seedEndBeatX() {
+      const endXRaw = lastMeasureContentRightX();
+      if (endXRaw == null || !isFinite(endXRaw)) {
+        scoreEndX = null;
+        return;
+      }
+      // Slight inset so the line sits on the closing barline area.
+      const endX = Math.max(0, endXRaw - 6);
+      scoreEndX = endX;
+      if (!beatXPoints.length) {
+        beatXPoints.push({ q: 0, x: endX });
+        return;
+      }
+      const last = beatXPoints[beatXPoints.length - 1];
+      let endQ = last.q;
+      for (let i = 0; i < timemap.length; i++) {
+        const q = timemap[i].qstamp;
+        if (typeof q === 'number' && q > endQ) endQ = q;
+      }
+      // Always leave a short post-onset span so X can ease past the last note.
+      endQ = Math.max(endQ, last.q + 0.75);
+      if (endX <= last.x + 2) {
+        // Last note already near measure end — still nudge past the notehead.
+        const nudged = last.x + Math.max(24, (endXRaw - last.x) * 0.85);
+        beatXPoints.push({ q: endQ, x: Math.max(endX, nudged) });
+        scoreEndX = Math.max(endX, nudged);
+        return;
+      }
+      if (Math.abs(last.q - endQ) < 1e-6) {
+        last.x = Math.max(last.x, endX);
+        return;
+      }
+      beatXPoints.push({ q: endQ, x: endX });
+    }
+
+    /**
+     * Near / before the first onset: park the playhead at the engraved LEFT
+     * (measure / staff start — 最左侧), then ease toward the first notehead so
+     * the line meets the attack when it should sound. Late-onset pieces use
+     * first timemap q (not always 0).
      */
     function focusContentX(beats, noteX) {
       if (noteX == null || !isFinite(noteX)) return noteX;
-      if (!(START_LEAD_PX > 0)) return noteX;
+      const firstQ = (typeof firstSoundingQ === 'number' && isFinite(firstSoundingQ))
+        ? firstSoundingQ
+        : (beatXPoints.length ? beatXPoints[0].q : 0);
       const base = (firstNoteX != null && isFinite(firstNoteX)) ? firstNoteX : noteX;
-      if (beats < 0) {
+      const left = Math.max(0, (startLeadFloorX != null && isFinite(startLeadFloorX))
+        ? startLeadFloorX
+        : 0);
+      const park = firstQ - PLAYBACK_LEAD_IN_BEATS;
+      // Before first onset: ease leftmost → first notehead (t=0 = 最左侧).
+      if (beats < firstQ - 1e-9) {
         const span = PLAYBACK_LEAD_IN_BEATS > 0 ? PLAYBACK_LEAD_IN_BEATS : 1;
-        const t = Math.max(0, Math.min(1, (beats + span) / span));
-        const led = base - START_LEAD_PX * (1 - t);
-        return Math.max(startLeadFloorX, led);
-      }
-      // Resting at start (paused): keep playhead in the lead-in pocket.
-      if (beats < 0.02) {
-        const led = base - START_LEAD_PX;
-        return Math.min(noteX, Math.max(startLeadFloorX, led));
+        const t = Math.max(0, Math.min(1, (beats - park) / span));
+        if (!(base > left)) return left;
+        return left + (base - left) * t;
       }
       return noteX;
     }
@@ -303,7 +421,9 @@
         }
         beatXPoints.push({ q: e.qstamp, x: x });
       }
+      firstSoundingQ = beatXPoints.length ? beatXPoints[0].q : 0;
       seedStartBeatX();
+      seedEndBeatX();
     }
 
     /** Wait for WebView layout after SVG inject before measuring note X. */
@@ -331,7 +451,8 @@
       }
       if (beats <= beatXPoints[0].q + 1e-9) return beatXPoints[0].x;
       const last = beatXPoints[beatXPoints.length - 1];
-      if (beats >= last.q) return last.x;
+      // Last polyline point is the staff-end sentinel (seedEndBeatX).
+      if (beats >= last.q - 1e-9) return last.x;
       for (let i = 1; i < beatXPoints.length; i++) {
         const a = beatXPoints[i - 1];
         const b = beatXPoints[i];
@@ -387,9 +508,9 @@
 
     /**
      * Playhead is a viewport overlay (#stage). Convert content X → view X.
-     * Scroll targets (contentX - ANCHOR*width) so during playback the line sits
-     * near ANCHOR while the score slides. At beat≈0 / pre-roll, focusContentX
-     * keeps the first notes right of the playhead until the onset should sound.
+     * Scroll targets (contentX - anchor*width). During lead-in the orange line
+     * sits near the left edge; after the first onset it locks near ANCHOR while
+     * the score slides underneath.
      */
     function paintPlayhead(ph, contentX, sx) {
       ph.style.display = 'block';
@@ -441,7 +562,17 @@
       }
       targetContentX = focusX;
 
-      const anchorX = wrap.clientWidth * ANCHOR;
+      const firstQ = (typeof firstSoundingQ === 'number' && isFinite(firstSoundingQ))
+        ? firstSoundingQ
+        : (beatXPoints.length ? beatXPoints[0].q : 0);
+      const park = firstQ - PLAYBACK_LEAD_IN_BEATS;
+      let anchorFrac = ANCHOR;
+      // Lead-in: keep the orange line at the far left; ease to ANCHOR by first onset.
+      if (displayBeats < firstQ - 1e-9 && PLAYBACK_LEAD_IN_BEATS > 0) {
+        const t = Math.max(0, Math.min(1, (displayBeats - park) / PLAYBACK_LEAD_IN_BEATS));
+        anchorFrac = START_ANCHOR + (ANCHOR - START_ANCHOR) * t;
+      }
+      const anchorX = wrap.clientWidth * anchorFrac;
       const maxS = maxScrollX(wrap);
       const targetScroll = Math.max(0, Math.min(maxS, focusX - anchorX));
       const dist = targetScroll - scrollX;
@@ -557,13 +688,45 @@
       });
     }
 
+    /** Phone / narrow staff lane — readable notes, horizontal follow scroll only. */
+    function isNarrowLane(cssW, cssH) {
+      const w = cssW || 0;
+      const h = cssH || 0;
+      return w > 0 && w < 520 || h > 0 && h < 340;
+    }
+
     /** Fit Verovio page metrics to the WebView box (units: 1/10 mm). */
     function layoutOptions(options, musicXml) {
       const wrap = document.getElementById('wrap');
       const cssW = (options && options.cssWidth) || wrap.clientWidth || window.innerWidth || 800;
       const cssH = (options && options.cssHeight) || wrap.clientHeight || window.innerHeight || 220;
-      const scale = (options && options.scale) || 60;
       const measures = countMeasures(musicXml || '');
+      const narrow = !!((options && options.mobile) || isNarrowLane(cssW, cssH));
+      const scale = narrow
+        ? Math.max(62, (options && options.scale) || 76)
+        : ((options && options.scale) || 60);
+      if (narrow) {
+        // One continuous system, wide strip — never crush all measures into viewport width.
+        const pageWidth = Math.max(
+          6000,
+          Math.min(120000, Math.max(measures * 300, Math.floor(cssW * 140 / scale))),
+        );
+        const pageHeight = Math.max(
+          640,
+          Math.min(920, (options && options.pageHeight) || 720),
+        );
+        return {
+          scale,
+          pageWidth,
+          pageHeight,
+          cssW,
+          cssH,
+          measures,
+          rawWidth: pageWidth,
+          breaks: 'none',
+          mobile: true,
+        };
+      }
       // Flowkey-like continuous grand staff: ONE horizontal system for the whole
       // piece. Cap-width + breaks:auto used to paginate mid-scroll and redraw the
       // piano brace/clefs on every system — discontinuous middle. Width scales
@@ -682,7 +845,12 @@
         if (vbH > maxVbH) maxVbH = vbH;
       });
       let fit = 1;
-      if (laneH > 0 && maxVbH > laneH) fit = laneH / maxVbH;
+      const narrow = wrap && wrap.clientWidth > 0 && wrap.clientWidth < 520;
+      if (laneH > 0 && maxVbH > laneH) {
+        fit = laneH / maxVbH;
+        // Narrow lane: keep staff readable; clip vertically, scroll horizontally.
+        if (narrow) fit = Math.max(0.9, fit);
+      }
       pages.forEach((pageSvg, i) => {
         try {
           const d = dims[i] || { vbW: 800, vbH: 220 };
@@ -850,11 +1018,11 @@
      */
     window.pfLoadFromUrlAsync = function (url, options) {
       lastLoadErr = null;
-      if (!toolkit) {
-        lastLoadErr = 'not-ready';
-        setStatus('谱面引擎未就绪');
-        logHost('pfLoadFromUrlAsync not-ready');
-        return false;
+      if (!ensureToolkit()) {
+        pendingLoad = { url: url, options: options || {} };
+        setStatus('等待谱面引擎…');
+        logHost('pfLoadFromUrlAsync queued (toolkit pending)');
+        return 'pending';
       }
       setStatus('正在加载乐谱…');
       logHost('pfLoadFromUrlAsync ' + url);
@@ -1065,8 +1233,20 @@
       return true;
     };
 
+    window.pfTransportReady = function () {
+      if (!ready || !toolkit) return false;
+      try {
+        const host = document.getElementById('svg');
+        if (!host) return false;
+        const notes = host.querySelectorAll('g.note, .notehead').length;
+        if (!(notes > 0)) return false;
+        return beatXPoints.length > 0 || timemap.length > 0;
+      } catch (_) {
+        return false;
+      }
+    };
+
     /**
-     * @param beats quarter-note position (same as Dart positionBeats / waterfall)
      * @param snap  jump scroll immediately (load / intentional seek)
      * @param rate  beats/sec from Dart (0 = paused). Omit → keep previous rate.
      */
@@ -1088,6 +1268,8 @@
       lastSyncTime = now;
       updatePlayhead(b, seekSnap || forceSnap);
       if (seekSnap) forceSnap = false;
+      // System WebView may throttle rAF — advance scroll/playhead on every bridge tick.
+      tickSmoothScroll(now);
     };
 
     function onVisibilityResume() {
@@ -1104,13 +1286,14 @@
       }
       document.addEventListener('visibilitychange', onVisibilityResume);
       window.addEventListener('focus', onVisibilityResume);
-      verovio.module.onRuntimeInitialized = function () {
-        toolkit = new verovio.toolkit();
-        setStatus('谱面引擎就绪');
-        if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {
-          window.chrome.webview.postMessage(JSON.stringify({ type: 'ready' }));
-        }
-      };
+      const mod = verovio.module;
+      if (mod && (mod.calledRun || mod.ready)) {
+        ensureToolkit();
+      } else if (mod) {
+        mod.onRuntimeInitialized = function () {
+          ensureToolkit();
+        };
+      }
     }
     boot();
   </script>

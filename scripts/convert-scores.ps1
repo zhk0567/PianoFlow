@@ -1,7 +1,7 @@
 # Convert MusicXML in third_party/scores_musicxml → assets/scores/*.json
 # Ids come from assets/scores/catalog.json (no hardcoded list).
 # Usage:
-#   Set-Location F:\commercial\Piano
+#   Set-Location F:\commercial\PianoFlow
 #   .\scripts\convert-scores.ps1
 #   .\scripts\convert-scores.ps1 -Id fur_elise_woo59
 

@@ -13,8 +13,8 @@ import 'workshop_import_common.dart';
 /// Prefers a warm ORT worker; falls back to one-shot Process if worker fails.
 abstract final class WorkshopAudioImporter {
   static const honestyDescription =
-      '工坊音频转录草稿（非正式精确谱；本地 Basic Pitch ONNX→练习 JSON；'
-      '可选 Demucs 分轨，无 demucs 时直转录并诚实标注。禁止冒充正式谱）。'
+      '工坊音频导入（可跟弹；本地 Basic Pitch ONNX→练习 JSON；'
+      '可选 Demucs 分轨，无 demucs 时直转录并标注。质量档为自导入，非教材级正式谱）。'
       '短片段目标秒级。';
 
   static Future<WorkshopImportResult> importFile({
@@ -48,7 +48,7 @@ abstract final class WorkshopAudioImporter {
       if (out['ok'] != true) {
         throw StateError(
           out['error']?.toString() ??
-              '音频转草稿失败。详情见控制台 [PianoFlow/Workshop]',
+              '音频导入失败。详情见控制台 [PianoFlow/Workshop]',
         );
       }
       final elapsed = out['elapsed_ms'] is int
@@ -62,9 +62,9 @@ abstract final class WorkshopAudioImporter {
       return WorkshopImportResult(
         scoreId: id,
         message:
-            '已入库「自导入·音频草稿」：$id（${elapsed}ms·暖会话·'
+            '已入库并可练习：$id（${elapsed}ms·暖会话·'
             '${demucsOk ? '含Demucs分轨' : '未分轨直转录'}）— '
-            '非正式精确谱，可去曲库练习',
+            '自导入质量档',
       );
     } catch (e, st) {
       pianoFlowLog('Workshop', 'worker path failed, one-shot fallback: $e\n$st');
@@ -127,7 +127,7 @@ abstract final class WorkshopAudioImporter {
     );
     Future<void> pump(Stream<List<int>> stream) async {
       await for (final line in stream
-          .transform(utf8.decoder)
+          .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())) {
         final t = line.trim();
         if (t.isEmpty) continue;
@@ -148,7 +148,7 @@ abstract final class WorkshopAudioImporter {
     );
     if (code != 0) {
       throw StateError(
-        '音频转草稿失败（退出码 $code）。'
+        '音频导入失败（退出码 $code）。'
         '已安装: Python + onnxruntime（用仓库 assets/models/basic_pitch.onnx）。'
         '详情见控制台 [PianoFlow/Workshop]',
       );
@@ -156,8 +156,8 @@ abstract final class WorkshopAudioImporter {
     return WorkshopImportResult(
       scoreId: id,
       message:
-          '已入库「自导入·音频草稿」：$id（${sw.elapsedMilliseconds}ms）— '
-          '非正式精确谱，可去曲库练习',
+          '已入库并可练习：$id（${sw.elapsedMilliseconds}ms）— '
+          '自导入质量档',
     );
   }
 }

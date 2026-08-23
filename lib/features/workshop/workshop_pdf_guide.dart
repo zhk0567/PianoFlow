@@ -11,7 +11,7 @@ abstract final class WorkshopPdfGuide {
   static const chineseSteps = [
     '① 选择 PDF（一键：暂存 → 启动本机 OMR → 自动扫描导入 → 进练习）',
     '② 依赖仓库 scripts/omr-from-pdf.ps1 与本机 Audiveris',
-    '③ 结果仅为草稿（omrDraft/自导入）；未校对禁止标正式谱',
+    '③ 可跟弹入库（自导入/OMR 质量档）；未校对不会标成正式谱',
     '④ 也可分步：暂存 → 启动 OMR → 扫描 → 导入',
   ];
 
@@ -76,8 +76,8 @@ abstract final class WorkshopPdfGuide {
       omrWorkDir: workHint,
       omrCommand: omrCmd,
       hasOmrScript: hasOmrScript,
-      guidance: 'PDF 已暂存。一键流水线将启动 OMR 并自动扫描导入为草稿'
-          '（未校对绝不能标正式谱）。',
+      guidance: 'PDF 已暂存。一键流水线将启动 OMR 并自动扫描导入并可练习'
+          '（质量档为自导入/OMR，未校对不标正式谱）。',
     );
   }
 
@@ -125,12 +125,14 @@ abstract final class WorkshopPdfGuide {
     Duration interval = defaultPollInterval,
     Future<void> Function(Duration d)? delay,
     Future<List<WorkshopOmrCandidate>> Function()? scanOnce,
+    void Function(int attempt, int total)? onPoll,
   }) async {
     final wait = delay ?? Future<void>.delayed;
     final scan = scanOnce ??
         () => findOmrMusicXml(scoreIdHint: scoreIdHint, repoRoot: repoRoot);
     final attempts = pollAttempts(timeout: timeout, interval: interval);
     for (var i = 0; i < attempts; i++) {
+      onPoll?.call(i + 1, attempts);
       final found = await scan();
       if (found.isNotEmpty) return found;
       if (i + 1 < attempts) await wait(interval);
@@ -167,6 +169,9 @@ abstract final class WorkshopPdfGuide {
       timeout: timeout,
       interval: interval,
       delay: delay,
+      onPoll: (i, total) {
+        onProgress?.call('等待 OMR 输出… ($i/$total)');
+      },
     );
     if (found.isEmpty) {
       final hint = staged.omrWorkDir ?? '_omr_work/…';
@@ -182,7 +187,7 @@ abstract final class WorkshopPdfGuide {
       staged: staged,
       candidates: found,
       ok: true,
-      message: '找到 ${found.length} 个 MusicXML，将导入为自导入草稿（非正式谱）。',
+      message: '找到 ${found.length} 个 MusicXML，将导入并可练习（自导入/OMR 质量档）。',
     );
   }
 

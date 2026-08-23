@@ -1,7 +1,7 @@
-# OMR audit index
+# OMR 校对文档索引
 
-Generated: 2026-08-09 11:56
+- **活状态：** [`PROOFREAD_STATUS.md`](./PROOFREAD_STATUS.md)
+- **升 formal 证据：** 本目录 `*_SOP.md`
+- **历史审计 / spotcheck / 机器 dump：** [`archive/`](./archive/)（归档，日常勿当权威）
 
-| id | kind | JSON≡XML | notes | warnings | promote |
-|----|------|----------|-------|----------|---------|
-| `sawano_call_of_silence` | omrDraft | True | 603 | 3 | NO |
+导入与诚实规则见 [`../曲谱导入SOP.md`](../曲谱导入SOP.md)。

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +8,7 @@ import '../library/library_catalog_filter.dart';
 import '../library/library_repository.dart';
 import '../library/song_card.dart';
 import '../practice/verovio_runtime.dart';
+import '../practice/verovio_web_host_factory.dart';
 
 /// Library — 「唱片架」：大标题、横滑筛选、宽幅封面网格。
 class LibraryTab extends ConsumerStatefulWidget {
@@ -31,7 +30,7 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
   @override
   void initState() {
     super.initState();
-    if (Platform.isWindows) {
+    if (verovioPlatformSupported) {
       VerovioRuntime.instance.prewarm();
     }
   }

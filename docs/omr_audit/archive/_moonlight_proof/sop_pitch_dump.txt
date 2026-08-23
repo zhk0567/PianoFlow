@@ -1,0 +1,116 @@
+--- m1 ---
+  staff1 v2: G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth
+  staff2 v5: C#2+C#3:whole
+--- m2 ---
+  staff1 v2: G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth
+  staff2 v5: B1+B2:whole
+--- m3 ---
+  staff1 v2: A3:eighth | C#4:eighth | E4:eighth | A3:eighth | C#4:eighth | E4:eighth | A3:eighth | Dn4:eighth | F#4:eighth | A3:eighth | Dn4:eighth | F#4:eighth
+  staff2 v5: A1+A2:half | F#1+F#2:half
+--- m4 ---
+  staff1 v2: G#3:eighth | B#3:eighth | F#4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | D#4:eighth | F#3:eighth | B#3:eighth | D#4:eighth
+  staff2 v5: G#1+G#2:half | G#1+G#2:half
+--- m5 ---
+  staff1 v1: rest:half. | G#4:eighth. | G#4:16th
+  staff1 v2: E3:eighth | G#3:eighth | C#4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth
+  staff2 v5: C#2+G#2+C#3:whole
+--- m6 ---
+  staff1 v1: G#4:half. | G#4:eighth. | G#4:16th
+  staff1 v2: G#3:eighth | D#4:eighth | F#4:eighth | G#3:eighth | D#4:eighth | F#4:eighth | G#3:eighth | D#4:eighth | F#4:eighth | G#3:eighth | D#4:eighth | F#4:eighth
+  staff2 v5: B#1+G#2+B#2:whole
+--- m7 ---
+  staff1 v1: G#4:half | A4:half
+  staff1 v2: G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth | A3:eighth | C#4:eighth | F#4:eighth | A3:eighth | C#4:eighth | F#4:eighth
+  staff2 v5: C#2+C#3:half | F#1+F#2:half
+--- m8 ---
+  staff1 v1: G#4:half | F#4:quarter | B4:quarter
+  staff1 v2: G#3:eighth | B3:eighth | E4:eighth | G#3:eighth | B3:eighth | E4:eighth | A3:eighth | B3:eighth | D#4:eighth | A3:eighth | B3:eighth | D#4:eighth
+  staff2 v5: B1+B2:half | B1+B2:half
+--- m28 ---
+  staff1 v1: rest:quarter | G#4:quarter | A4:quarter | F#4:quarter
+  staff1 v2: B#4:eighth | B#3:eighth | D#4:eighth | G#4:eighth | B#3:eighth | D#4:eighth | A4:eighth | B#3:eighth | D#4:eighth | F#4:eighth | B#3:eighth | D#4:eighth
+  staff2 v5: G#1+G#2:whole
+--- m29 ---
+  staff1 v1: rest:quarter | G#3:quarter | A3:quarter | F#3:quarter
+  staff1 v2: rest:eighth | B#3:eighth | D#4:eighth | G#3:eighth | B#3:eighth | D#4:eighth | A3:eighth | B#3:eighth | D#4:eighth | F#3:eighth | B#3:eighth | D#4:eighth
+  staff2 v5: G#1+G#2:whole
+--- m30 ---
+  staff1 v1: rest:quarter | C#5:quarter | E5:quarter | C#5:quarter
+  staff1 v2: E3:eighth | E4:eighth | G#4:eighth | C#5:eighth | E4:eighth | G#4:eighth | E5:eighth | E4:eighth | G#4:eighth | C#5:eighth | E4:eighth | G#4:eighth
+  staff2 v5: G#1+G#2:whole
+--- m31 ---
+  staff1 v1: rest:quarter | C#4:quarter | E4:quarter | C#4:quarter
+  staff1 v2: rest:eighth | E3:eighth | G#3:eighth | C#4:eighth | E3:eighth | G#3:eighth | E4:eighth | E3:eighth | G#3:eighth | C#4:eighth | E3:eighth | G#3:eighth
+  staff2 v5: G#1+G#2:whole
+--- m32 ---
+  staff1 v2: D#3:eighth | A3:eighth | F#3:eighth | B#3:eighth | A3:eighth | D#4:eighth | B#3:eighth | F#4:eighth | D#4:eighth | A4:eighth | F#4:eighth | B#4:eighth
+  staff2 v5: G#1+G#2:whole
+--- m33 ---
+  staff1 v2: E3:eighth | C#4:eighth | G#3:eighth | E4:eighth | C#4:eighth | G#4:eighth | E4:eighth | C#5:eighth | G#4:eighth | E5:eighth | C#5:eighth | G#4:eighth
+  staff2 v5: G#1+G#2:whole
+--- m34 ---
+  staff1 v2: C#4:eighth | F##4:eighth | E4:eighth | A#4:eighth | F##4:eighth | C#5:eighth | A#4:eighth | E5:eighth | C#5:eighth | F##5:eighth | E5:eighth | A#5:eighth
+  staff2 v5: G#1+G#2:whole
+--- m35 ---
+  staff1 v2: F#4:eighth | B#4:eighth | A4:eighth | D#5:eighth | B#4:eighth | F#5:eighth | D#5:eighth | A5:eighth | F#5:eighth | B#5:eighth | A5:eighth | D#6:eighth
+  staff2 v5: G#1+G#2:whole
+--- m36 ---
+  staff1 v2: B#5:eighth | F#5:eighth | A5:eighth | D#5:eighth | F#5:eighth | B#4:eighth | D#5:eighth | A4:eighth | B#4:eighth | F#4:eighth | A4:eighth | D#4:eighth
+  staff2 v5: G#1+G#2:whole
+--- m37 ---
+  staff1 v1: rest:half | rest:16th | rest:16th | D#3:quarter | C#3:quarter
+  staff1 v2: F#4:eighth | B#3:eighth | D#4:eighth | A3:eighth | B#3:eighth | F#3:eighth | A3:eighth | D#3:eighth | F#3:eighth | C#3:eighth | F#3:eighth | A3:eighth
+  staff2 v5: G#1+G#2:whole
+--- m38 ---
+  staff2 v5: B#2:eighth | F#3:eighth | G#3:eighth | A3:eighth | G#3:eighth | F#3:eighth | D#3:eighth | F#3:eighth | A3:eighth | C#3:eighth | F#3:eighth | A3:eighth
+  staff2 v6: B#2:half | D#3:quarter | C#3:quarter
+  staff2 v7: G#1+G#2:whole
+--- m39 ---
+  staff2 v5: B#2:eighth | F#3:eighth | G#3:eighth | A3:eighth | G#3:eighth | F#3:eighth | Dn3:eighth | F#3:eighth | A3:eighth | C#3:eighth | F#3:eighth | A3:eighth
+  staff2 v6: B#2:half | Dn3:quarter | C#3:quarter
+  staff2 v7: G#1+G#2:whole
+--- m40 ---
+  staff1 v2: B#2:eighth | F#3:eighth | G#3:eighth | A3:eighth | G#3:eighth | F#3:eighth | C#3:eighth | E3:eighth | C#4:eighth | C#3:eighth | E3:eighth | C#4:eighth
+  staff2 v5: B#2:half | rest:half
+  staff2 v6: G#1+G#2:half | A1+A2:half
+--- m60 ---
+  staff1 v1: C#4:quarter | rest:half.
+  staff1 v2: E3:eighth | G#3:eighth | C#4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth | G#3:eighth | C#4:eighth | E4:eighth
+  staff2 v5: G#2:half. | G#2:eighth. | G#2:16th
+  staff2 v6: C#2:whole
+--- m61 ---
+  staff1 v2: G#3:eighth | D#4:eighth | F#4:eighth | G#3:eighth | D#4:eighth | F#4:eighth | G#3:eighth | D#4:eighth | F#4:eighth | G#3:eighth | D#4:eighth | F#4:eighth
+  staff2 v5: G#2:half. | G#2:eighth. | G#2:16th
+  staff2 v6: B#1:whole
+--- m62 ---
+  staff1 v2: G#3:eighth | E4:eighth | C#4:eighth | G#4:eighth | E4:eighth | C#5:eighth | G#4:eighth | E5:eighth | C#5:eighth | G#5:eighth | E5:eighth | C#5:eighth
+  staff2 v5: G#2:half. | G#2:eighth. | G#2:16th
+  staff2 v6: C#2:whole
+--- m63 ---
+  staff1 v1: rest:half. | B#3:quarter
+  staff1 v2: B#4:eighth | D#5:eighth | A4:eighth | B#4:eighth | F#4:eighth | A4:eighth | D#4:eighth | F#4:eighth | A3:eighth | A3:eighth | G#3:eighth | F#3:eighth
+  staff2 v5: G#2:half. | rest:quarter
+  staff2 v6: rest:half. | G#2:eighth. | G#2:16th
+  staff2 v7: G#1:whole
+--- m64 ---
+  staff1 v2: E3+C#4:eighth | E4:eighth | C#4:eighth | G#4:eighth | E4:eighth | C#5:eighth | G#4:eighth | E5:eighth | C#5:eighth | G#5:eighth | E5:eighth | C#5:eighth
+  staff2 v5: G#2:half. | G#2:eighth. | G#2:16th
+  staff2 v6: C#2:whole
+--- m65 ---
+  staff1 v1: rest:half. | B#3:quarter
+  staff1 v2: B#4:eighth | D#5:eighth | A4:eighth | B#4:eighth | F#4:eighth | A4:eighth | D#4:eighth | F#4:eighth | A3:eighth | A3:eighth | G#3:eighth | F#3:eighth
+  staff2 v5: G#2:half. | G#2:eighth. | G#2:16th
+  staff2 v6: G#1:whole
+--- m66 ---
+  staff1 v2: E3+C#4:eighth | G#3:eighth | C#4:eighth | E4:eighth | C#4:eighth | G#3:eighth | rest:eighth | E3:eighth | G#3:eighth | C#4:eighth | G#3:eighth | E3:eighth
+  staff2 v5: G#2:half | C#3:half
+  staff2 v6: C#2:whole
+--- m67 ---
+  staff2 v5: rest:eighth | C#3:eighth | E3:eighth | G#3:eighth | E3:eighth | C#3:eighth | G#2:eighth | C#3:eighth | G#2:eighth | E2:eighth | G#2:eighth | E2:eighth
+  staff2 v6: C#2+G#2:half | rest:half
+--- m68 ---
+  staff2 v5: rest:half | C#3+E3+G#3+C#4:half
+  staff2 v6: C#2:half | C#2+G#2:half
+--- m69 ---
+  staff2 v5: C#2+G#2+C#3:whole
+  staff2 v6: E3+G#3+C#4:whole

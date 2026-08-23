@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,31 +18,46 @@ class HomeShell extends StatelessWidget {
     );
   }
 
-  static const _items = <_NavItem>[
-    _NavItem(
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home_rounded,
-      label: '首页',
-    ),
-    _NavItem(
-      icon: Icons.library_music_outlined,
-      selectedIcon: Icons.library_music_rounded,
-      label: '曲库',
-    ),
-    _NavItem(
-      icon: Icons.handyman_outlined,
-      selectedIcon: Icons.handyman_rounded,
-      label: '工坊',
-    ),
-    _NavItem(
+  /// Android 首版：隐藏考试 / 工坊（桌面版保留）。
+  static List<_NavItem> get _items {
+    const core = <_NavItem>[
+      _NavItem(
+        icon: Icons.home_outlined,
+        selectedIcon: Icons.home_rounded,
+        label: '首页',
+      ),
+      _NavItem(
+        icon: Icons.library_music_outlined,
+        selectedIcon: Icons.library_music_rounded,
+        label: '曲库',
+      ),
+    ];
+    const desktopExtra = <_NavItem>[
+      _NavItem(
+        icon: Icons.fact_check_outlined,
+        selectedIcon: Icons.fact_check_rounded,
+        label: '考试',
+      ),
+      _NavItem(
+        icon: Icons.handyman_outlined,
+        selectedIcon: Icons.handyman_rounded,
+        label: '工坊',
+      ),
+    ];
+    const profile = _NavItem(
       icon: Icons.person_outline_rounded,
       selectedIcon: Icons.person_rounded,
       label: '我的',
-    ),
-  ];
+    );
+    if (Platform.isAndroid) {
+      return [...core, profile];
+    }
+    return [...core, ...desktopExtra, profile];
+  }
 
   @override
   Widget build(BuildContext context) {
+    final items = _items;
     return WideBreakpointBuilder(
       enter: 900,
       exit: 860,
@@ -52,7 +69,7 @@ class HomeShell extends StatelessWidget {
               children: [
                 _SideRail(
                   selectedIndex: navigationShell.currentIndex,
-                  items: _items,
+                  items: items,
                   onSelect: _goBranch,
                 ),
                 Expanded(child: navigationShell),
@@ -67,7 +84,7 @@ class HomeShell extends StatelessWidget {
             selectedIndex: navigationShell.currentIndex,
             onDestinationSelected: _goBranch,
             destinations: [
-              for (final item in _items)
+              for (final item in items)
                 NavigationDestination(
                   icon: Icon(item.icon),
                   selectedIcon: Icon(item.selectedIcon),

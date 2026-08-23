@@ -1,0 +1,22 @@
+{
+  "songs": [
+    {
+      "id": "fur_elise_woo59",
+      "title": "Fur Elise",
+      "artist": "Ludwig van Beethoven",
+      "scoreKind": "formal",
+      "scoreKindLabel": "正式谱",
+      "honesty": "正式谱 · 微信仅预渲染节选；完整跟弹请用 Windows / Android",
+      "staffAsset": "data/staff/fur_elise_woo59.json"
+    },
+    {
+      "id": "hisaishi_castle_in_the_sky",
+      "title": "天空之城",
+      "artist": "Joe Hisaishi",
+      "scoreKind": "omrDraft",
+      "scoreKindLabel": "OMR草稿",
+      "honesty": "OMR草稿 · 未校对；微信仅预渲染节选；完整跟弹请用 Windows / Android",
+      "staffAsset": "data/staff/hisaishi_castle_in_the_sky.json"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 # -ScoreKind: formal | simplified | omrDraft（OMR 必须 omrDraft，禁止冒充 formal）
 #
 # Usage:
-#   Set-Location F:\commercial\Piano
+#   Set-Location F:\commercial\PianoFlow
 #   .\scripts\import-score.ps1 -Id fur_elise_woo59 -Source .\path\score.musicxml -Title "Fur Elise" -Artist "Beethoven"
 #   .\scripts\import-score.ps1 -Id my_piece -Source C:\scores\a.mscz -Title "..." -Artist "..." -Pdf C:\scores\a.pdf -ScoreKind omrDraft
 

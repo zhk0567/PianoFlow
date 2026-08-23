@@ -11,6 +11,7 @@ import '../../shared/piano_flow_log.dart';
 import '../../shared/theme/app_theme.dart';
 import '../library/library_repository.dart';
 import '../library/user_import_store.dart';
+import '../library/user_library_store.dart';
 import 'workshop_audio_draft_worker.dart';
 import 'workshop_audio_import.dart';
 import 'workshop_external_editor.dart';
@@ -39,14 +40,18 @@ class WorkshopPage extends ConsumerWidget {
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: wide ? 960 : 880),
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              wide ? 48 : 20,
-              wide ? 36 : 24,
-              wide ? 48 : 20,
-              40,
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              scrollbars: false,
             ),
-            children: [
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                wide ? 48 : 20,
+                wide ? 36 : 24,
+                wide ? 48 : 20,
+                40,
+              ),
+              children: [
               Text(
                 '谱面工坊',
                 style: AppTheme.display(
@@ -56,7 +61,7 @@ class WorkshopPage extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                '把 PDF、MusicXML、MIDI 变成可跟弹的曲谱；自导入永远不是正式谱。',
+                '各入口已可跟弹入库；质量档诚实标注为「自导入/OMR」，未校对不会标成正式谱。',
                 style: AppTheme.body(
                   fontSize: 15,
                   color: AppColors.textSecondary,
@@ -136,6 +141,7 @@ class WorkshopPage extends ConsumerWidget {
               const SizedBox(height: 12),
               _ToolDetail(tool: selected),
             ],
+            ),
           ),
         ),
       ),
@@ -155,6 +161,8 @@ class _ToolDetail extends ConsumerStatefulWidget {
 class _ToolDetailState extends ConsumerState<_ToolDetail> {
   bool _busy = false;
   String? _status;
+  /// `null` while busy → indeterminate bar; `0..1` when fraction known.
+  double? _progress;
   String? _lastScoreId;
   WorkshopPdfStageResult? _pdfStage;
   List<WorkshopOmrCandidate> _omrCandidates = const [];
@@ -162,6 +170,45 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
   bool _userSongsLoaded = false;
   /// 音频：默认尝试 Demucs；无 demucs 时脚本会跳过并诚实标「未分轨」。
   bool _useDemucs = true;
+
+  /// Parse `progress=3/24`, `progress=decode=1/8`, or `(3/40)` → 0..1.
+  static double? _fractionFromLine(String line) {
+    final m = RegExp(r'(\d+)\s*/\s*(\d+)').firstMatch(line);
+    if (m == null) return null;
+    final a = int.tryParse(m.group(1)!);
+    final b = int.tryParse(m.group(2)!);
+    if (a == null || b == null || b <= 0) return null;
+    return (a / b).clamp(0.0, 1.0);
+  }
+
+  void _setBusy(String status, {double? progress}) {
+    if (!mounted) return;
+    setState(() {
+      _busy = true;
+      _status = status;
+      _progress = progress;
+    });
+  }
+
+  void _setStatus(String status, {double? progress, bool clearProgress = false}) {
+    if (!mounted) return;
+    setState(() {
+      _status = status;
+      if (clearProgress) {
+        _progress = null;
+      } else if (progress != null) {
+        _progress = progress;
+      }
+    });
+  }
+
+  void _clearBusy() {
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _progress = null;
+    });
+  }
 
   @override
   void initState() {
@@ -226,12 +273,12 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
   }
 
   Future<void> _importMusicXml({String? presetPath, String? preferredId}) async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _status = presetPath == null ? '选择文件…' : '正在导入检测到的 MusicXML…';
-      _lastScoreId = null;
-    });
+    if (_busy && presetPath == null) return;
+    _setBusy(
+      presetPath == null ? '选择文件…' : '正在导入检测到的 MusicXML…',
+      progress: presetPath == null ? 0.05 : 0.82,
+    );
+    setState(() => _lastScoreId = null);
     try {
       final path = presetPath ??
           await _pickPath(
@@ -239,7 +286,7 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
             dialogTitle: '选择 MusicXML / MXL',
             fallbackName: 'import.musicxml',
           );
-      setState(() => _status = '正在转换（Python / musicxml_to_score）…');
+      _setStatus('正在转换（Python / musicxml_to_score）…', progress: 0.35);
       final derivedTitle = preferredId
           ?.replaceFirst(RegExp(r'^user_pdf_'), '')
           .replaceFirst(RegExp(r'^user_'), '');
@@ -248,65 +295,64 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
         scoreId: preferredId,
         title: derivedTitle,
       );
+      _setStatus('写入曲库…', progress: 0.9);
       await _afterImportOk(result);
     } on _Cancelled {
-      setState(() => _status = '已取消');
+      _setStatus('已取消', clearProgress: true);
     } catch (e, st) {
       pianoFlowLog('Workshop', 'MusicXML import UI failed: $e\n$st');
       final msg = e is StateError ? e.message : '导入失败：$e';
-      setState(() => _status = msg);
+      _setStatus(msg, clearProgress: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _clearBusy();
     }
   }
 
   Future<void> _importMidi() async {
     if (_busy) return;
-    setState(() {
-      _busy = true;
-      _status = '选择 MIDI…';
-      _lastScoreId = null;
-    });
+    _setBusy('选择 MIDI…', progress: 0.05);
+    setState(() => _lastScoreId = null);
     try {
       final path = await _pickPath(
         extensions: const ['mid', 'midi'],
-        dialogTitle: '选择 MIDI（仅草稿）',
+        dialogTitle: '选择 MIDI',
         fallbackName: 'import.mid',
       );
-      setState(() => _status = '正在生成 MIDI 草稿谱（两步转换）…');
+      _setStatus('正在转换 MIDI（两步）…', progress: 0.25);
       final result = await WorkshopMidiImporter.importFile(inputPath: path);
+      _setStatus('写入曲库…', progress: 0.9);
       await _afterImportOk(result);
     } on _Cancelled {
-      setState(() => _status = '已取消');
+      _setStatus('已取消', clearProgress: true);
     } catch (e, st) {
       pianoFlowLog('Workshop', 'MIDI import UI failed: $e\n$st');
       final msg = e is StateError ? e.message : '导入失败：$e';
-      setState(() => _status = msg);
+      _setStatus(msg, clearProgress: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _clearBusy();
     }
   }
 
   Future<void> _importAudio() async {
     if (_busy) return;
-    setState(() {
-      _busy = true;
-      _status = '选择音频…';
-      _lastScoreId = null;
-    });
+    _setBusy('选择音频…', progress: 0.04);
+    setState(() => _lastScoreId = null);
     // Warm ORT while the user picks a file (first import pays less cold start).
     unawaited(
       WorkshopAudioDraftWorker.instance.ensureStarted(
         onProgress: (line) {
           if (!mounted || !_busy) return;
           if (line.contains('ORT')) {
-            setState(() => _status = '预热转录引擎… $line');
+            _setStatus(
+              '预热转录引擎… $line',
+              progress: _fractionFromLine(line) ?? 0.08,
+            );
           }
         },
       ).catchError((Object e) {
@@ -316,46 +362,53 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
     try {
       final path = await _pickPath(
         extensions: const ['wav', 'mp3', 'flac', 'ogg', 'm4a'],
-        dialogTitle: '选择音频（转录草稿·短片段）',
+        dialogTitle: '选择音频（短片段）',
         fallbackName: 'import.wav',
       );
-      setState(() => _status = '正在本地转录（Basic Pitch ONNX，短片段约数秒）…');
+      _setStatus(
+        '正在本地转录（Basic Pitch ONNX，短片段约数秒）…',
+        progress: 0.12,
+      );
       final result = await WorkshopAudioImporter.importFile(
         inputPath: path,
         useDemucs: _useDemucs,
         onProgress: (line) {
           if (!mounted) return;
-          if (line.startsWith('progress=') || line.contains('progress=')) {
-            setState(() => _status = '正在本地转录… $line');
-          } else if (line.contains('dur=') ||
+          final frac = _fractionFromLine(line);
+          if (line.startsWith('progress=') ||
+              line.contains('progress=') ||
+              line.contains('dur=') ||
               line.contains('notes=') ||
               line.contains('truncate') ||
               line.contains('ORT') ||
               line.contains('demucs')) {
-            setState(() => _status = '正在本地转录… $line');
+            _setStatus(
+              '正在本地转录… $line',
+              progress: frac ?? (_progress == null ? 0.2 : null),
+            );
           }
         },
       );
+      _setStatus('写入曲库…', progress: 0.92);
       await _afterImportOk(result);
     } on _Cancelled {
-      setState(() => _status = '已取消');
+      _setStatus('已取消', clearProgress: true);
     } catch (e, st) {
       pianoFlowLog('Workshop', 'Audio import UI failed: $e\n$st');
       final msg = e is StateError ? e.message : '导入失败：$e';
-      setState(() => _status = msg);
+      _setStatus(msg, clearProgress: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _clearBusy();
     }
   }
 
   Future<void> _stagePdf() async {
     if (_busy) return;
+    _setBusy('选择 PDF…', progress: 0.05);
     setState(() {
-      _busy = true;
-      _status = '选择 PDF…';
       _pdfStage = null;
       _omrCandidates = const [];
     });
@@ -365,33 +418,33 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
         dialogTitle: '选择 PDF 乐谱',
         fallbackName: 'score.pdf',
       );
-      setState(() => _status = '正在暂存 PDF…');
+      _setStatus('正在暂存 PDF…', progress: 0.4);
       final staged = await WorkshopPdfGuide.stagePdf(pdfPath: path);
       setState(() {
         _pdfStage = staged;
         _status =
             '${staged.guidance}\n暂存：${staged.stagedPdfPath}\n命令：${staged.omrCommand}';
+        _progress = 1.0;
       });
     } on _Cancelled {
-      setState(() => _status = '已取消');
+      _setStatus('已取消', clearProgress: true);
     } catch (e, st) {
       pianoFlowLog('Workshop', 'PDF stage UI failed: $e\n$st');
       final msg = e is StateError ? e.message : '暂存失败：$e';
-      setState(() => _status = msg);
+      _setStatus(msg, clearProgress: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _clearBusy();
     }
   }
 
-  /// One-shot: pick PDF → OMR → poll → import → practice (draft only).
+  /// One-shot: pick PDF -> OMR -> poll -> import -> practice (draft only).
   Future<void> _pdfOneShotToPractice() async {
     if (_busy) return;
+    _setBusy('选择 PDF…', progress: 0.04);
     setState(() {
-      _busy = true;
-      _status = '选择 PDF…';
       _pdfStage = null;
       _omrCandidates = const [];
       _lastScoreId = null;
@@ -406,13 +459,25 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
         pdfPath: path,
         onProgress: (s) {
           if (!mounted) return;
-          setState(() => _status = s);
+          final frac = _fractionFromLine(s);
+          double? mapped = frac;
+          if (mapped == null) {
+            if (s.contains('暂存')) {
+              mapped = 0.12;
+            } else if (s.contains('启动')) {
+              mapped = 0.2;
+            } else if (s.contains('等待 OMR')) {
+              mapped = 0.25;
+            }
+          }
+          _setStatus(s, progress: mapped);
         },
       );
       setState(() {
         _pdfStage = result.staged;
         _omrCandidates = result.candidates;
         _status = result.message;
+        _progress = result.ok ? 0.8 : null;
       });
       if (!result.ok) {
         if (mounted) {
@@ -429,44 +494,38 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
         preferredId: result.staged.scoreIdHint,
       );
     } on _Cancelled {
-      setState(() => _status = '已取消');
+      _setStatus('已取消', clearProgress: true);
     } catch (e, st) {
       pianoFlowLog('Workshop', 'PDF one-shot failed: $e\n$st');
       final msg = e is StateError ? e.message : 'PDF 一键成谱失败：$e';
-      setState(() => _status = msg);
+      _setStatus(msg, clearProgress: true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _clearBusy();
     }
   }
 
   Future<void> _launchOmr() async {
     final staged = _pdfStage;
     if (staged == null || _busy) return;
-    setState(() {
-      _busy = true;
-      _status = '正在启动 OMR…';
-    });
+    _setBusy('正在启动 OMR…', progress: 0.3);
     try {
       final msg = await WorkshopPdfGuide.tryLaunchOmr(staged: staged);
-      setState(() => _status = msg);
+      _setStatus(msg, progress: 1.0);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _clearBusy();
     }
   }
 
   Future<void> _scanOmrOutputs() async {
     final staged = _pdfStage;
     if (staged == null || _busy) return;
-    setState(() {
-      _busy = true;
-      _status = '正在扫描 OMR 输出…';
-    });
+    _setBusy('正在扫描 OMR 输出…', progress: 0.35);
     try {
       final found = await WorkshopPdfGuide.findOmrMusicXml(
         scoreIdHint: staged.scoreIdHint,
@@ -474,20 +533,21 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
       );
       setState(() {
         _omrCandidates = found;
+        _progress = 1.0;
         if (found.isEmpty) {
           final hint = staged.omrWorkDir ?? 'third_party/scores_musicxml/_omr_work/…';
-          _status = '未找到 MusicXML。请确认 OMR 已完成，输出应在：\n$hint';
+          _status = '未找到 MusicXML。请确认 OMR 已完成，并检查：\n$hint';
         } else {
           _status =
-              '找到 ${found.length} 个 MusicXML（优先 corrected / omr_draft）。'
-              '可一键导入为「自导入」草稿。';
+              '找到 ${found.length} 个 MusicXML（含 corrected / omr_draft）。'
+              '下一步请点「导入并练习」。';
         }
       });
     } catch (e, st) {
       pianoFlowLog('Workshop', 'OMR scan failed: $e\n$st');
-      setState(() => _status = '扫描失败：$e');
+      _setStatus('扫描失败：$e', clearProgress: true);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _clearBusy();
     }
   }
 
@@ -503,8 +563,8 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
     final tool = widget.tool;
     final body = switch (tool.id) {
       WorkshopToolId.importOther =>
-        'MXL 压缩包请直接使用「导入 MusicXML」。其它专有格式仍在筹备。',
-      _ => '「${tool.title}」正在筹备，请先用命令行导入脚本（见曲谱导入 SOP）。',
+        'MXL 请直接使用「导入 MusicXML」。其余专用格式后续扩展。',
+      _ => '「${tool.title}」请用上方对应入口；详见控制台 [PianoFlow/Workshop]。',
     };
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(body)));
     setState(() => _status = body);
@@ -524,7 +584,7 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '仅改标题 / 艺术家 / BPM，不改记谱。仍为自导入，非正式谱。',
+                '仅改标题 / 艺术家 / BPM，不改记谱。质量档仍为自导入。',
                 style: AppTheme.body(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -619,6 +679,7 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
     });
     try {
       await UserImportStore().deleteUserScore(song.id);
+      await ref.read(userLibraryProvider.notifier).forgetSong(song.id);
       ref.invalidate(catalogProvider);
       await _reloadUserSongs();
       setState(() {
@@ -738,6 +799,18 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
                     height: 1.35,
                   ),
                 ),
+              ),
+            ),
+          ],
+          if (_busy) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: _progress,
+                minHeight: 8,
+                backgroundColor: AppColors.surfaceAlt,
+                color: AppColors.accent,
               ),
             ),
           ],
@@ -900,7 +973,7 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
                       onPressed: _busy
                           ? null
                           : () => context.push('/workshop/edit-notes/${s.id}'),
-                      child: const Text('编辑音符表'),
+                      child: const Text('编辑音符'),
                     ),
                     OutlinedButton(
                       onPressed: _busy ? null : () => _editMetadata(s),
@@ -946,32 +1019,32 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
       case WorkshopToolId.importMusicXml:
         return '选择 MusicXML 文件';
       case WorkshopToolId.importMidi:
-        return '选择 MIDI（草稿）';
+        return '选择 MIDI';
       case WorkshopToolId.importAudio:
-        return '选择音频（草稿）';
+        return '选择音频';
       case WorkshopToolId.pdfToScore:
         return 'PDF 一键成谱并练习';
       case WorkshopToolId.editScore:
         return '刷新自导入列表';
       case WorkshopToolId.importOther:
-        return '了解筹备说明';
+        return '查看格式说明';
     }
   }
 
   static String? _honestyBanner(WorkshopToolId id) {
     switch (id) {
       case WorkshopToolId.importMidi:
-        return '诚实说明：${WorkshopMidiImporter.honestyDescription}';
+        return '质量说明：${WorkshopMidiImporter.honestyDescription}';
       case WorkshopToolId.importAudio:
-        return '诚实说明：${WorkshopAudioImporter.honestyDescription}';
+        return '质量说明：${WorkshopAudioImporter.honestyDescription}';
       case WorkshopToolId.pdfToScore:
-        return '诚实说明：OMR 结果未逐音校对前只能是草稿；'
-            '${SongSummary.omrHonestyNotice} 工坊入库一律为「自导入」，不会标正式谱。';
+        return '流程可用。${SongSummary.omrHonestyNotice}'
+            '入库为自导入/OMR 质量档，未校对不会标成正式谱。';
       case WorkshopToolId.importMusicXml:
         return SongSummary.userImportHonestyNotice;
       case WorkshopToolId.editScore:
-        return '自导入可编辑：① 元数据（标题/艺术家/BPM）② 轻量音符表（MIDI/起始拍/时值/手，保存写回 JSON+MusicXML）'
-            '③ 外部打开 MusicXML ④ 删除。仍非正式谱；不是 MuseScore 级排版编辑器。';
+        return '自导入可编辑：① 元数据（标题/艺术家/BPM）② 钢琴卷帘可视化改音高/拍/手（保存写回 JSON+MusicXML）'
+            '③ 外部打开 MusicXML ④ 删除。质量档仍为自导入；不是 MuseScore 级排版编辑器。';
       case WorkshopToolId.importOther:
         return null;
     }
@@ -981,26 +1054,26 @@ class _ToolDetailState extends ConsumerState<_ToolDetail> {
     switch (id) {
       case WorkshopToolId.pdfToScore:
         return '流程：选 PDF → 启动本机 OMR（omr-from-pdf.ps1 / Audiveris）→ '
-            '自动扫描导入 → 进练习。结果为草稿，禁止冒充正式谱。'
+            '自动扫描导入 → 进练习。可跟弹；质量档为自导入/OMR，未校对不标正式谱。'
             '也可下方分步：仅暂存 / 启动 OMR / 扫描。';
       case WorkshopToolId.editScore:
-        return '管理本机自导入：改元数据、打开「编辑音符表」改 MIDI/拍/手并保存、'
-            '外部打开 MusicXML、删除、打开练习。正式谱/OMR 草稿不可在此改。';
+        return '管理本机自导入：改元数据、打开「编辑音符」钢琴卷帘改音高/拍/手并保存、'
+            '外部打开 MusicXML、删除、打开练习。仅编辑自导入曲目。';
       case WorkshopToolId.importMusicXml:
-        return '选择本机 .musicxml / .xml / .mxl，转换为跟弹 JSON 并写入「自导入」曲库。'
+        return '选择本机 .musicxml / .xml / .mxl，转换为跟弹 JSON 并写入曲库。'
             '需要本机 Python 与仓库 scripts/musicxml_to_score.py；'
-            '自导入不会标为正式谱。成功后自动进入练习。';
+            '写入后可跟弹；质量档为自导入。成功后自动进入练习。';
       case WorkshopToolId.importMidi:
-        return '选择 .mid / .midi，经草稿转换写入「自导入」。'
-            '仅作节奏与音高参考，正式精确谱禁止用 MIDI→MusicXML 冒充。'
+        return '选择 .mid / .midi，转换后写入曲库并可练习。'
+            '适合节奏/音高跟弹参考；未校对精确谱请勿当作教材级正式谱。'
             '成功后自动进入练习。';
       case WorkshopToolId.importAudio:
-        return '选择 wav/mp3 等，本机 Basic Pitch ONNX 转录→草稿→自导入，'
-            '成功后自动进入练习。短钢琴片段目标数秒；默认不做频段强调（秒级优先）。'
-            '需 Python + onnxruntime。非正式精确谱。';
+        return '选择 wav/mp3 等，本机 Basic Pitch ONNX 转录后入库并进练习；'
+            '可选 Demucs 分轨（无则跳过并标注）。短钢琴片段目标数秒。'
+            '需 Python + onnxruntime。可跟弹；质量档为自导入。';
       case WorkshopToolId.importOther:
-        return '压缩包 MusicXML（.mxl）已由「导入 MusicXML」支持；'
-            '其它专有格式仍在筹备。';
+        return '压缩的 MusicXML（.mxl）已由「导入 MusicXML」支持；'
+            '点此仅作指引，请改用 MusicXML 入口。';
     }
   }
 }

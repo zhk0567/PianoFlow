@@ -14,6 +14,7 @@ class PianoKeyboard extends StatelessWidget {
     required this.geometry,
     required this.highlighted,
     required this.pressed,
+    this.visualFxEnabled = false,
   });
 
   final KeyboardGeometry geometry;
@@ -21,6 +22,7 @@ class PianoKeyboard extends StatelessWidget {
   /// MIDI → hand for active/waiting highlights. Presence means highlighted.
   final Map<int, Hand> highlighted;
   final Set<int> pressed;
+  final bool visualFxEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +40,7 @@ class PianoKeyboard extends StatelessWidget {
                     height: h,
                     hand: highlighted[geometry.whiteMidis[i]],
                     pressed: pressed.contains(geometry.whiteMidis[i]),
+                    visualFx: visualFxEnabled,
                   ),
               ],
             ),
@@ -54,6 +57,7 @@ class PianoKeyboard extends StatelessWidget {
                   width: geometry.blackWidth,
                   hand: highlighted[m],
                   pressed: pressed.contains(m),
+                  visualFx: visualFxEnabled,
                 ),
               );
             }),
@@ -66,7 +70,6 @@ class PianoKeyboard extends StatelessWidget {
 
 Color _handHighlight(Hand hand, {required bool onBlack}) {
   final base = hand == Hand.left ? AppColors.leftHand : AppColors.rightHand;
-  // Same LH/RH hue on both key types; slight shade tweak for black-key visibility.
   if (onBlack) {
     return Color.lerp(base, Colors.white, 0.12)!;
   }
@@ -80,6 +83,7 @@ class _WhiteKey extends StatelessWidget {
     required this.height,
     required this.hand,
     required this.pressed,
+    this.visualFx = false,
   });
 
   final int midi;
@@ -87,6 +91,7 @@ class _WhiteKey extends StatelessWidget {
   final double height;
   final Hand? hand;
   final bool pressed;
+  final bool visualFx;
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +112,7 @@ class _WhiteKey extends StatelessWidget {
         color: fill,
         border: Border.all(color: AppColors.border, width: 0.8),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
+        boxShadow: null, // FX glow removed — blur shadows stall Windows raster
       ),
       alignment: Alignment.bottomCenter,
       padding: EdgeInsets.only(bottom: height * 0.06),
@@ -135,12 +141,14 @@ class _BlackKey extends StatelessWidget {
     required this.width,
     required this.hand,
     required this.pressed,
+    this.visualFx = false,
   });
 
   final int midi;
   final double width;
   final Hand? hand;
   final bool pressed;
+  final bool visualFx;
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +167,11 @@ class _BlackKey extends StatelessWidget {
         color: fill,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(4)),
         boxShadow: const [
-          BoxShadow(color: Colors.black54, blurRadius: 2, offset: Offset(0, 1)),
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
         ],
       ),
       alignment: Alignment.bottomCenter,

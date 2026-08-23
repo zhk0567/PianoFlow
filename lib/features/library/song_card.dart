@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../shared/models/song.dart';
+import '../../shared/piano_flow_log.dart';
 import '../../shared/theme/app_theme.dart';
+import 'library_repository.dart';
+import 'user_import_store.dart';
 import 'user_library_store.dart';
 
 /// 「唱片」封面卡：大图 + 底部叠字 + 角上收藏。
@@ -27,12 +30,50 @@ class RecordAlbumCard extends ConsumerWidget {
     return pairs[id.hashCode.abs() % pairs.length];
   }
 
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除自导入？'),
+        content: Text(
+          '将删除「${song.title}」及其本地 JSON / MusicXML。曲库打包曲目不受影响。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await UserImportStore().deleteUserScore(song.id);
+      await ref.read(userLibraryProvider.notifier).forgetSong(song.id);
+      ref.invalidate(catalogProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除「${song.title}」')),
+      );
+    } catch (e, st) {
+      pianoFlowLog('Library', 'delete userImport failed: $e\n$st');
+      if (!context.mounted) return;
+      final msg = e is StateError ? e.message : '删除失败：$e';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fav = ref.watch(userLibraryProvider).favorites.contains(song.id);
     final ink = _ink(song.id);
     final hue = ink.$1;
     final deep = ink.$2;
+    final canDelete = song.isUserImport;
 
     return Material(
       color: Colors.transparent,
@@ -159,21 +200,45 @@ class RecordAlbumCard extends ConsumerWidget {
               Positioned(
                 top: 6,
                 right: 6,
-                child: Material(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    tooltip: fav ? '取消收藏' : '收藏',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => ref
-                        .read(userLibraryProvider.notifier)
-                        .toggleFavorite(song.id),
-                    icon: Icon(
-                      fav ? Icons.star_rounded : Icons.star_border_rounded,
-                      color: fav ? AppColors.accent : Colors.white70,
-                      size: 22,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Material(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      shape: const CircleBorder(),
+                      child: IconButton(
+                        tooltip: fav ? '取消收藏' : '收藏',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => ref
+                            .read(userLibraryProvider.notifier)
+                            .toggleFavorite(song.id),
+                        icon: Icon(
+                          fav
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          color: fav ? AppColors.accent : Colors.white70,
+                          size: 22,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (canDelete) ...[
+                      const SizedBox(height: 4),
+                      Material(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          tooltip: '删除自导入',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _confirmDelete(context, ref),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: Colors.white70,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],

@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Stubs restored for score-specific OMR rhythm fixes (invoke via _fix_omr_openings)."""
+"""Stubs: score-specific OMR rhythm helpers moved to scripts/_archive/."""
 from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "scripts"))
-
 
 def main() -> None:
     print(
-        "[PianoFlow/omr] Use: python scripts/_fix_omr_openings.py <target>\n"
-        "  e.g. castle_mid | suzume | moonlight helpers live in _fix_*.py"
+        "[PianoFlow/omr] One-shot helpers live in scripts/_archive/\n"
+        "  e.g. python scripts/_archive/_fix_omr_openings.py <target>"
     )
 
 

@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/auth_controller.dart';
 import '../features/auth/login_page.dart';
+import '../features/exam/exam_tab.dart';
 import '../features/home/constellation_page.dart';
 import '../features/home/discover_tab.dart';
 import '../features/home/home_shell.dart';
@@ -16,8 +19,73 @@ import '../features/sandbox/sandbox_page.dart';
 import '../features/workshop/workshop_note_editor_page.dart';
 import '../features/workshop/workshop_page.dart';
 import '../features/workshop/workshop_tools.dart';
+import '../shared/models/song.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
+
+List<StatefulShellBranch> _shellBranches() {
+  final branches = <StatefulShellBranch>[
+    StatefulShellBranch(
+      routes: [
+        GoRoute(
+          path: '/discover',
+          builder: (context, state) => const DiscoverTab(),
+        ),
+      ],
+    ),
+    StatefulShellBranch(
+      routes: [
+        GoRoute(
+          path: '/library',
+          builder: (context, state) => const LibraryTab(),
+        ),
+      ],
+    ),
+  ];
+  if (!Platform.isAndroid) {
+    branches.addAll([
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/exam',
+            builder: (context, state) => const ExamTab(),
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/workshop',
+            builder: (context, state) {
+              final raw = state.uri.queryParameters['tool'];
+              WorkshopToolId? tool;
+              if (raw != null) {
+                for (final id in WorkshopToolId.values) {
+                  if (id.name == raw) {
+                    tool = id;
+                    break;
+                  }
+                }
+              }
+              return WorkshopPage(initialTool: tool);
+            },
+          ),
+        ],
+      ),
+    ]);
+  }
+  branches.add(
+    StatefulShellBranch(
+      routes: [
+        GoRoute(
+          path: '/profile',
+          builder: (context, state) => const ProfileTab(),
+        ),
+      ],
+    ),
+  );
+  return branches;
+}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
@@ -35,6 +103,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
       if (!auth.isLoggedIn && !loggingIn) return '/login';
       if (auth.isLoggedIn && loggingIn) return '/discover';
+      // Android 首版无考试/工坊 shell 分支；深链落到曲库。
+      if (Platform.isAndroid) {
+        final loc = state.matchedLocation;
+        if (loc.startsWith('/exam') || loc.startsWith('/workshop')) {
+          return '/library';
+        }
+      }
       return null;
     },
     routes: [
@@ -50,58 +125,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, navigationShell) {
           return HomeShell(navigationShell: navigationShell);
         },
-        branches: [
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/discover',
-                builder: (context, state) => const DiscoverTab(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/library',
-                builder: (context, state) => const LibraryTab(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/workshop',
-                builder: (context, state) {
-                  final raw = state.uri.queryParameters['tool'];
-                  WorkshopToolId? tool;
-                  if (raw != null) {
-                    for (final id in WorkshopToolId.values) {
-                      if (id.name == raw) {
-                        tool = id;
-                        break;
-                      }
-                    }
-                  }
-                  return WorkshopPage(initialTool: tool);
-                },
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/profile',
-                builder: (context, state) => const ProfileTab(),
-              ),
-            ],
-          ),
-        ],
+        branches: _shellBranches(),
       ),
       GoRoute(
         path: '/practice/:id',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
-          return PracticePage(songId: id);
+          final q = state.uri.queryParameters;
+          return PracticePage(
+            songId: id,
+            examMode: q['mode'] == 'exam',
+            examRecord: q['record'] == '1',
+            examHand: _parseHand(q['hand']),
+          );
         },
       ),
       GoRoute(
@@ -137,4 +173,17 @@ class _AuthRefresh extends ChangeNotifier {
   }
 
   final Ref ref;
+}
+
+Hand? _parseHand(String? raw) {
+  switch (raw) {
+    case 'left':
+      return Hand.left;
+    case 'right':
+      return Hand.right;
+    case 'both':
+      return Hand.both;
+    default:
+      return null;
+  }
 }

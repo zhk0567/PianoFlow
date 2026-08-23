@@ -25,8 +25,8 @@ abstract final class PracticeConstants {
 
   /// Speed slider / audio clamp.
   static const speedMin = 0.4;
-  static const speedMaxUi = 1.2;
-  static const speedMaxAudio = 1.5;
+  static const speedMaxUi = 2.0;
+  static const speedMaxAudio = 2.0;
 
   /// Master volume slider. 1.0 = 100% (same loudness as before).
   /// Values above 1.0 go past 100% up to [volumeMax] (AudioPlayer is still 0–1;
@@ -108,6 +108,10 @@ abstract final class PracticeConstants {
   static const fallingNotesFlex = 2;
   static const staffFlex = 5;
 
+  /// When「视觉特效」is on, give the waterfall/FX stage a larger share.
+  static const fallingNotesFlexFx = 4;
+  static const staffFlexFx = 4;
+
   /// Minimum staff lane height (px). Must fit Verovio grand staff at [verovioScale]
   /// (~316–340 CSS px); shorter lanes + vertical centering clipped the clef
   /// under the keyboard (looked like occlusion).
@@ -118,9 +122,15 @@ abstract final class PracticeConstants {
   static const staffMaxHeightCompact = 260.0;
   static const staffMaxHeightComfort = 440.0;
 
+  /// Slightly tighter staff caps when FX stage is boosted.
+  static const staffMaxHeightCompactFx = 230.0;
+  static const staffMaxHeightComfortFx = 360.0;
+
   /// Minimum falling-notes lane height (px) so the waterfall is not crushed.
   static const fallingMinHeightCompact = 80.0;
   static const fallingMinHeightComfort = 110.0;
+  static const fallingMinHeightCompactFx = 120.0;
+  static const fallingMinHeightComfortFx = 160.0;
 
   /// Gaps between falling / keyboard / staff in the stage column.
   /// Falling↔keyboard is 0 so the hit line meets the key tops (Flowkey).
@@ -128,22 +138,31 @@ abstract final class PracticeConstants {
   static const stageFallingKeyboardGap = 0.0;
 
   /// Hit line sits this many px above the falling-lane bottom (≈ half stroke).
-  static const fallingHitLineInset = 1.0;
+  static const fallingHitLineInset = 3.0;
 
   /// Split usable stage height (excluding keyboard + gaps) between lanes.
+  ///
+  /// [boostFalling]: larger waterfall share (avoid for FX — staff readability
+  /// first; FX glamour comes from paint quality, not stealing staff height).
   static ({double falling, double staff}) splitStageLanes({
     required double usableHeight,
     required bool compact,
+    bool boostFalling = false,
   }) {
     final usable = usableHeight.clamp(0.0, double.infinity);
     if (usable <= 0) return (falling: 0.0, staff: 0.0);
 
     final minStaff = compact ? staffMinHeightCompact : staffMinHeightComfort;
-    final maxStaff = compact ? staffMaxHeightCompact : staffMaxHeightComfort;
-    final minFalling =
-        compact ? fallingMinHeightCompact : fallingMinHeightComfort;
-    final totalFlex = fallingNotesFlex + staffFlex;
-    var staffH = usable * staffFlex / totalFlex;
+    final maxStaff = compact
+        ? (boostFalling ? staffMaxHeightCompactFx : staffMaxHeightCompact)
+        : (boostFalling ? staffMaxHeightComfortFx : staffMaxHeightComfort);
+    final minFalling = compact
+        ? (boostFalling ? fallingMinHeightCompactFx : fallingMinHeightCompact)
+        : (boostFalling ? fallingMinHeightComfortFx : fallingMinHeightComfort);
+    final fallFlex = boostFalling ? fallingNotesFlexFx : fallingNotesFlex;
+    final stFlex = boostFalling ? staffFlexFx : staffFlex;
+    final totalFlex = fallFlex + stFlex;
+    var staffH = usable * stFlex / totalFlex;
 
     // Prefer a readable staff floor when there is room.
     if (usable >= minStaff + minFalling) {
@@ -152,7 +171,10 @@ abstract final class PracticeConstants {
     } else {
       // Cramped window: still keep most height for the grand staff so the bass
       // staff is not almost entirely clipped ("一边遮挡完了").
-      final staffFloor = (usable * 0.62).clamp(minFalling, usable - minFalling);
+      // With FX boost, still protect staff but leave more for falling.
+      final staffShare = boostFalling ? 0.52 : 0.62;
+      final staffFloor =
+          (usable * staffShare).clamp(minFalling * 0.5, usable - minFalling);
       staffH = staffH.clamp(staffFloor, usable - minFalling * 0.5);
     }
     return (falling: usable - staffH, staff: staffH);
@@ -195,12 +217,11 @@ abstract final class PracticeConstants {
   /// Seek/play counts as "at start" (apply lead-in) at or below this beat.
   static const playbackLeadInSeekEps = 0.05;
 
-  /// Parked transport position while idle at the piece start (negative pre-roll).
-  /// Idle and play share this so pressing play does not snap 0 → −lead.
-  static double get playbackStartParkBeats {
-    final lead = playbackLeadInBeats;
-    return lead > 0 ? -lead : 0.0;
-  }
+  /// Parked transport position while idle at the piece start (negative pre-roll
+  /// when the first note is at beat 0). Prefer
+  /// [PracticeLoopLogic.startParkBeats] with the score's first onset.
+  static double get playbackStartParkBeats =>
+      -playbackLeadInBeats;
 
   // —— Wait-mode (跟弹) timing — Flowkey-style ————————————————
 
@@ -225,8 +246,8 @@ abstract final class PracticeConstants {
 
   // —— Lightweight visual FX ————————————————————————————————
 
-  /// Hold last chord visuals before settlement sheet (末音悬停).
-  static const endHangMs = 1400;
+  /// Hold last chord briefly is replaced by animated rewind to start.
+  static const endRewindMs = 750;
 
   /// Hands-dialogue arc: both hands graded within this window.
   static const handsDialogueMs = 220;

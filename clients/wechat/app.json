@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/library/library",
+    "pages/practice/practice"
+  ],
+  "window": {
+    "navigationBarTitleText": "PianoFlow",
+    "navigationBarBackgroundColor": "#0f1419",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0f1419"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

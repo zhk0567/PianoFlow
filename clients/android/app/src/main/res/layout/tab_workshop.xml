@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B0E13">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="谱面工坊"
+            android:textColor="#F5F2EB"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="12dp"
+            android:text="MusicXML / MIDI / 音频导入。PDF 暂存+Windows OMR 指引。Demucs 完整分轨请用 Windows。"
+            android:textColor="#9AA3B2" />
+
+        <Button
+            android:id="@+id/btnImportXml"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#E8A849"
+            android:text="选择 MusicXML 导入"
+            android:textColor="#000000" />
+
+        <Button
+            android:id="@+id/btnImportMidi"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#E8A849"
+            android:text="选择 MIDI 导入"
+            android:textColor="#000000" />
+
+        <Button
+            android:id="@+id/btnImportAudio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#E8A849"
+            android:text="选择音频导入（草稿）"
+            android:textColor="#000000" />
+
+        <Button
+            android:id="@+id/btnImportPdf"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#3A4556"
+            android:text="暂存 PDF（OMR 用 Windows）"
+            android:textColor="#F5F2EB" />
+
+        <TextView
+            android:id="@+id/workshopStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="8dp"
+            android:textColor="#9AA3B2" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="16dp"
+            android:text="我的自导入"
+            android:textColor="#F5F2EB"
+            android:textStyle="bold" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/userImportList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false" />
+    </LinearLayout>
+</ScrollView>

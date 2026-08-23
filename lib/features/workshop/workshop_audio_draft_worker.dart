@@ -53,13 +53,13 @@ class WorkshopAudioDraftWorker {
     );
     _proc = proc;
     _stdoutSub = proc.stdout
-        .transform(utf8.decoder)
+        .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
         .listen(_onStdoutLine, onError: (Object e) {
       pianoFlowLog('Workshop', 'worker stdout error: $e');
     });
     _stderrSub = proc.stderr
-        .transform(utf8.decoder)
+        .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
         .listen((line) {
       final t = line.trim();

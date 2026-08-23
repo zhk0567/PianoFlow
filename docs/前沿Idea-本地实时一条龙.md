@@ -78,72 +78,22 @@
 | 成谱 | **秒级**出可练谱并进入练习 | 可补：按曲长的秒数上限、机型 |
 | 三路同步 | 正常播放肉眼不明显漂 | 可补：漂移上限（拍 / ms） |
 
-### 5.1 本战役证明范围（2026-08-13 · 体系通关已冻结）
+### 5.1 本战役证明范围（体系通关已冻结）
 
-与 [产品定位 · 体系通关](./产品定位-一条龙体系.md) 对齐：
-
-- **已通关证明**：曲库 + 音频（可选 Demucs）+ PDF 一键成谱进练；跟弹/三路可用可观测；短片段秒级。
-- **仍战役外**：formal 人眼校对生产线、跨平台 Verovio、实验室误推进仪表盘、云私教。
-- 草稿诚实；未校对禁止升 formal。
-
-通关冻结后默认不再自动演进；未标定的「可更好」只进 backlog。
-
-### 落地进度（实现备忘）
-
-| 日期 | 项 | 说明 |
-|------|-----|------|
-| 2026-08-12 | 跟弹·捕获窗 | `PitchService` 真音频窗 0.32s→**0.25s**；BP `tail` 6→4 |
-| 2026-08-12 | 跟弹·示范音抑制 | 软 cue `echoSuppressGuide` 480→**300ms**；软 cue **不**扇出泛音 suppress |
-| 2026-08-12 | 跟弹·误 miss | 冻结时邻键 ±1 不计 miss |
-| 2026-08-12 | 成谱·秒级入口 | `audio_to_practice_draft.py` + 工坊「导入音频」（userImport） |
-| 2026-08-12 | 成谱·频段强调 | `--emphasize-piano` 简易带通（非真分轨） |
-| 2026-08-12 | 三路对齐 | Verovio `_posThrottleMs` 50→16；heartbeat 80→33；rate 过 0 强制 snap |
-| 2026-08-12 | 再练·弱项 | 结算「练薄弱段」：miss 拍聚类 → 开循环再练 |
-| 2026-08-12 | 跟弹·±1 命中 | 估偏半音映射到 waitingFor 记命中；gate 静音条视 ±1 为仍在响 |
-| 2026-08-12 | 成谱·自动进练 | 工坊导入成功后 `push` 练习页（合上「出完就能练」） |
-| 2026-08-12 | 跟弹·边沿命中 | frame 仅武装+gap 后再击；延音/共有音不再电平推进 |
-| 2026-08-12 | 跟弹·noteOn 穿透 | suppress 结束后 noteOn 可记命中，不必先松键凑 quiet |
-| 2026-08-12 | 跟弹·延迟清 emitted | cue 后等 suppress 再 clearEmitted（仅 cue 前已响音） |
-| 2026-08-12 | 跟弹·再击/hop | `_releaseFrames` 2→1；pitch `_hop` ~40ms→**~30ms** |
-| 2026-08-12 | 成谱·更快草稿 | 默认 `--hop-sec` 0.25→**0.4**；stdout `progress=` + 工坊流式状态 |
-| 2026-08-12 | 成谱·限长预览 | 默认 `--max-sec 45` 截前段，长曲仍落秒级 |
-| 2026-08-12 | 三路·外推 | Verovio `MAX_EXTRAPOLATE_SEC` 0.12→**0.08** |
-| 2026-08-12 | 跟弹·cue 更轻 | `echoSuppressGuide` 300→**250ms**；`guideVolumeWithMic` 0.28→**0.22** |
-| 2026-08-12 | 跟弹·停 cue 残响 | suppress 到期 `stopOneShots(cued)`，声学寿命对齐 250ms |
-| 2026-08-12 | 成谱·默关强调 | 工坊默认关闭 `--emphasize-piano`（秒级优先） |
-| 2026-08-12 | 跟弹·多音门限 | BP `relativeThresh` 0.62→**0.55**（弱键少被吃） |
-| 2026-08-12 | 跟弹·停声竞态 | `_resetGuideRetrigger` 先 `stopOneShots`（命中推进不取消停声） |
-| 2026-08-12 | 成谱·同进程入库 | ONNX events 直写 JSON+catalog，去掉 MIDI/双 Python 子进程 |
-| 2026-08-12 | 跟弹·cue 未满足 | 冻结 soft-cue 只播/arm `expected−satisfied`（不重 cue 早命中） |
-| 2026-08-12 | 跟弹·unlock 清边沿 | `locked` 空时立刻 `_emitted.clear`（不等 280ms 定时器） |
-| 2026-08-12 | 跟弹·按下反馈 | 恢复 `HitFeedbackOverlay`；`hit-latency` 控制台可观测 |
-| 2026-08-12 | 成谱·解码诚实 | 非 WAV/无 soundfile 时明确报错；音频草稿写盘冒烟测 |
-| 2026-08-12 | 跟弹·BP 真上下文 | PitchService ~2s 滚动环；稳态不再「静音垫 + 0.25s」 |
-| 2026-08-12 | 成谱·ffmpeg | `audio_to_practice_draft` soundfile→PCM WAV→ffmpeg；`progress=decode=` |
-| 2026-08-12 | 三路·单时钟 | 去掉 Verovio 33ms heartbeat；`MAX_EXTRAPOLATE_SEC` 0.08→0.032 |
-| 2026-08-12 | 跟弹·reedge | suppress 后 `clearEmitted` + `reedgeIfLocked`（按住共有音立刻出边） |
-| 2026-08-12 | 跟弹·capture延迟 | `PitchNoteOn.captureAt`；日志 `hit-capture-ms` / `hit-wait-ms` |
-| 2026-08-12 | 成谱·截断诚实 | `--max-sec` 写入 description「仅前 N 秒预览」+ 练习页 banner |
-| 2026-08-12 | 三路·节拍器 | 冻结 rate=0 停 metro；恢复 align 再开（跟 PracticeClock） |
-| 2026-08-12 | 跟弹·capture判定 | `PracticePosHistory` 插值；grade 用 capture 拍点 |
-| 2026-08-12 | 三路·Staff冲刷 | 去掉 lane 16ms Timer；靠 Runtime in-flight 队列 |
-| 2026-08-12 | 成谱·ORT暖会话 | `--serve` worker + 选文件预热；失败回退 one-shot |
-| 2026-08-12 | 跟弹·BP增量环 | 22.05kHz 环；每 hop 只重采样 ~30ms（修重叠灌窗） |
-| 2026-08-12 | 成谱·启动预热 | `main` post-frame 启 worker（对齐 Verovio） |
-| 2026-08-12 | 三路·外推/RTT | `MAX_EXTRAPOLATE`→0.10；`pushPosition rttMs≥25` 日志 |
-| 2026-08-12 | 成谱·静音跳ORT | 低 RMS hop 不跑 `_infer_window` |
+- **已通关**：曲库 + 音频（可选 Demucs）+ PDF 一键成谱进练；跟弹/三路可用可观测；短片段秒级。权威表见 [`战役终态验收勾选.md`](./战役终态验收勾选.md)。
+- **战役外 / 可更好**：见 [`战役外-backlog.md`](./战役外-backlog.md)。
+- 实现细项历史以 [`进化日志.md`](./进化日志.md) 为准（本文不再维护落地进度长表）。
 
 ---
 
-## 6. 与文档 / 排期的关系
+## 6. 与文档的关系
 
 | 文档 | 关系 |
 |------|------|
-| [产品定位-一条龙体系.md](./产品定位-一条龙体系.md) | 身份与总图；本文是其上的**前沿 idea** |
-| [音高识别.md](./音高识别.md) | 跟弹识音实现细节 |
-| [五线谱.md](./五线谱.md) | 谱面通道；同步问题常涉此 |
-| [开发计划.md](./开发计划.md) | 排期按本文 §3 优先级挂任务 |
-| [需求汇总.md](./需求汇总.md) | 现行功能；改体验时对照本文「更加好」 |
+| [产品定位-一条龙体系.md](./产品定位-一条龙体系.md) | 身份与总图 |
+| [音高识别.md](./音高识别.md) / [五线谱.md](./五线谱.md) | 跟弹与谱面实现细节 |
+| [需求汇总.md](./需求汇总.md) | 现行功能 |
+| [战役外-backlog.md](./战役外-backlog.md) | 冻结后「可更好」 |
 
 ---
 
@@ -152,3 +102,4 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-08-12 | 初稿：三块前沿主张；优先级 跟弹体感 > 成谱秒级 > 三路不明显漂 |
+| 2026-08-21 | 删落地进度长表；战役外改链 backlog |

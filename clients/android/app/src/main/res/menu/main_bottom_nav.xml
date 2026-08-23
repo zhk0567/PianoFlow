@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_home" android:title="首页" android:icon="@android:drawable/ic_menu_compass" />
+    <item android:id="@+id/nav_library" android:title="曲库" android:icon="@android:drawable/ic_menu_sort_by_size" />
+    <item android:id="@+id/nav_exam" android:title="考试" android:icon="@android:drawable/ic_menu_agenda" />
+    <item android:id="@+id/nav_workshop" android:title="工坊" android:icon="@android:drawable/ic_menu_edit" />
+    <item android:id="@+id/nav_profile" android:title="我的" android:icon="@android:drawable/ic_menu_myplaces" />
+</menu>

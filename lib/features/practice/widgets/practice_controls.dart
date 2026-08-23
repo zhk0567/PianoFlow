@@ -5,6 +5,7 @@ import '../../../shared/theme/app_theme.dart';
 import '../practice_clock.dart';
 import '../practice_constants.dart';
 import '../practice_models.dart';
+import '../practice_stage_theme.dart';
 import 'visual_metronome.dart';
 
 /// Bottom control strip for the practice page — transport / mode / options.
@@ -31,6 +32,8 @@ class PracticeControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = snap.settings;
+    final stage = PracticeStageTheme.of(visualFxEnabled: s.visualFxEnabled);
+    final baseTheme = Theme.of(context);
     final segmentStyle = ButtonStyle(
       visualDensity: VisualDensity.compact,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -39,12 +42,16 @@ class PracticeControls extends StatelessWidget {
       ),
     );
 
-    return Container(
+    return Theme(
+      data: stage.applyTo(baseTheme),
+      child: Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.borderSubtle)),
+      decoration: BoxDecoration(
+        color: stage.panelBg,
+        border: Border(
+          top: BorderSide(color: stage.panelBorder, width: 1.4),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -56,7 +63,7 @@ class PracticeControls extends StatelessWidget {
                 onPressed: onPlay,
                 tooltip: snap.isPlaying ? '暂停' : '播放',
                 style: IconButton.styleFrom(
-                  backgroundColor: AppColors.accent,
+                  backgroundColor: stage.accent,
                   foregroundColor: Colors.black,
                   minimumSize: const Size(44, 44),
                 ),
@@ -121,129 +128,97 @@ class PracticeControls extends StatelessWidget {
                       : snap.endHangActive
                           ? '收束…'
                           : '考试中 · 不可拖动进度',
-                  style: AppTheme.body(fontSize: 11, color: AppColors.accent),
+                  style: AppTheme.body(fontSize: 11, color: stage.accent),
                 ),
               ),
             ),
           const SizedBox(height: 4),
-          // Mode + hand（考试不是顶层模式，见下方「考试模式」开关）
+          // Mode + hand（考试由 /exam 大厅进入，此处锁定）
           Row(
             children: [
               Expanded(
-                child: SegmentedButton<PracticeMode>(
+                child: s.mode.isExam
+                    ? Container(
+                        height: 40,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: stage.accent.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: stage.accent.withValues(alpha: 0.45),
+                          ),
+                        ),
+                        child: Text(
+                          '考试中 · 规则已锁定',
+                          style: AppTheme.body(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: stage.accent,
+                          ),
+                        ),
+                      )
+                    : SegmentedButton<PracticeMode>(
+                        style: segmentStyle,
+                        segments: const [
+                          ButtonSegment(
+                            value: PracticeMode.autoPlay,
+                            label: Text('自动'),
+                          ),
+                          ButtonSegment(
+                            value: PracticeMode.wait,
+                            label: Text('练习'),
+                          ),
+                        ],
+                        selected: {
+                          s.mode.isAutoPlay
+                              ? PracticeMode.autoPlay
+                              : PracticeMode.wait,
+                        },
+                        onSelectionChanged: (v) {
+                          final mode = v.first;
+                          if (mode.isAutoPlay) {
+                            onSettings(s.copyWith(
+                              mode: PracticeMode.autoPlay,
+                              guideAudio: true,
+                            ));
+                          } else {
+                            onSettings(s.copyWith(
+                              mode: PracticeMode.wait,
+                              guideAudio: false,
+                            ));
+                          }
+                        },
+                      ),
+              ),
+              if (!s.mode.isExam) ...[
+                const SizedBox(width: 10),
+                SegmentedButton<Hand>(
                   style: segmentStyle,
                   segments: const [
                     ButtonSegment(
-                      value: PracticeMode.autoPlay,
-                      label: Text('自动'),
+                      value: Hand.left,
+                      label: Text('左'),
+                      tooltip: '只练左手',
                     ),
                     ButtonSegment(
-                      value: PracticeMode.wait,
-                      label: Text('练习'),
+                      value: Hand.right,
+                      label: Text('右'),
+                      tooltip: '只练右手',
+                    ),
+                    ButtonSegment(
+                      value: Hand.both,
+                      label: Text('双'),
+                      tooltip: '双手',
                     ),
                   ],
-                  selected: {
-                    s.mode.isAutoPlay
-                        ? PracticeMode.autoPlay
-                        : PracticeMode.wait,
-                  },
-                  onSelectionChanged: (v) {
-                    final mode = v.first;
-                    if (mode.isAutoPlay) {
-                      onSettings(s.copyWith(
-                        mode: PracticeMode.autoPlay,
-                        guideAudio: true,
-                      ));
-                    } else {
-                      onSettings(s.copyWith(
-                        mode: PracticeMode.wait,
-                        guideAudio: false,
-                      ));
-                    }
-                  },
+                  selected: {s.hand},
+                  onSelectionChanged: (v) =>
+                      onSettings(s.copyWith(hand: v.first)),
                 ),
-              ),
-              const SizedBox(width: 10),
-              SegmentedButton<Hand>(
-                style: segmentStyle,
-                segments: const [
-                  ButtonSegment(
-                    value: Hand.left,
-                    label: Text('左'),
-                    tooltip: '只练左手',
-                  ),
-                  ButtonSegment(
-                    value: Hand.right,
-                    label: Text('右'),
-                    tooltip: '只练右手',
-                  ),
-                  ButtonSegment(
-                    value: Hand.both,
-                    label: Text('双'),
-                    tooltip: '双手',
-                  ),
-                ],
-                selected: {s.hand},
-                onSelectionChanged: (v) =>
-                    onSettings(s.copyWith(hand: v.first)),
-              ),
+              ],
             ],
           ),
-          if (s.mode.isPractice) ...[
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Text(
-                  '考试模式',
-                  style: AppTheme.body(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: s.mode.isExam
-                        ? AppColors.accent
-                        : AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Transform.scale(
-                  scale: 0.85,
-                  alignment: Alignment.centerLeft,
-                  child: Switch(
-                    value: s.mode.isExam,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    onChanged: (on) {
-                      if (on) {
-                        onSettings(s.copyWith(
-                          mode: PracticeMode.exam,
-                          guideAudio: false,
-                          loopEnabled: false,
-                        ));
-                      } else {
-                        onSettings(s.copyWith(mode: PracticeMode.wait));
-                      }
-                    },
-                  ),
-                ),
-                if (s.mode.isExam) ...[
-                  const SizedBox(width: 8),
-                  _OptionChip(
-                    label: '录制',
-                    selected: s.examRecordAudio,
-                    onSelected: (v) =>
-                        onSettings(s.copyWith(examRecordAudio: v)),
-                  ),
-                  if (snap.ghostHits.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    _OptionChip(
-                      label: '残影',
-                      selected: s.showGhost,
-                      onSelected: (v) =>
-                          onSettings(s.copyWith(showGhost: v)),
-                    ),
-                  ],
-                ],
-              ],
-            ),
-          ],
           const SizedBox(height: 4),
           // Speed + option chips
           Row(
@@ -264,7 +239,7 @@ class PracticeControls extends StatelessWidget {
                   style: AppTheme.body(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.accent,
+                    color: stage.accent,
                   ),
                 ),
               ),
@@ -312,15 +287,6 @@ class PracticeControls extends StatelessWidget {
                         enabled: s.metronome,
                         isPlaying: snap.isPlaying,
                       ),
-                      if (s.mode.allowsLoop) ...[
-                        const SizedBox(width: 6),
-                        _OptionChip(
-                          label: '循环',
-                          selected: s.loopEnabled,
-                          onSelected: (v) =>
-                              onSettings(s.copyWith(loopEnabled: v)),
-                        ),
-                      ],
                       const SizedBox(width: 6),
                       _OptionChip(
                         label: '装饰特效',
@@ -353,7 +319,7 @@ class PracticeControls extends StatelessWidget {
                   style: AppTheme.body(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.accent,
+                    color: stage.accent,
                   ),
                 ),
               ),
@@ -398,7 +364,7 @@ class PracticeControls extends StatelessWidget {
                         style: AppTheme.body(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.accent,
+                          color: stage.accent,
                         ),
                       )
                     : s.mode.isAutoPlay
@@ -414,7 +380,7 @@ class PracticeControls extends StatelessWidget {
                                 '开场准备',
                                 style: AppTheme.body(
                                   fontSize: 12,
-                                  color: AppColors.accent,
+                                  color: stage.accent,
                                 ),
                               )
                             : const SizedBox.shrink(),
@@ -422,6 +388,7 @@ class PracticeControls extends StatelessWidget {
             ),
         ],
       ),
+    ),
     );
   }
 
@@ -454,14 +421,16 @@ class _OptionChip extends StatelessWidget {
       labelStyle: AppTheme.body(
         fontSize: 12,
         fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-        color: selected ? AppColors.accent : AppColors.textSecondary,
+        color: selected
+            ? Theme.of(context).colorScheme.primary
+            : AppColors.textSecondary,
       ),
-      selectedColor: AppColors.accentSoft,
-      backgroundColor: AppColors.surfaceAlt,
+      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
       side: BorderSide(
         color: selected
-            ? AppColors.accent.withValues(alpha: 0.45)
-            : AppColors.border,
+            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.65)
+            : Theme.of(context).colorScheme.outline,
       ),
       onSelected: onSelected,
     );

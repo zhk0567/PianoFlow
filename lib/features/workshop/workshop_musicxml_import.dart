@@ -34,7 +34,7 @@ abstract final class WorkshopMusicXmlImporter {
       title: title,
       artist: artist ?? '自导入',
       description: description ??
-          '工坊 MusicXML 自导入（非正式谱，未做教材级校对）。',
+          '工坊 MusicXML 导入（可跟弹；自导入质量档，未做教材级校对）。',
     );
   }
 }

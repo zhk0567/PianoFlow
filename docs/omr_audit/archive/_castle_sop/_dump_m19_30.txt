@@ -1,0 +1,84 @@
+=== m19 ===
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '18', 'type': 'half', 'voice': '1', 'staff': '1'}
+{'pitch': 'A4', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'A4', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'A3', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '5', 'staff': '2'}
+=== m20 ===
+{'pitch': 'F5', 'rest': False, 'chord': False, 'dur': '9', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'D5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'F5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'F2', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '5', 'staff': '2'}
+=== m21 ===
+{'pitch': 'A4', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'G3', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '5', 'staff': '2'}
+=== m22 ===
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'D5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'D5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'F5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'C3', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+{'pitch': 'G2', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+=== m23 ===
+{'pitch': 'A4', 'rest': False, 'chord': False, 'dur': '9', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'G4', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'A4', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'F2', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '5', 'staff': '2'}
+=== m24 ===
+{'pitch': 'B4', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'A4', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'G4', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'F4', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'G2', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '5', 'staff': '2'}
+=== m25 ===
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'A2', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '5', 'staff': '2'}
+{'pitch': 'C3', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '5', 'staff': '2'}
+{'pitch': 'E3', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '5', 'staff': '2'}
+{'pitch': 'A3', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '5', 'staff': '2'}
+{'pitch': 'C4', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+=== m26 ===
+{'pitch': 'A5', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '1', 'staff': '1'}
+{'pitch': 'G5', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'A3', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+{'pitch': 'G3', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+=== m27 ===
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'D5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '1', 'staff': '1'}
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'F3', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '5', 'staff': '2'}
+=== m28 ===
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'D5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'F5', 'rest': False, 'chord': False, 'dur': '3', 'type': 'eighth', 'voice': '1', 'staff': '1'}
+{'pitch': 'G5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'G2', 'rest': False, 'chord': False, 'dur': '24', 'type': 'whole', 'voice': '5', 'staff': '2'}
+=== m29 ===
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '18', 'type': 'half', 'voice': '1', 'staff': '1'}
+{'pitch': 'C5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'C3', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+{'pitch': 'G3', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+=== m30 ===
+{'pitch': 'D5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'pitch': 'F5', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '1', 'staff': '1'}
+{'pitch': 'E5', 'rest': False, 'chord': False, 'dur': '6', 'type': 'quarter', 'voice': '1', 'staff': '1'}
+{'tag': 'backup', 'dur': '24'}
+{'pitch': 'F3', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}
+{'pitch': 'C4', 'rest': False, 'chord': False, 'dur': '12', 'type': 'half', 'voice': '5', 'staff': '2'}

@@ -6,6 +6,7 @@ import '../keyboard_geometry.dart';
 import '../note_window_index.dart';
 import '../practice_constants.dart';
 import '../practice_models.dart';
+import '../practice_stage_theme.dart';
 
 class FallingNotesLane extends StatelessWidget {
   const FallingNotesLane({
@@ -15,9 +16,6 @@ class FallingNotesLane extends StatelessWidget {
     required this.positionBeats,
     required this.pixelsPerBeat,
     required this.waitingFor,
-    required this.loopEnabled,
-    required this.loopStart,
-    required this.loopEnd,
     this.visualFxEnabled = false,
     this.ghostHits = const [],
     this.showGhost = false,
@@ -28,9 +26,6 @@ class FallingNotesLane extends StatelessWidget {
   final double positionBeats;
   final double pixelsPerBeat;
   final Set<int> waitingFor;
-  final bool loopEnabled;
-  final double loopStart;
-  final double loopEnd;
   final bool visualFxEnabled;
   final List<GhostHit> ghostHits;
   final bool showGhost;
@@ -42,7 +37,9 @@ class FallingNotesLane extends StatelessWidget {
         top: Radius.circular(AppRadii.md),
       ),
       child: ColoredBox(
-        color: AppColors.surface,
+        color: visualFxEnabled
+            ? PracticeStageTheme.midnight.waterfallMid
+            : AppColors.surface,
         child: CustomPaint(
           painter: _FallingNotesPainter(
             geometry: geometry,
@@ -50,9 +47,6 @@ class FallingNotesLane extends StatelessWidget {
             positionBeats: positionBeats,
             pixelsPerBeat: pixelsPerBeat,
             waitingFor: waitingFor,
-            loopEnabled: loopEnabled,
-            loopStart: loopStart,
-            loopEnd: loopEnd,
             visualFxEnabled: visualFxEnabled,
             ghostHits: (showGhost && visualFxEnabled) ? ghostHits : const [],
           ),
@@ -70,9 +64,6 @@ class _FallingNotesPainter extends CustomPainter {
     required this.positionBeats,
     required this.pixelsPerBeat,
     required this.waitingFor,
-    required this.loopEnabled,
-    required this.loopStart,
-    required this.loopEnd,
     required this.visualFxEnabled,
     required this.ghostHits,
   });
@@ -82,40 +73,13 @@ class _FallingNotesPainter extends CustomPainter {
   final double positionBeats;
   final double pixelsPerBeat;
   final Set<int> waitingFor;
-  final bool loopEnabled;
-  final double loopStart;
-  final double loopEnd;
   final bool visualFxEnabled;
   final List<GhostHit> ghostHits;
 
   @override
   void paint(Canvas canvas, Size size) {
     final hitY = size.height - PracticeConstants.fallingHitLineInset;
-
-    final guidePaint = Paint()
-      ..color = AppColors.border.withValues(alpha: 0.28)
-      ..strokeWidth = 1;
-    for (var i = 1; i < geometry.whiteKeyCount; i++) {
-      final x = geometry.whiteKeyLeft(i);
-      canvas.drawLine(Offset(x, 0), Offset(x, hitY), guidePaint);
-    }
-
-    if (loopEnabled) {
-      final top = hitY - (loopEnd - positionBeats) * pixelsPerBeat;
-      final bottom = hitY - (loopStart - positionBeats) * pixelsPerBeat;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(
-            0,
-            top.clamp(-size.height, size.height * 2),
-            size.width,
-            bottom.clamp(-size.height, size.height * 2),
-          ),
-          const Radius.circular(8),
-        ),
-        Paint()..color = AppColors.accent.withValues(alpha: 0.07),
-      );
-    }
+    final stage = PracticeStageTheme.of(visualFxEnabled: visualFxEnabled);
 
     final lookAhead = (hitY / pixelsPerBeat) + 2.0;
     final lookBehind = (size.height / pixelsPerBeat) + 4.0;
@@ -125,6 +89,51 @@ class _FallingNotesPainter extends CustomPainter {
       lookBehind: lookBehind,
       lookAhead: lookAhead,
     );
+
+    final phase = (positionBeats * 2.2).remainder(1.0).abs();
+
+    if (visualFxEnabled) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              stage.waterfallTop,
+              stage.waterfallMid,
+              stage.waterfallNear,
+              stage.waterfallHitGlow,
+            ],
+            stops: const [0.0, 0.55, 0.88, 1.0],
+          ).createShader(Offset.zero & size),
+      );
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              stage.auroraCool.withValues(alpha: 0.14),
+              Colors.transparent,
+              Colors.transparent,
+              stage.auroraCool.withValues(alpha: 0.14),
+            ],
+            stops: const [0.0, 0.16, 0.84, 1.0],
+          ).createShader(Offset.zero & size),
+      );
+    }
+
+    final guidePaint = Paint()
+      ..color = visualFxEnabled
+          ? stage.accent.withValues(alpha: 0.10 + 0.04 * phase)
+          : AppColors.borderSubtle.withValues(alpha: 0.55)
+      ..strokeWidth = visualFxEnabled ? 1.2 : 1;
+    for (var i = 1; i < geometry.whiteKeyCount; i++) {
+      final x = geometry.whiteKeyLeft(i);
+      canvas.drawLine(Offset(x, 0), Offset(x, hitY), guidePaint);
+    }
 
     for (final n in visible) {
       final cx = geometry.midiToCenterX(n.midi);
@@ -149,36 +158,35 @@ class _FallingNotesPainter extends CustomPainter {
           (n.start - positionBeats) >= -0.12;
       final base =
           n.hand == Hand.left ? AppColors.leftHand : AppColors.rightHand;
-      final fillColor = waiting ? AppColors.accent : base;
+      final fillColor = waiting ? stage.accent : base;
 
-      canvas.drawRRect(rrect, Paint()..color = fillColor);
-
-      if (visualFxEnabled) {
-        final sheenH = (barH * 0.14).clamp(2.0, 8.0);
+      // FX path: solid fill (no top sheen).
+      if (visualFxEnabled && waiting) {
         canvas.drawRRect(
-          RRect.fromRectAndCorners(
-            Rect.fromLTWH(
-              rect.left + 1.5,
-              rect.top + 1.5,
-              rect.width - 3,
-              sheenH,
-            ),
-            topLeft: radius,
-            topRight: radius,
-            bottomLeft: const Radius.circular(3),
-            bottomRight: const Radius.circular(3),
+          RRect.fromRectAndRadius(
+            rect.inflate(2.0),
+            Radius.circular((barW * 0.45).clamp(3.0, 12.0)),
           ),
-          Paint()..color = Colors.white.withValues(alpha: 0.08),
+          Paint()..color = fillColor.withValues(alpha: 0.22 + 0.08 * phase),
         );
       }
+
+      canvas.drawRRect(rrect, Paint()..color = fillColor);
 
       canvas.drawRRect(
         rrect,
         Paint()
-          ..color = Colors.white.withValues(alpha: waiting ? 0.85 : 0.18)
+          ..color = Colors.white.withValues(
+            alpha: waiting
+                ? (visualFxEnabled ? 0.72 : 0.85)
+                : (visualFxEnabled ? 0.28 : 0.18),
+          )
           ..style = PaintingStyle.stroke
-          ..strokeWidth = waiting ? 1.8 : 1.0,
+          ..strokeWidth = waiting
+              ? (visualFxEnabled ? 1.35 : 1.8)
+              : (visualFxEnabled ? 0.9 : 1.0),
       );
+
     }
 
     if (ghostHits.isNotEmpty) {
@@ -195,21 +203,32 @@ class _FallingNotesPainter extends CustomPainter {
         );
         final ghostColor = g.grade == HitGrade.perfect
             ? AppColors.success
-            : AppColors.accent;
+            : stage.accent;
         canvas.drawRRect(
           RRect.fromRectAndRadius(rect, const Radius.circular(5)),
-          Paint()..color = ghostColor.withValues(alpha: 0.16),
+          Paint()..color = ghostColor.withValues(alpha: 0.22),
         );
       }
     }
 
-    canvas.drawLine(
-      Offset(0, hitY),
-      Offset(size.width, hitY),
-      Paint()
-        ..color = AppColors.accent.withValues(alpha: 0.85)
-        ..strokeWidth = 2,
-    );
+    if (!visualFxEnabled) {
+      canvas.drawLine(
+        Offset(0, hitY),
+        Offset(size.width, hitY),
+        Paint()
+          ..color = stage.accent.withValues(alpha: 0.025)
+          ..strokeWidth = 36
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawLine(
+        Offset(0, hitY),
+        Offset(size.width, hitY),
+        Paint()
+          ..color = stage.accent.withValues(alpha: 0.05)
+          ..strokeWidth = 20
+          ..strokeCap = StrokeCap.round,
+      );
+    }
   }
 
   @override
@@ -219,9 +238,6 @@ class _FallingNotesPainter extends CustomPainter {
         oldDelegate.waitingFor != waitingFor ||
         oldDelegate.geometry != geometry ||
         oldDelegate.pixelsPerBeat != pixelsPerBeat ||
-        oldDelegate.loopEnabled != loopEnabled ||
-        oldDelegate.loopStart != loopStart ||
-        oldDelegate.loopEnd != loopEnd ||
         oldDelegate.visualFxEnabled != visualFxEnabled ||
         oldDelegate.ghostHits != ghostHits;
   }

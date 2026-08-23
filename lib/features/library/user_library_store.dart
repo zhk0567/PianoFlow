@@ -43,6 +43,17 @@ class UserLibraryStore {
     }
     await prefs.setStringList(_recentKey, list);
   }
+
+  /// Drop id from favorites and recent (e.g. after deleting a userImport).
+  Future<void> forgetSong(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final fav = prefs.getStringList(_favKey) ?? <String>[];
+    final recent = prefs.getStringList(_recentKey) ?? <String>[];
+    fav.remove(id);
+    recent.remove(id);
+    await prefs.setStringList(_favKey, fav);
+    await prefs.setStringList(_recentKey, recent);
+  }
 }
 
 class UserLibraryState {
@@ -104,6 +115,15 @@ class UserLibraryController extends Notifier<UserLibraryState> {
       await _reload();
     } catch (e, st) {
       pianoFlowLog('Library', 'touchRecent failed ($id): $e\n$st');
+    }
+  }
+
+  Future<void> forgetSong(String id) async {
+    try {
+      await _store.forgetSong(id);
+      await _reload();
+    } catch (e, st) {
+      pianoFlowLog('Library', 'forgetSong failed ($id): $e\n$st');
     }
   }
 

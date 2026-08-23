@@ -4,7 +4,7 @@
 # proofread against the PDF before formal catalog import.
 #
 # Usage (from repo root):
-#   Set-Location F:\commercial\Piano
+#   Set-Location F:\commercial\PianoFlow
 #   .\scripts\omr-from-pdf.ps1 -Id toby_fox_megalovania -Pdf .\third_party\scores_pdf\megalovania.pdf
 #   .\scripts\omr-from-pdf.ps1 -Id fur_elise_woo59 -Pdf .\third_party\scores_pdf\fur_elise_woo59.pdf -InstallAudiveris
 #
@@ -137,7 +137,7 @@ if ($xmls.Count -eq 0) {
   Write-Host "  $PdfCopy"
   Write-Host "Then File → Export → MusicXML into:"
   Write-Host "  $OutDir"
-  Write-Host "Docs: docs\PDF识谱与FlowKey对齐.md"
+  Write-Host "Docs: docs\曲谱导入SOP.md"
   exit 2
 }
 

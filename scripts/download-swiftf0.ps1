@@ -1,6 +1,6 @@
 # Prepare SwiftF0 model into this repository (manual or optional pip).
 # Usage:
-#   Set-Location F:\commercial\Piano
+#   Set-Location F:\commercial\PianoFlow
 #   .\scripts\download-swiftf0.ps1
 #
 # Expected output:

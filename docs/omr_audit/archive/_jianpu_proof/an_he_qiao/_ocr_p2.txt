@@ -1,0 +1,28 @@
+=== p2_s01.png split=112 h=272 ===
+  rha: １６５０００５５１１１６６２２６６６１３７１７６６７０６５１
+  rhb: １６５０００５５１ｉｉ６６２２６６６１３７ｉ７６６７０６５１
+  lha: (empty)
+  lhb: (empty)
+  lh_bottoma: 11551515—41415252—155363—
+  lh_bottomb: 1151515151414152521151563631
+=== p2_s02.png split=109 h=270 ===
+  rha: 　１６５ｉ６６０２２１１１００００５５１ｉｉ６６２２６６６１
+  rhb: 　１６５ｉ６６０２２１１１００００５５１ｉｉ６６２２６６６１
+  lha: (empty)
+  lhb: (empty)
+  lh_bottoma: 141415252—515155—41415252—
+  lh_bottomb: (empty)
+=== p2_s03.png split=110 h=150 ===
+  rha: １３７ｉ７６６７０６５１６５ｉ６６０２２１１１００００１
+  rhb: １３７ｉ７６６７０６５１６５ｉ６６０２２１１１００００１
+  lha: (empty)
+  lhb: (empty)
+  lh_bottoma: (empty)
+  lh_bottomb: (empty)
+=== p2_s04.png split=104 h=143 ===
+  rha: 115156363141415252115151-1
+  rhb: 115156363141415252115151-1
+  lha: ，················
+  lhb: ，··············
+  lh_bottoma: (empty)
+  lh_bottomb: (empty)

@@ -41,9 +41,8 @@
 ### 工具
 
 ```powershell
-python .\scripts\_fix_suzume_m16_end.py
-python .\scripts\_restore_suzume_m8_15.py
-python .\scripts\_pad_omr_short_bars.py
+# 一过性修谱脚本已迁 scripts/_archive/；日常只用：
+python .\scripts\omr_audit_score.py --id <id>
 python .\scripts\omr_promote_formal.py --id <id> --confirm-sop-passed
 ```
 
@@ -66,7 +65,7 @@ python .\scripts\omr_promote_formal.py --id <id> --confirm-sop-passed
 2. 春日影等同手大跳：疑似跨谱表/八度 OMR 错，勿按启发式瞎翻八度  
 3. 节奏/时值/type 显示层：已收口；再动需新证据  
 
-已修：伪 `divisions`、type-2x 小节、pad/trim/clamp、`type`←`duration`（见 `_fix_omr_duration_doubling.py` / `_pad_omr_short_bars.py` / `_fix_omr_type_duration_2x.py` / `_fix_omr_type_from_duration.py`）。
+已修：伪 `divisions`、type-2x 小节、pad/trim/clamp、`type`←`duration`（见 `scripts/_archive/` 内 `_fix_omr_duration_doubling.py` 等一过脚本）。
 
 ## 诚实声明
 

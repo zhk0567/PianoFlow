@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 横屏：顶栏 → 键盘 → 五线谱 → 底栏单行横滑（与 Windows 同序，手机隐藏瀑布） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/practiceRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B1016"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/practiceTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#121820"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="6dp">
+
+        <Button
+            android:id="@+id/btnBack"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="10dp"
+            android:text="返回"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#E8EEF4"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#8A96A8"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnFav"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="2dp"
+            android:text="收藏"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/grade"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="6dp"
+            android:textColor="#FFD078"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:maxWidth="120dp"
+            android:textColor="#FF8A7A"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/stageHost"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/stageInner"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <com.pianoflow.android.ui.MiniKeyboardView
+                android:id="@+id/keyboard"
+                android:layout_width="match_parent"
+                android:layout_height="84dp"
+                android:background="#E8E2D6" />
+
+            <FrameLayout
+                android:id="@+id/staffHost"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="#FFFBF5">
+
+                <WebView
+                    android:id="@+id/staffWeb"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+            </FrameLayout>
+
+            <com.pianoflow.android.ui.FallingNotesView
+                android:id="@+id/falling"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <com.pianoflow.android.ui.PracticeFxOverlay
+            android:id="@+id/fxOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="false"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#121820"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="6dp">
+
+            <Button
+                android:id="@+id/btnPlay"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginEnd="4dp"
+                android:backgroundTint="#E8A849"
+                android:minWidth="56dp"
+                android:paddingHorizontal="12dp"
+                android:text="播放"
+                android:textColor="#000000"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnRestart"
+                style="@style/PfChip"
+                android:layout_marginEnd="4dp"
+                android:text="重来" />
+
+            <SeekBar
+                android:id="@+id/seekBar"
+                android:layout_width="140dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:max="1000" />
+
+            <Button
+                android:id="@+id/btnAuto"
+                style="@style/PfChip"
+                android:layout_marginEnd="4dp"
+                android:text="自动" />
+
+            <Button
+                android:id="@+id/btnFollow"
+                style="@style/PfChip"
+                android:layout_marginEnd="4dp"
+                android:text="跟弹" />
+
+            <Button
+                android:id="@+id/btnHandBoth"
+                style="@style/PfChip"
+                android:layout_marginEnd="4dp"
+                android:text="双手" />
+
+            <Button
+                android:id="@+id/btnHandLeft"
+                style="@style/PfChip"
+                android:layout_marginEnd="4dp"
+                android:text="左手" />
+
+            <Button
+                android:id="@+id/btnHandRight"
+                style="@style/PfChip"
+                android:layout_marginEnd="4dp"
+                android:text="右手" />
+
+            <Button
+                android:id="@+id/btnGuide"
+                style="@style/PfChip"
+                android:layout_marginEnd="4dp"
+                android:text="示范音" />
+
+            <Button
+                android:id="@+id/btnMetro"
+                style="@style/PfChip"
+                android:layout_marginEnd="8dp"
+                android:text="节拍器" />
+
+            <TextView
+                android:id="@+id/speedLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                android:text="速度"
+                android:textColor="#C5D0DC"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/speedBar"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:max="160"
+                android:progress="60" />
+
+            <TextView
+                android:id="@+id/volumeLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                android:text="音量"
+                android:textColor="#C5D0DC"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/volumeBar"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="85" />
+        </LinearLayout>
+    </HorizontalScrollView>
+</LinearLayout>

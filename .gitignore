@@ -83,3 +83,11 @@ _tmp_*.png
 docs/omr_audit/_*/
 third_party/nuget/
 /package-lock.json
+
+# Local bulk archive (moved dead third_party / large leftovers)
+_archive/
+
+# Native Android client build cache (clients/android)
+clients/android/.gradle/
+clients/android/**/build/
+android/build/

@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:webview_windows/webview_windows.dart';
 
 import '../../../shared/models/song.dart';
 import '../../../shared/piano_flow_log.dart';
 import '../practice_clock.dart';
 import '../verovio_runtime.dart';
 import '../verovio_transport_sync.dart';
+import '../verovio_web_host_factory.dart';
 
 /// Verovio-engraved staff (MusicXML). Falls back to generated MusicXML from [SongScore].
 ///
@@ -64,11 +63,11 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   @override
   void initState() {
     super.initState();
-    if (!Platform.isWindows) {
-      _error = 'Verovio 谱面目前仅支持 Windows';
+    if (!verovioPlatformSupported) {
+      _error = 'Verovio 谱面目前仅支持 Windows / Android';
       return;
     }
-    _runtime.controller.addListener(_onController);
+    _runtime.host.addListener(_onController);
     widget.clock.addListener(_onClock);
     _lastClockPos = widget.clock.positionBeats;
     _lastClockPlaying = widget.clock.isPlaying;
@@ -304,8 +303,10 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
           (applied.height - _viewport.height).abs() >= _resizeSlop;
       _viewport = applied;
       _heldSize = applied;
-      setState(() {});
-      if (bigEnough && _runtime.isToolkitReady) {
+      // Avoid WebView rebuild flash on tiny layout jitter.
+      if (!bigEnough) return;
+      if (mounted) setState(() {});
+      if (_runtime.isToolkitReady) {
         unawaited(_pushResize());
       }
     });
@@ -356,8 +357,8 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     _disposed = true;
     _resizeDebounce?.cancel();
     widget.clock.removeListener(_onClock);
-    _runtime.controller.removeListener(_onController);
-    // Do NOT dispose shared WebviewController — kept warm for next visit.
+    _runtime.host.removeListener(_onController);
+    // Do NOT dispose shared WebView host — kept warm for next visit.
     super.dispose();
   }
 
@@ -379,10 +380,10 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       );
     }
 
-    if (!Platform.isWindows) {
+    if (!verovioPlatformSupported) {
       return const ColoredBox(
         color: Color(0xFFFFFBF5),
-        child: Center(child: Text('Verovio 谱面仅 Windows')),
+        child: Center(child: Text('Verovio 谱面仅 Windows / Android')),
       );
     }
 
@@ -408,14 +409,9 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
             return Stack(
               fit: StackFit.expand,
               children: [
-                if (_runtime.controller.value.isInitialized)
+                if (_runtime.host.isInitialized)
                   Positioned.fill(
-                    child: Webview(
-                      _runtime.controller,
-                      permissionRequested:
-                          (url, kind, isUserInitiated) async =>
-                              WebviewPermissionDecision.deny,
-                    ),
+                    child: _runtime.host.buildView(),
                   ),
                 if (showSpinner)
                   const Center(

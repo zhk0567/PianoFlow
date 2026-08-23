@@ -1,0 +1,10 @@
+<view class="page">
+  <view class="banner">简易练习 · 预渲染谱节选 + 节拍器。完整跟弹请用 Windows / Android。</view>
+  <block wx:for="{{songs}}" wx:key="id">
+    <view class="card" data-id="{{item.id}}" bindtap="openPractice">
+      <text class="title">{{item.title}}</text>
+      <text class="meta">{{item.scoreKindLabel}} · {{item.artist}}</text>
+      <text class="honesty">{{item.honesty}}</text>
+    </view>
+  </block>
+</view>

@@ -39,8 +39,11 @@ class MetronomeTick {
 /// Piano tones are MusyngKite Acoustic Grand one-shots (assets/audio/piano),
 /// copied into a temp cache with [PracticeConstants.sampleGain] soft-clip so
 /// 100% slider is ~10× louder than the quiet source peaks (AudioPlayer max
-/// volume remains 1.0). Metronome clicks stay synth-generated. Each MIDI /
-/// click gets a dedicated [AudioPlayer] with the source preloaded.
+/// volume remains 1.0). Metronome clicks stay synth-generated.
+///
+/// Players are bound lazily (plus optional [prefetchMidis]) so we do not open
+/// 88 [AudioPlayer]s at once — on Windows that floods `audioplayers` platform-
+/// thread ERROR spam from the plugin.
 ///
 /// Stereo: samples are mono; [AudioPlayer.setBalance] pans by score hand
 /// (LH left / RH right) and MIDI pitch (bass left → treble right) on Windows.
@@ -59,6 +62,9 @@ class ScoreAudioPlayer {
 
   final Map<int, AudioPlayer> _notePlayers = {};
   final Map<int, AudioPlayer> _clickPlayers = {};
+  final Map<int, Future<AudioPlayer?>> _noteBindInflight = {};
+  /// Bumped per MIDI so overlapping [_retrigger] calls drop stale resumes.
+  final Map<int, int> _noteRetriggerGen = {};
   bool _ready = false;
   Future<void>? _readyFuture;
 
@@ -166,15 +172,9 @@ class ScoreAudioPlayer {
       }
       _silentWarmFile = silentFile.path;
 
-      final noteEntries = _noteFiles.entries.toList();
+      // Only clicks + silent warm at init. Note players bind lazily /
+      // via [prefetchMidis] to avoid 88× audioplayers platform-thread spam.
       final clickEntries = _clickFiles.entries.toList();
-      const batchSize = 8;
-      for (var i = 0; i < noteEntries.length; i += batchSize) {
-        final slice = noteEntries.skip(i).take(batchSize);
-        await Future.wait([
-          for (final e in slice) _bindPlayer(_notePlayers, e.key, e.value),
-        ]);
-      }
       await Future.wait([
         for (final e in clickEntries) _bindPlayer(_clickPlayers, e.key, e.value),
       ]);
@@ -184,10 +184,75 @@ class ScoreAudioPlayer {
       await _warmPipeline();
 
       _ready = true;
+      pianoFlowLog(
+        'Audio',
+        'ready (clicks=${_clickPlayers.length}; notes lazy-bind)',
+      );
     } catch (e, st) {
       _readyFuture = null;
       pianoFlowLog('Audio', 'ScoreAudioPlayer init failed: $e\n$st');
       rethrow;
+    }
+  }
+
+  /// Prefetch pitches whose onsets fall in [[fromBeats], [fromBeats]+[lookAheadBeats]].
+  Future<void> prefetchMidisNear(
+    Iterable<ScoreNote> notes, {
+    required double fromBeats,
+    double lookAheadBeats = 8,
+  }) {
+    final lo = fromBeats;
+    final hi = fromBeats + lookAheadBeats;
+    final midis = <int>{
+      for (final n in notes)
+        if (n.start >= lo - 0.05 && n.start <= hi) n.midi,
+    };
+    return prefetchMidis(midis);
+  }
+
+  /// Pre-bind players for [midis] (score pitches) before play to avoid first-hit lag.
+  Future<void> prefetchMidis(Iterable<int> midis) async {
+    await ensureReady();
+    final needed = <int>{};
+    for (final raw in midis) {
+      final m = raw.clamp(
+        PracticeConstants.midiMin,
+        PracticeConstants.midiMax,
+      );
+      if (_notePlayers.containsKey(m) || _noteBindInflight.containsKey(m)) {
+        continue;
+      }
+      if (_noteFiles.containsKey(m)) needed.add(m);
+    }
+    if (needed.isEmpty) return;
+    const batchSize = 8;
+    final list = needed.toList()..sort();
+    for (var i = 0; i < list.length; i += batchSize) {
+      final slice = list.skip(i).take(batchSize);
+      await Future.wait([for (final m in slice) _ensureNotePlayer(m)]);
+    }
+    pianoFlowLogVerbose(
+      'Audio',
+      'prefetchMidis bound=${list.length} totalNotes=${_notePlayers.length}',
+    );
+  }
+
+  Future<AudioPlayer?> _ensureNotePlayer(int midi) async {
+    final hit = _notePlayers[midi];
+    if (hit != null) return hit;
+    final inflight = _noteBindInflight[midi];
+    if (inflight != null) return inflight;
+    final path = _noteFiles[midi];
+    if (path == null) return null;
+    final future = () async {
+      await _bindPlayer(_notePlayers, midi, path);
+      return _notePlayers[midi];
+    }();
+    _noteBindInflight[midi] = future;
+    try {
+      return await future;
+    } finally {
+      _noteBindInflight.remove(midi);
     }
   }
 
@@ -465,12 +530,20 @@ class ScoreAudioPlayer {
   }
 
   void _triggerNote(int midi, double volume, double balance) {
-    final player = _notePlayers[midi.clamp(
+    final m = midi.clamp(
       PracticeConstants.midiMin,
       PracticeConstants.midiMax,
-    )];
-    if (player == null) return;
-    unawaited(_retrigger(player, volume, balance: balance));
+    );
+    final player = _notePlayers[m];
+    if (player != null) {
+      unawaited(_retrigger(player, volume, midi: m, balance: balance));
+      return;
+    }
+    unawaited(() async {
+      final p = await _ensureNotePlayer(m);
+      if (p == null) return;
+      await _retrigger(p, volume, midi: m, balance: balance);
+    }());
   }
 
   void _triggerClick({required bool accent}) {
@@ -483,25 +556,36 @@ class ScoreAudioPlayer {
       PracticeConstants.volumeMax,
     );
     // Metronome stays centered so it does not pull the stereo image.
-    unawaited(_retrigger(player, _playerLevel(linear), balance: 0));
+    // Key -1: click pool (not a piano MIDI).
+    unawaited(
+      _retrigger(player, _playerLevel(linear), midi: -1, balance: 0),
+    );
   }
 
   /// Replay a preloaded source without calling [AudioPlayer.setSource].
+  ///
+  /// Windows `audioplayers`: awaiting [setBalance]/[setVolume] on a burst of
+  /// first-chord notes stalls the method channel while the practice Timer
+  /// keeps advancing → hit line moves, audio feels "stuck". Attack path only
+  /// awaits seek+resume; pan/level are best-effort and non-blocking.
   Future<void> _retrigger(
     AudioPlayer player,
     double volume, {
+    required int midi,
     double balance = 0,
   }) async {
     final epoch = _voiceEpoch;
+    final gen = (_noteRetriggerGen[midi] ?? 0) + 1;
+    _noteRetriggerGen[midi] = gen;
+    bool stale() => epoch != _voiceEpoch || _noteRetriggerGen[midi] != gen;
     try {
       if ((player.balance - balance).abs() > 0.02) {
-        await player.setBalance(balance);
+        unawaited(player.setBalance(balance));
       }
-      if (epoch != _voiceEpoch) return;
       if ((player.volume - volume).abs() > 0.02) {
-        await player.setVolume(volume);
+        unawaited(player.setVolume(volume));
       }
-      if (epoch != _voiceEpoch) return;
+      if (stale()) return;
       // seek+resume avoids a full stop() round-trip that often clicks / delays
       // the very first note after transport start.
       try {
@@ -509,12 +593,12 @@ class ScoreAudioPlayer {
       } catch (e) {
         pianoFlowLog('Audio', 'tone seek failed, fallback stop: $e');
         await player.stop();
-        if (epoch != _voiceEpoch) return;
+        if (stale()) return;
       }
-      if (epoch != _voiceEpoch) return;
+      if (stale()) return;
       await player.resume();
       // pause/stop may have raced past resume — silence again.
-      if (epoch != _voiceEpoch) {
+      if (stale()) {
         try {
           await player.stop();
         } catch (e) {
@@ -651,7 +735,7 @@ class ScoreAudioPlayer {
 
 final scoreAudioProvider = Provider<ScoreAudioPlayer>((ref) {
   final player = ScoreAudioPlayer();
-  // Start 88-tone preload as soon as anything reads this provider.
+  // Warm device + clicks only; note players bind per-score / on demand.
   unawaited(player.ensureReady());
   ref.onDispose(player.dispose);
   return player;

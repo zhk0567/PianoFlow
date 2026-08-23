@@ -10,7 +10,7 @@ import 'workshop_import_common.dart';
 /// MIDI → draft MusicXML → userImport (never formal).
 abstract final class WorkshopMidiImporter {
   static const honestyDescription =
-      '工坊 MIDI 自导入草稿（非正式精确谱；MIDI→MusicXML 会丢声部/记谱细节，禁止冒充正式谱）。';
+      '工坊 MIDI 导入（可跟弹；MIDI→MusicXML 会丢声部/记谱细节，质量档为自导入，非教材级正式谱）。';
 
   static Future<WorkshopImportResult> importFile({
     required String inputPath,
@@ -58,24 +58,24 @@ abstract final class WorkshopMidiImporter {
     }
     if (conv.exitCode != 0) {
       throw StateError(
-        'MIDI 转草稿失败（退出码 ${conv.exitCode}，详见控制台 [PianoFlow/Workshop]）',
+        'MIDI 导入失败（退出码 ${conv.exitCode}，详见控制台 [PianoFlow/Workshop]）',
       );
     }
     if (!await File(draftXml).exists()) {
-      throw StateError('MIDI 转草稿未生成 MusicXML');
+      throw StateError('MIDI 导入未生成 MusicXML');
     }
 
     final result = await WorkshopImportCommon.runMusicXmlToUserImport(
       inputPath: draftXml,
       scoreId: id,
       title: title ?? p.basenameWithoutExtension(inputPath),
-      artist: 'MIDI草稿',
+      artist: 'MIDI导入',
       description: honestyDescription,
     );
     return WorkshopImportResult(
       scoreId: result.scoreId,
       message:
-          '已入库「自导入·MIDI草稿」：${result.scoreId} — 非正式精确谱，可去曲库练习',
+          '已入库并可练习：${result.scoreId}（自导入质量档）',
     );
   }
 }

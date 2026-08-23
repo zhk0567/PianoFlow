@@ -64,6 +64,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   bool _allowExamSeek = false;
   bool _statsFlushed = false;
   Timer? _endHangTimer;
+  Timer? _rewindTimer;
   Timer? _deferredClearEmitted;
   final ExamPcmRecorder _examRecorder = ExamPcmRecorder();
   String? _lastExamRecordingPath;
@@ -86,6 +87,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     ref.onDispose(() {
       _ticker?.cancel();
       _endHangTimer?.cancel();
+      _rewindTimer?.cancel();
       _deferredClearEmitted?.cancel();
       _pitchSub?.cancel();
       _pitchFrameSub?.cancel();
@@ -99,8 +101,11 @@ class PracticeController extends Notifier<PracticeSnapshot> {
 
     final end = _score.durationBeats.clamp(1.0, double.infinity);
     final settings = PracticeSettings(loopEnd: end > 4 ? 4 : end);
-    // Park in pre-roll so the first play() does not snap falling notes / staff.
-    final park = PracticeConstants.playbackStartParkBeats;
+    // Park before the *first sounding note* (not always absolute −lead).
+    final firstOnset = PracticeLoopLogic.firstOnsetBeats(
+      _score.notesForHand(settings.hand).map((n) => n.start),
+    );
+    final park = PracticeLoopLogic.startParkBeats(firstOnset: firstOnset);
     _pos = park;
     clock.setParked(park);
     scheduleMicrotask(() => unawaited(_loadGhost()));
@@ -150,6 +155,13 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   Future<void> _bootstrapAudioAndPitch(PitchService pitch) async {
     try {
       await _audio.ensureReady();
+      // Open window first so autoplay beat-0 is not still binding.
+      await _audio.prefetchMidisNear(
+        _score.notes,
+        fromBeats: _pos,
+        lookAheadBeats: 8,
+      );
+      unawaited(_audio.prefetchMidis(_score.notes.map((n) => n.midi)));
       _audio.setMasterVolume(state.settings.volume);
       // Device warm is silent zero-PCM inside ensureReady. Do NOT resume real
       // piano samples here — Windows volume-0 still leaks ("ghost notes" on open).
@@ -176,7 +188,11 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     final err = pitch.lastError;
     if (err != null && err.isNotEmpty) {
       pianoFlowLog('Practice', '麦克风：$err');
-      state = state.copyWith(statusHint: err);
+      state = state.copyWith(
+        statusHint: err.contains('权限')
+            ? '跟弹需要麦克风权限。请在系统设置中允许 PianoFlow 使用麦克风后重试。'
+            : err,
+      );
     }
   }
 
@@ -245,10 +261,12 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     if (loopEnd <= settings.loopStart) {
       loopEnd = (settings.loopStart + 2).clamp(0, maxBeat).toDouble();
     }
-    var next = settings.copyWith(loopEnd: loopEnd);
+    // Loop UI removed — always keep loop off; end-of-piece rewinds to start.
+    var next = settings.copyWith(loopEnd: loopEnd, loopEnabled: false);
     final wasAuto = state.settings.mode.isAutoPlay;
+    final handChanged = next.hand != state.settings.hand;
     if (next.mode.isExam) {
-      next = next.copyWith(loopEnabled: false, guideAudio: false);
+      next = next.copyWith(guideAudio: false);
     }
     // 自动播放始终开启示范音。
     if (next.mode.isAutoPlay) {
@@ -261,6 +279,17 @@ class PracticeController extends Notifier<PracticeSnapshot> {
         (next.speed - state.settings.speed).abs() > 1e-6;
     final metroJustEnabled = next.metronome && !state.settings.metronome;
     _satisfied = {};
+    if (handChanged) {
+      final onset = PracticeLoopLogic.firstOnsetBeats(
+        _score.notesForHand(next.hand).map((n) => n.start),
+      );
+      if (_pos <= PracticeConstants.playbackLeadInSeekEps ||
+          (_pos - onset).abs() <= PracticeConstants.playbackLeadInSeekEps ||
+          (_pos + 1e-9 >= PracticeLoopLogic.startParkBeats(firstOnset: onset) &&
+              _pos < onset - 1e-9)) {
+        _pos = PracticeLoopLogic.withStartLeadIn(_pos, firstOnset: onset);
+      }
+    }
     _audio.setMetronomeBpm(_score.bpm.toDouble());
     _audio.setMetronome(next.metronome);
     _audio.setSpeed(next.speed);
@@ -317,6 +346,12 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   Future<void> _playWhenReady() async {
     try {
       await _audio.ensureReady();
+      await _audio.prefetchMidisNear(
+        _score.notes,
+        fromBeats: _pos,
+        lookAheadBeats: 8,
+      );
+      unawaited(_audio.prefetchMidis(_score.notes.map((n) => n.midi)));
     } catch (e) {
       pianoFlowLog('Practice', '示范音初始化失败：$e');
       state = state.copyWith(
@@ -329,6 +364,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   }
 
   void _startTransport() {
+    _cancelEndRitual();
     _sessionStarted ??= DateTime.now();
     _lastTick = DateTime.now();
     // From piece start: run a pre-roll so the first note is not immediate.
@@ -379,18 +415,28 @@ class PracticeController extends Notifier<PracticeSnapshot> {
   }
 
   /// Apply negative pre-roll when starting/seeking at the piece beginning.
-  double _withStartLeadIn(double pos) => PracticeLoopLogic.withStartLeadIn(pos);
+  double _firstOnsetBeats([PracticeSettings? settings]) {
+    final hand = (settings ?? state.settings).hand;
+    return PracticeLoopLogic.firstOnsetBeats(
+      _score.notesForHand(hand).map((n) => n.start),
+    );
+  }
+
+  double _withStartLeadIn(double pos) => PracticeLoopLogic.withStartLeadIn(
+        pos,
+        firstOnset: _firstOnsetBeats(),
+      );
 
   void pause() {
     _ticker?.cancel();
     _ticker = null;
-    _endHangTimer?.cancel();
-    _endHangTimer = null;
+    _cancelEndRitual();
     unawaited(_stopExamRecording());
     state = state.copyWith(
       isPlaying: false,
       positionBeats: _pos,
       endHangActive: false,
+      clearStatusHint: true,
     );
     _audio.setTransportPlaying(false);
     _syncClock();
@@ -401,8 +447,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       pianoFlowLog('Practice', 'exam mode: seek blocked');
       return;
     }
-    _endHangTimer?.cancel();
-    _endHangTimer = null;
+    _cancelEndRitual();
     final clamped = beats.clamp(0.0, _score.durationBeats);
     // Restart / seek-to-start get pre-roll; mid-piece seeks do not.
     final target = _withStartLeadIn(clamped);
@@ -429,6 +474,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
               : _activeAt(state.filteredNotes, target)),
       endHangActive: false,
       settlementReady: false,
+      clearStatusHint: true,
     );
     _syncClock(intentionalSeek: true);
     if (state.isPlaying) {
@@ -441,13 +487,18 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     }
   }
 
+  void _cancelEndRitual() {
+    _endHangTimer?.cancel();
+    _endHangTimer = null;
+    _rewindTimer?.cancel();
+    _rewindTimer = null;
+  }
+
   void restart() {
     _audioFired = {};
     _allowExamSeek = true;
     try {
-      seek(state.settings.loopEnabled && state.settings.mode.allowsLoop
-          ? state.settings.loopStart
-          : 0);
+      seek(0);
     } finally {
       _allowExamSeek = false;
     }
@@ -482,32 +533,32 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     restart();
   }
 
-  /// Enable loop around weak misses and restart (再练闭环).
+  /// Jump to a weak section and restart once（不再启用循环区间）.
   void applyWeakLoopAndRestart({
     required double start,
     required double end,
   }) {
     var lo = start;
-    var hi = end;
     final maxBeat = _score.durationBeats;
-    if (hi > maxBeat) hi = maxBeat;
     if (lo < 0) lo = 0;
-    if (hi <= lo + 0.5) {
-      hi = (lo + 2).clamp(0, maxBeat).toDouble();
-    }
+    if (lo > maxBeat) lo = maxBeat;
     updateSettings(
       state.settings.copyWith(
-        loopEnabled: true,
-        loopStart: lo,
-        loopEnd: hi,
+        loopEnabled: false,
         mode: PracticeMode.wait,
       ),
     );
     pianoFlowLog(
       'Practice',
-      'weak-loop apply start=${lo.toStringAsFixed(2)} end=${hi.toStringAsFixed(2)}',
+      'weak-section restart at=${lo.toStringAsFixed(2)} (end hint=${end.toStringAsFixed(2)})',
     );
     resetSessionAndRestart();
+    _allowExamSeek = true;
+    try {
+      seek(lo);
+    } finally {
+      _allowExamSeek = false;
+    }
     if (!state.isPlaying) {
       togglePlay();
     }
@@ -632,7 +683,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       final ms = PracticeHitLatency.record(
         now.difference(captureAt).inMilliseconds,
       );
-      pianoFlowLog(
+      pianoFlowLogVerbose(
         'Practice',
         'hit-capture-ms=$ms grade=${grade.name} midi=$midi '
         'gradePos=${gradePos.toStringAsFixed(3)}',
@@ -640,7 +691,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     }
     final freezeAt = _freezeSince;
     if (freezeAt != null) {
-      pianoFlowLog(
+      pianoFlowLogVerbose(
         'Practice',
         'hit-wait-ms=${now.difference(freezeAt).inMilliseconds} '
         'grade=${grade.name} midi=$midi',
@@ -767,6 +818,20 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     }
 
     // 自动播放：按 BPM 时间轴前进，必播示范音。
+    // Large dt (UI hitch) would mark+fire many onsets at once and stall
+    // Windows audioplayers while the hit line keeps moving — skip the gap.
+    if (dtSec > 0.085) {
+      final skipTo = _pos + beatDelta;
+      _armGuideBefore(skipTo);
+      _advance(beatDelta);
+      _playGuideAt(_pos);
+      pianoFlowLog(
+        'Practice',
+        'autoplay catch-up skip dt=${dtSec.toStringAsFixed(3)}s '
+        '→ arm before ${_pos.toStringAsFixed(2)}',
+      );
+      return;
+    }
     _advance(beatDelta);
     _playGuideAt(_pos);
   }
@@ -806,7 +871,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       // Do NOT clearEmitted now — the re-edge would land inside suppress and
       // be discarded; held common tones would never noteOn again.
       _scheduleClearEmittedAfterGuideSuppress(cued);
-      pianoFlowLog(
+      pianoFlowLogVerbose(
         'Practice',
         'guide cue ${cued.map((m) => m).join(",")} + retrigger gate',
       );
@@ -828,7 +893,7 @@ class PracticeController extends Notifier<PracticeSnapshot> {
       if (already.isNotEmpty) {
         _pitch.clearEmitted(already);
         _pitch.reedgeIfLocked(already);
-        pianoFlowLog(
+        pianoFlowLogVerbose(
           'Practice',
           'deferred clearEmitted+reedge ${already.join(",")}',
         );
@@ -879,6 +944,8 @@ class PracticeController extends Notifier<PracticeSnapshot> {
     // Practice + mic: keep guide soft so speaker→mic echo stays usable.
     final volume = auto ? 1.0 : PracticeConstants.guideVolumeWithMic;
     final cued = <int>{};
+    // One AudioPlayer per MIDI: LH+RH unison must not double-trigger.
+    final soundedMidi = <int>{};
     for (final n in state.filteredNotes) {
       final key = '${n.midi}_${n.start}_${n.hand.name}';
       if (_audioFired.contains(key)) continue;
@@ -894,7 +961,9 @@ class PracticeController extends Notifier<PracticeSnapshot> {
         if (!auto) {
           cued.add(n.midi);
         }
-        _audio.playOneShot(n.midi, volume: volume, hand: n.hand);
+        if (soundedMidi.add(n.midi)) {
+          _audio.playOneShot(n.midi, volume: volume, hand: n.hand);
+        }
       }
     }
     if (cued.isNotEmpty) {
@@ -919,71 +988,79 @@ class PracticeController extends Notifier<PracticeSnapshot> {
 
   void _advance(double beatDelta) {
     var next = _pos + beatDelta;
-    final settings = state.settings;
-    if (settings.loopEnabled && settings.mode.allowsLoop) {
-      final wrapped = PracticeLoopLogic.wrapIfPastEnd(
-        next: next,
-        loopStart: settings.loopStart,
-        loopEnd: settings.loopEnd,
-      );
-      if (wrapped != null) {
-        next = wrapped;
-        _satisfied = {};
-        _audioFired = {};
-        _guideCuedChordStart = null;
-        _resetGuideRetrigger();
-        // Match seek(): re-phase metro beat index (and click timer) to wrap.
-        _audio.alignMetronomeToPosition(next);
-        _applyPosition(next, intentionalSeek: true);
-        return;
-      }
-    } else if (next >= _score.durationBeats) {
+    if (next >= _score.durationBeats) {
       next = _score.durationBeats;
       _applyPosition(next);
-      if (state.settings.mode.isPractice && state.hasSessionActivity) {
-        _beginEndHang();
-      } else {
-        pause();
-      }
+      _beginEndRewind();
       return;
     }
     _applyPosition(next);
   }
 
-  void _beginEndHang() {
-    if (state.endHangActive) return;
+  /// Animate playhead back to the start park after reaching the end.
+  void _beginEndRewind() {
+    if (_rewindTimer != null) return;
     _ticker?.cancel();
     _ticker = null;
-    final lastActive = state.activeMidi.isNotEmpty
-        ? state.activeMidi
-        : _activeAt(state.filteredNotes, _score.durationBeats - 0.01);
-    _pos = _score.durationBeats;
-    state = state.copyWith(
-      isPlaying: true,
-      endHangActive: true,
-      positionBeats: _score.durationBeats,
-      activeMidi: lastActive,
-      waitingFor: const {},
+    _cancelEndRitual();
+
+    final from = _pos;
+    final to = PracticeLoopLogic.withStartLeadIn(
+      0,
+      firstOnset: _firstOnsetBeats(state.settings),
     );
+    final wantSettlement =
+        state.settings.mode.isPractice && state.hasSessionActivity;
+
     _audio.setTransportPlaying(false);
-    _syncClock();
-    _endHangTimer?.cancel();
-    _endHangTimer = Timer(
-      const Duration(milliseconds: PracticeConstants.endHangMs),
-      _finishEndHang,
+    state = state.copyWith(
+      isPlaying: false,
+      endHangActive: true,
+      positionBeats: from,
+      waitingFor: const {},
+      statusHint: '返回开头…',
     );
+    _syncClock();
+
+    final started = DateTime.now();
+    _rewindTimer = Timer.periodic(const Duration(milliseconds: 16), (t) {
+      final ms = DateTime.now().difference(started).inMilliseconds;
+      final u = (ms / PracticeConstants.endRewindMs).clamp(0.0, 1.0);
+      final e = PracticeLoopLogic.easeInOutCubic(u);
+      final pos = from + (to - from) * e;
+      _pos = pos;
+      // Snap staff at the ends; soft-track in the middle for a scrub feel.
+      _syncClock(intentionalSeek: u < 0.03 || u > 0.97);
+      if (u >= 1.0) {
+        t.cancel();
+        _rewindTimer = null;
+        _finishEndRewind(to, settlement: wantSettlement);
+      }
+    });
   }
 
-  void _finishEndHang() {
-    _endHangTimer = null;
+  void _finishEndRewind(double to, {required bool settlement}) {
+    _satisfied = {};
+    _audioFired = {};
+    _guideCuedChordStart = null;
+    _freezeSince = null;
+    _resetGuideRetrigger();
+    _pos = to;
     unawaited(_finalizeExamArtifacts());
+    final auto = state.settings.mode.isAutoPlay;
     state = state.copyWith(
       isPlaying: false,
       endHangActive: false,
-      settlementReady:
-          state.settings.mode.isPractice && state.hasSessionActivity,
+      positionBeats: to,
+      waitingFor: auto
+          ? const {}
+          : _expectedAt(_score, to, state.settings),
+      activeMidi: _activeAt(state.filteredNotes, to),
+      settlementReady: settlement,
+      clearStatusHint: true,
     );
-    _syncClock();
+    _audio.alignMetronomeToPosition(to);
+    _syncClock(intentionalSeek: true);
   }
 
   Future<void> _finalizeExamArtifacts() async {

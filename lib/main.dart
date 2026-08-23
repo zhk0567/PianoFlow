@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'features/practice/verovio_runtime.dart';
+import 'features/practice/verovio_web_host_factory.dart';
 import 'features/workshop/workshop_audio_draft_worker.dart';
 import 'shared/piano_flow_log.dart';
 
@@ -14,7 +14,7 @@ void main() {
   runApp(const ProviderScope(child: PianoFlowApp()));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     // Background-prewarm Verovio WASM so practice staff is near-instant.
-    if (Platform.isWindows) {
+    if (verovioPlatformSupported) {
       VerovioRuntime.instance.prewarm();
     }
     // Warm audio-draft ORT worker (same idea — first import should not cold-start).

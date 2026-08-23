@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>PianoFlow Web</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Web 场景：顶栏导航 + 内容区；练习宽屏左右分栏 -->
+  <div id="app-shell" class="app-shell">
+    <header class="top-nav">
+      <div class="brand">PianoFlow</div>
+      <nav class="nav-tabs">
+        <button type="button" data-tab="home" class="nav-btn active">首页</button>
+        <button type="button" data-tab="library" class="nav-btn">曲库</button>
+        <button type="button" data-tab="exam" class="nav-btn">考试</button>
+        <button type="button" data-tab="workshop" class="nav-btn">工坊</button>
+        <button type="button" data-tab="profile" class="nav-btn">我的</button>
+      </nav>
+    </header>
+
+    <main class="main-pane">
+      <section id="tab-home" class="tab-pane active">
+        <div class="page">
+          <div class="home-hero">
+            <h1>跟弹，从这里开始</h1>
+            <p class="page-sub">桌面浏览器 · 功能对齐 Windows · 布局为 Web 优化</p>
+            <button type="button" id="home-cta" class="cta">去曲库看看</button>
+          </div>
+            <div class="home-cols">
+            <div class="surface-box"><h3>最近练习</h3><ul id="home-recent" class="plain-list"></ul></div>
+            <div class="surface-box"><h3>我的收藏</h3><ul id="home-favorites" class="plain-list"></ul></div>
+            <div class="surface-box"><h3>今日推荐</h3><div id="home-today"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-library" class="tab-pane">
+        <div class="page">
+          <h1 class="page-title">曲库</h1>
+          <p class="page-sub">按谱种、难度或风格挑一张，直接开练</p>
+          <input id="lib-search" class="search" type="search" placeholder="搜索曲名、作曲家、风格或谱种" />
+          <div id="lib-filters" class="filter-strip"></div>
+          <p id="omr-hint" class="warn-hint" hidden>OMR 草稿未逐音校对，勿当教材级正式谱。</p>
+          <p id="lib-count" class="muted-count"></p>
+          <div id="song-grid" class="song-grid"></div>
+          <p id="lib-error" class="err" hidden></p>
+        </div>
+      </section>
+
+      <section id="tab-exam" class="tab-pane">
+        <div class="page">
+          <h1 class="page-title">考试</h1>
+          <p class="page-sub">跟弹计分 · 考试模式禁用 seek · 示范音关闭</p>
+          <input id="exam-search" class="search" type="search" placeholder="搜索曲目" />
+          <p id="exam-history" class="page-sub"></p>
+          <ul id="exam-history-list" class="plain-list exam-history-list"></ul>
+          <div class="exam-layout">
+            <ul id="exam-list" class="exam-list"></ul>
+            <div class="exam-detail surface-box">
+              <h2 id="exam-title">选择曲目</h2>
+              <p id="exam-meta" class="page-sub"></p>
+              <label class="check-row"><input type="checkbox" id="exam-record" checked /> 计入本地战绩</label>
+              <label class="check-row"><input type="checkbox" id="exam-record-audio" /> 录制本场 PCM 回放</label>
+              <button type="button" id="exam-start" class="cta" disabled>开始考试</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-workshop" class="tab-pane">
+        <div class="page">
+          <h1 class="page-title">谱面工坊</h1>
+          <p class="page-sub">MusicXML / MIDI / 音频草稿导入。PDF 暂存 + Windows OMR 指引。Demucs 完整分轨请用 Windows。</p>
+          <div class="tool-grid">
+            <div class="surface-box">
+              <h3>导入 MusicXML</h3>
+              <p class="page-sub">.musicxml / .xml</p>
+              <input id="import-mxml" type="file" accept=".musicxml,.xml,.mxl" />
+            </div>
+            <div class="surface-box">
+              <h3>导入 MIDI</h3>
+              <p class="page-sub">.mid / .midi（草稿谱，非正式谱）</p>
+              <input id="import-midi" type="file" accept=".mid,.midi,audio/midi" />
+            </div>
+            <div class="surface-box">
+              <h3>导入音频（草稿）</h3>
+              <p class="page-sub">.wav / .mp3 / .m4a（Basic Pitch 或 Poly-YIN）</p>
+              <input id="import-audio" type="file" accept="audio/*" />
+            </div>
+            <div class="surface-box">
+              <h3>暂存 PDF</h3>
+              <p class="page-sub">浏览器暂存；OMR 一键请用 Windows</p>
+              <input id="import-pdf" type="file" accept=".pdf,application/pdf" />
+              <p id="pdf-stage-hint" class="page-sub"></p>
+            </div>
+            <div class="surface-box">
+              <h3>状态</h3>
+              <p id="workshop-status" class="page-sub"></p>
+            </div>
+            <div class="surface-box">
+              <h3>我的自导入</h3>
+              <ul id="user-import-list" class="plain-list"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-profile" class="tab-pane">
+        <div class="page profile-page">
+          <h1 class="page-title">我的</h1>
+          <div class="profile-user surface-box">
+            <div class="avatar">访</div>
+            <div>
+              <div id="profile-name" class="uname">访客</div>
+              <div id="profile-sub" class="page-sub">Web 本地练习</div>
+            </div>
+            <button type="button" id="btn-login" class="chip">登录</button>
+            <button type="button" id="btn-logout" class="chip" hidden>退出</button>
+          </div>
+          <h3 class="section-title">今日练习</h3>
+          <div class="surface-box">
+            <div class="row-between"><span id="today-label">今日 0 / 20 分钟</span><span class="accent" id="today-pct">0%</span></div>
+            <div class="progress"><i id="today-bar"></i></div>
+          </div>
+          <h3 class="section-title">练习概览</h3>
+          <div class="surface-box stats-row">
+            <div><b id="stat-sessions">0</b><span>练习次数</span></div>
+            <div><b id="stat-minutes">0</b><span>累计分钟</span></div>
+            <div><b id="stat-songs">0</b><span>曲目数</span></div>
+          </div>
+          <div class="surface-box action-list">
+            <button type="button" class="action-row" id="btn-constellation"><span>练习星座</span><small>点亮练过的曲子</small></button>
+            <button type="button" class="action-row" id="btn-sandbox"><span>节拍器 · 试音</span><small>独立试音与音量</small></button>
+            <button type="button" class="action-row" id="btn-pitch-test"><span>音高识别测试</span><small>YIN 麦克风测试</small></button>
+            <button type="button" class="action-row" id="btn-settings"><span>设置</span><small>关于与谱面诚实说明</small></button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="底栏">
+      <button type="button" data-tab="home" class="nav-btn active">首页</button>
+      <button type="button" data-tab="library" class="nav-btn">曲库</button>
+      <button type="button" data-tab="exam" class="nav-btn">考试</button>
+      <button type="button" data-tab="workshop" class="nav-btn">工坊</button>
+      <button type="button" data-tab="profile" class="nav-btn">我的</button>
+    </nav>
+  </div>
+
+  <section id="practice" class="practice" hidden>
+    <div class="topbar">
+      <button type="button" id="btn-back" class="chip">返回</button>
+      <div class="titles">
+        <div id="practice-title" class="ptitle"></div>
+        <div id="practice-meta" class="pmeta"></div>
+      </div>
+      <button type="button" id="btn-fav" class="chip" title="收藏">☆</button>
+      <div id="grade" class="grade"></div>
+      <div id="status" class="status"></div>
+    </div>
+    <div class="practice-body">
+      <div id="stage-scroll" class="stage-scroll">
+        <div id="stage-inner" class="stage-inner">
+          <canvas id="fall" height="220" aria-label="瀑布"></canvas>
+          <canvas id="keys" height="120" aria-label="键盘"></canvas>
+        </div>
+      </div>
+      <div class="staff-panel">
+        <iframe id="staff-frame" class="staff" title="Verovio" src="./vendor/verovio/viewer.html"></iframe>
+      </div>
+    </div>
+    <div class="bottombar">
+      <div class="ctrl-transport">
+        <button type="button" id="btn-play" class="ctrl-play" aria-label="播放">▶</button>
+        <button type="button" id="btn-restart" class="ctrl-btn">重来</button>
+        <div class="ctrl-seek-wrap">
+          <input id="seek" type="range" min="0" max="1000" value="0" class="ctrl-seek" aria-label="进度" />
+        </div>
+      </div>
+      <div class="ctrl-modes">
+        <span class="ctrl-label">模式</span>
+        <button type="button" id="btn-auto" class="ctrl-seg">自动</button>
+        <button type="button" id="btn-follow" class="ctrl-seg">跟弹</button>
+      </div>
+      <div class="ctrl-groups">
+        <div class="ctrl-group">
+          <span class="ctrl-label">手型</span>
+          <div class="ctrl-btns">
+            <button type="button" id="btn-hand-both" class="ctrl-seg">双手</button>
+            <button type="button" id="btn-hand-left" class="ctrl-seg">左手</button>
+            <button type="button" id="btn-hand-right" class="ctrl-seg">右手</button>
+          </div>
+        </div>
+        <div class="ctrl-group">
+          <span class="ctrl-label">选项</span>
+          <div class="ctrl-btns">
+            <button type="button" id="btn-guide" class="ctrl-seg">示范音</button>
+            <button type="button" id="btn-metro" class="ctrl-seg">节拍器</button>
+          </div>
+        </div>
+      </div>
+      <div class="ctrl-sliders">
+        <label class="ctrl-slider">
+          <span id="volume-label">音量</span>
+          <input id="volume" type="range" min="10" max="100" value="85" />
+        </label>
+        <label class="ctrl-slider">
+          <span id="speed-label">速度 100%</span>
+          <input id="speed" type="range" min="40" max="200" value="100" />
+        </label>
+      </div>
+    </div>
+    <div id="hit-flash" class="hit-flash" hidden></div>
+    <div id="combo-badge" class="combo-badge" hidden></div>
+  </section>
+
+  <dialog id="settle-dlg">
+    <h3>本段结算</h3>
+    <p id="settle-msg"></p>
+    <button type="button" id="settle-listen" class="chip" hidden>聆听录音</button>
+    <div class="dlg-actions">
+      <button type="button" id="settle-weak" hidden>练薄弱段</button>
+      <button type="button" id="settle-again">再练一次</button>
+      <button type="button" id="settle-lib">回曲库</button>
+    </div>
+  </dialog>
+
+  <dialog id="login-dlg">
+    <h3>登录 / 注册</h3>
+    <p class="page-sub">本地保存，无云端（与 Windows 一致）</p>
+    <input id="login-email" class="search" placeholder="邮箱" />
+    <input id="login-pass" class="search" type="password" placeholder="密码（至少4位）" />
+    <input id="login-name" class="search" placeholder="昵称（注册）" />
+    <p id="login-err" class="err" hidden></p>
+    <div class="dlg-actions">
+      <button type="button" id="login-guest" class="chip">访客继续</button>
+      <button type="button" id="login-submit" class="cta">登录</button>
+    </div>
+  </dialog>
+
+  <dialog id="settings-dlg">
+    <h3>设置</h3>
+    <p>曲库含正式校对谱与 OMR 草稿；草稿未逐音校对，勿当教材。</p>
+    <label class="check-row"><input type="checkbox" id="settings-visual-fx" checked /> 视觉特效（命中环/光柱）</label>
+    <p id="settings-pitch-engine" class="page-sub"></p>
+    <p class="page-sub">PianoFlow Web · 功能对齐 Windows</p>
+    <button type="button" id="settings-close" class="cta">关闭</button>
+  </dialog>
+
+  <dialog id="constellation-dlg" class="wide-dlg">
+    <h3>练习星座</h3>
+    <div id="constellation-grid" class="star-grid"></div>
+    <button type="button" onclick="this.closest('dialog').close()" class="cta">关闭</button>
+  </dialog>
+
+  <dialog id="sandbox-dlg" class="wide-dlg">
+    <h3>节拍器 · 试音</h3>
+    <button type="button" id="sandbox-metro" class="chip">节拍器一下</button>
+    <label class="speed-lab">音量 <input id="sandbox-volume" type="range" min="10" max="100" value="85" /></label>
+    <canvas id="sandbox-keys" width="600" height="80" class="sandbox-keys"></canvas>
+    <p class="page-sub">点击条带试音</p>
+    <button type="button" onclick="this.closest('dialog').close()" class="cta">关闭</button>
+  </dialog>
+
+  <dialog id="pitch-dlg">
+    <h3>音高识别测试</h3>
+    <p id="pitch-label" class="page-sub">对着麦克风演奏</p>
+    <button type="button" onclick="this.closest('dialog').close()" class="cta">关闭</button>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

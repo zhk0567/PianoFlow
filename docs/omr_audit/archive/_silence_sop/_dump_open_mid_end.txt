@@ -1,0 +1,80 @@
+m1 RH: REST/whole/32
+m1 LH: REST/whole/32
+
+m2 RH: REST/quarter/8 G4/eighth/4 A4/eighth/4 C5/half/16
+m2 LH: C3/whole/32 +G3/whole/32 +C4/whole/32
+
+m3 RH: C5/quarter/8 G4/quarter/8 G4/eighth/4 A4/eighth/4 C5/quarter/8
+m3 LH: G2/whole/32 +D3/whole/32 +G3/whole/32
+
+m4 RH: C5/half/16 +E5/half/16 G5/eighth/4 E5/eighth/4 D5/quarter/8
+m4 LH: F2/half/24 +C3/half/24 +F3/half/24 G2/quarter/8 +D3/quarter/8 +G3/quarter/8
+
+m5 RH: C5/quarter/8 +E5/quarter/8 D5/quarter/8 C5/eighth/4 B4/eighth/4 C5/eighth/4 A4/eighth/4
+m5 LH: A2/whole/32 +E3/whole/32 +A3/whole/32
+
+m6 RH: E4/quarter/8 +C5/quarter/8 E5/quarter/8 D5/eighth/4 C5/eighth/4 REST/quarter/8
+m6 LH: C3/half/16 +G3/half/16 +C4/half/16 C3/half/16 +G3/half/16 +C4/half/16
+
+m7 RH: F4/quarter/8 +D5/quarter/8 G5/half/16 F5/quarter/8
+m7 LH: F2/half/24 +C3/half/24 +F3/half/24 F2/quarter/8 +C3/quarter/8 +F3/quarter/8
+
+m8 RH: E4/whole/32 +G4/whole/32 +E5/whole/32
+m8 LH: C3/whole/32 +G3/whole/32 +C4/whole/32
+
+m9 RH: D5/eighth/4 E5/eighth/4 F5/quarter/8 E5/quarter/8 E5/eighth/4 D5/eighth/4
+m9 LH: G2/half/16 +G3/half/16 +B3/half/16 G2/half/16 +G3/half/16 +B3/half/16
+
+m10 RH: C5/quarter/8 REST/half/16 G4/eighth/4 C5/eighth/4
+m10 LH: C3/whole/32 +G3/whole/32 +C4/whole/32
+
+m11 RH: E4/quarter/12 E4/16th/2 B3/16th/2 B3/quarter/12 A3/16th/2 C4/16th/2
+m11 LH: F2/quarter/8 +C3/quarter/8 +F3/quarter/8 C3/quarter/8 +F3/quarter/8 G2/quarter/8 +D3/quarter/8 +G3/quarter/8 D3/quarter/8 +G3/quarter/8
+
+m12 RH: C4/half/24 A3/eighth/4 E4/eighth/4
+m12 LH: A2/quarter/8 +E3/quarter/8 +A3/quarter/8 E3/quarter/8 +A3/quarter/8 E3/quarter/8 +A3/quarter/8 E3/quarter/8
+
+m13 RH: E4/quarter/12 E4/16th/2 E4/16th/2 +B4/16th/2 E4/quarter/12 +B4/quarter/12 C5/16th/2 E4/16th/2
+m13 LH: F2/quarter/8 +C3/quarter/8 +F3/quarter/8 C3/quarter/8 +F3/quarter/8 G2/quarter/8 +D3/quarter/8 +G3/quarter/8 D3/quarter/8 +G3/quarter/8
+
+m14 RH: E4/half/24 A4/eighth/4 E5/eighth/4
+m14 LH: A2/quarter/8 +E3/quarter/8 +A3/quarter/8 E3/quarter/8 +A3/quarter/8 E3/quarter/8 +A3/quarter/8 E3/quarter/8 +A3/quarter/8
+
+m15 RH: C5/quarter/12 B4/eighth/4 A4/eighth/4 B4/eighth/4 C5/quarter/8
+m15 LH: C2/quarter/8 +G2/quarter/8 +C3/quarter/8 C2/quarter/8 +G2/quarter/8 +C3/quarter/8 C2/quarter/8 +G2/quarter/8 +C3/quarter/8 C2/quarter/8 +G2/quarter/8 +C3/quarter/8
+
+m16 RH: B4/quarter/12 A4/eighth/4 G4/eighth/4 A4/eighth/4 B4/quarter/8
+m16 LH: G1/quarter/8 +D2/quarter/8 +G2/quarter/8 G1/quarter/8 +D2/quarter/8 +G2/quarter/8 G1/quarter/8 +D2/quarter/8 +G2/quarter/8 G1/quarter/8 +D2/quarter/8 +G2/quarter/8
+
+m17 RH: A4/quarter/8 B4/eighth/4 C5/quarter/8 D5/eighth/4 E5/quarter/8
+m17 LH: A1/quarter/8 +E2/quarter/8 +A2/quarter/8 A1/quarter/8 +E2/quarter/8 +A2/quarter/8 A1/quarter/8 +E2/quarter/8 +A2/quarter/8 A1/quarter/8 +E2/quarter/8 +A2/quarter/8
+
+m18 RH: F5/quarter/12 E5/eighth/4 D5/half/16
+m18 LH: F1/quarter/8 +C2/quarter/8 +F2/quarter/8 F1/quarter/8 +C2/quarter/8 +F2/quarter/8 F1/quarter/8 +C2/quarter/8 +F2/quarter/8 F1/quarter/8 +C2/quarter/8 +F2/quarter/8
+
+m19 RH: REST/quarter/8 REST/eighth/4 G5/eighth/4 REST/half/16
+m19 LH: REST/whole/32
+
+m38 RH: C5/quarter/4 C5/quarter/4 C5/eighth/2 C6/eighth/2 B5/eighth/2 E5/16th/1 E4/16th/1 +A4/16th/1
+m38 LH: A3/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2
+
+m39 RH: E4/quarter/6 +A4/quarter/6 A5/16th/1 G5/16th/1 +B5/16th/1 G5/quarter/6 +B5/quarter/6 D6/16th/1 C5/16th/1
+m39 LH: F3/eighth/2 C4/eighth/2 F4/eighth/2 C4/eighth/2 G3/eighth/2 D4/eighth/2 G4/eighth/2 D4/eighth/2
+
+m40 RH: C5/half/8 C5/eighth/2 C6/eighth/2 B5/eighth/2 E5/16th/1 E4/16th/1 +A4/16th/1
+m40 LH: A3/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2
+
+m41 RH: E4/quarter/4 +A4/quarter/4 E5/quarter/6 +A5/quarter/6 C6/eighth/2 B5/eighth/2 G5/16th/1 C5/16th/1
+m41 LH: F3/eighth/2 C4/eighth/2 F4/eighth/2 C4/eighth/2 G3/eighth/2 D4/eighth/2 G4/eighth/2 D4/eighth/2
+
+m42 RH: C5/half/8 C5/eighth/2 C6/eighth/2 B5/eighth/2 C6/16th/1 B5/16th/1 +D6/16th/1
+m42 LH: A3/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2 A4/eighth/2 E4/eighth/2
+
+m43 RH: B5/quarter/6 +D6/quarter/6 E6/16th/1 E6/16th/1 E6/quarter/6 C6/16th/1 B5/16th/1
+m43 LH: F3/eighth/2 C4/eighth/2 F4/eighth/2 C4/eighth/2 G3/eighth/2 D4/eighth/2 G4/eighth/2 D4/eighth/2
+
+m44 RH: B5/quarter/6 B5/eighth/2 C6/half/8
+m44 LH: A3/eighth/2 E4/eighth/2 A4/eighth/2 REST/eighth/2 REST/half/8
+
+m45 RH: A6/whole/16
+m45 LH: REST//16

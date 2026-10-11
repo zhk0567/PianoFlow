@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../shared/models/song.dart';
 import '../../shared/piano_flow_log.dart';
+import '../library/user_import_store.dart';
 import 'practice_constants.dart';
 import 'staff/score_to_musicxml.dart';
 import 'verovio_transport_sync.dart';
@@ -267,8 +268,9 @@ class VerovioRuntime {
       );
     }
 
-    // v55: end playhead travels to staff right edge (past last note).
-    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v57';
+    // v72: staff glyphs stay at native page px (诀别书). Crop no longer
+    // squeezes short scores by crop/page.
+    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v72';
     final marker = File('${dir.path}${Platform.pathSeparator}.asset_stamp');
     final htmlOut = File('${dir.path}${Platform.pathSeparator}viewer.html');
     final wasmOut = File(
@@ -302,23 +304,39 @@ class VerovioRuntime {
   static String musicXmlCacheKey(String songId, Hand hand) =>
       '$songId|${hand.name}';
 
-  static String scoreKey(SongScore score, Hand hand) =>
-      '${score.id}|${hand.name}';
+  static String scoreKey(SongScore score, Hand hand, {String layout = 'strip'}) =>
+      '${score.id}|${hand.name}|$layout';
 
+  /// Practice strip layout (default) or full-score paged browse.
   static Map<String, dynamic> layoutOpts(
     Size viewport, {
     int? bpm,
+    String layoutMode = 'strip',
   }) {
     const scale = PracticeConstants.verovioScale;
     // pageHeight is a Verovio layout ceiling (adjustPageHeight shrinks to content).
     // Note CSS size comes from engraver [scale], not from stretching to [h].
     final h = viewport.height.clamp(260.0, 900.0);
     final w = viewport.width.clamp(200.0, 4000.0);
+    if (layoutMode == 'paged') {
+      final browseH = viewport.height.clamp(400.0, 1600.0);
+      final browseW = viewport.width.clamp(280.0, 2400.0);
+      return {
+        'bpm': ?bpm,
+        'cssWidth': browseW.round(),
+        'cssHeight': browseH.round(),
+        'scale': scale,
+        'layoutMode': 'paged',
+        'pageWidth': (browseW * 100 / scale).round().clamp(1200, 4000),
+        'pageHeight': (browseH * 100 / scale).round().clamp(1600, 6000),
+      };
+    }
     return {
       'bpm': ?bpm,
       'cssWidth': w.round(),
       'cssHeight': h.round(),
       'scale': scale,
+      'layoutMode': 'strip',
       'pageHeight': (h * 100 / scale).round().clamp(450, 4000),
     };
   }
@@ -330,6 +348,73 @@ class VerovioRuntime {
     final xml = await _loadMusicXml(score, hand);
     _musicXmlCache[key] = xml;
     return xml;
+  }
+
+  /// Packaged / user MusicXML for full-score engraving (prefer over JSON→XML).
+  Future<String> resolveEngravingMusicXml(SongScore score) async {
+    final cacheKey = 'engrave|${score.id}';
+    final hit = _musicXmlCache[cacheKey];
+    if (hit != null) return hit;
+
+    for (final path in [
+      'assets/scores/musicxml/${score.id}.musicxml',
+      'assets/scores/musicxml/${score.id}.xml',
+    ]) {
+      try {
+        final xml = await rootBundle.loadString(path);
+        if (xml.trim().length > 32) {
+          _musicXmlCache[cacheKey] = xml;
+          _verovioLogVerbose('engrave MusicXML from $path chars=${xml.length}');
+          return xml;
+        }
+      } catch (_) {
+        // try next
+      }
+    }
+
+    try {
+      final file = await UserImportPaths.musicXml(score.id);
+      if (await file.exists()) {
+        final xml = await file.readAsString();
+        if (xml.trim().length > 32) {
+          _musicXmlCache[cacheKey] = xml;
+          _verovioLogVerbose(
+            'engrave MusicXML from userImport chars=${xml.length}',
+          );
+          return xml;
+        }
+      }
+    } catch (e) {
+      _verovioLogVerbose('userImport MusicXML skip: $e');
+    }
+
+    // Dev-only third_party source (not packaged).
+    try {
+      final candidates = [
+        p.join('third_party', 'scores_musicxml', '${score.id}.musicxml'),
+        p.join('third_party', 'scores_musicxml', '${score.id}.xml'),
+      ];
+      for (final rel in candidates) {
+        final f = File(rel);
+        if (await f.exists()) {
+          final xml = await f.readAsString();
+          if (xml.trim().length > 32) {
+            _musicXmlCache[cacheKey] = xml;
+            _verovioLogVerbose('engrave MusicXML from $rel chars=${xml.length}');
+            return xml;
+          }
+        }
+      }
+    } catch (e) {
+      _verovioLogVerbose('third_party MusicXML skip: $e');
+    }
+
+    final fallback = await resolveMusicXml(score, Hand.both);
+    _verovioLog(
+      'engrave fallback SongScore→MusicXML id=${score.id} '
+      '(no packaged MusicXML)',
+    );
+    return fallback;
   }
 
   Future<void> prefetchMusicXml(SongScore score, {Hand hand = Hand.both}) {
@@ -348,15 +433,19 @@ class VerovioRuntime {
     return xml;
   }
 
+  String _layoutMode = 'strip';
+  String get layoutMode => _layoutMode;
+
   Future<void> pushScore({
     required SongScore score,
     required Hand hand,
     required Size viewport,
     String? musicXml,
     bool force = false,
+    String layoutMode = 'strip',
   }) async {
     if (!_toolkitReady) return;
-    final key = scoreKey(score, hand);
+    final key = scoreKey(score, hand, layout: layoutMode);
     if (!force && key == lastScoreKey && scoreLoaded) {
       final prev = lastViewport;
       if (prev != null &&
@@ -364,7 +453,7 @@ class VerovioRuntime {
           (prev.height - viewport.height).abs() < 16) {
         return;
       }
-      await pushResize(viewport);
+      await pushResize(viewport, layoutMode: layoutMode);
       return;
     }
 
@@ -373,8 +462,10 @@ class VerovioRuntime {
     // Mark unloaded immediately so pushPosition cannot steer the previous piece.
     scoreLoaded = false;
     lastScoreKey = null;
+    _layoutMode = layoutMode;
     _resetPositionTracking();
 
+    // Practice + full-score browse share SongScore→MusicXML (waterfall clock).
     final xml = musicXml ?? await resolveMusicXml(score, hand);
     if (ownedEpoch != _loadEpoch) {
       _verovioLog('pushScore aborted (stale after resolve) epoch=$ownedEpoch');
@@ -384,10 +475,12 @@ class VerovioRuntime {
       layoutOpts(
         viewport,
         bpm: score.bpm,
+        layoutMode: layoutMode,
       ),
     );
     _verovioLogVerbose(
-      'pushScore id=${score.id} epoch=$ownedEpoch xmlChars=${xml.length} '
+      'pushScore id=${score.id} layout=$layoutMode epoch=$ownedEpoch '
+      'xmlChars=${xml.length} '
       'viewport=${viewport.width.toStringAsFixed(0)}x${viewport.height.toStringAsFixed(0)}',
     );
 
@@ -409,6 +502,7 @@ class VerovioRuntime {
       _verovioLog('reloadViewer + retry');
       await reloadViewer();
       ownedEpoch = _loadEpoch;
+      _layoutMode = layoutMode;
       await _loadScoreXml(xml, opts, epoch: ownedEpoch);
       if (ownedEpoch != _loadEpoch) return;
       await Future<void>.delayed(const Duration(milliseconds: 250));
@@ -427,11 +521,13 @@ class VerovioRuntime {
     }
 
     _verovioLogVerbose(
-      'pushScore OK notes=${info?['notes']} htmlLen=${info?['htmlLen']}',
+      'pushScore OK layout=$layoutMode notes=${info?['notes']} '
+      'htmlLen=${info?['htmlLen']}',
     );
     scoreLoaded = true;
     lastScoreKey = key;
     lastViewport = viewport;
+    _layoutMode = layoutMode;
   }
 
   bool _infoHasNotes(Map<String, dynamic>? info) {
@@ -542,21 +638,88 @@ class VerovioRuntime {
     return null;
   }
 
-  Future<void> pushResize(Size viewport) async {
+  /// Cropped strip height in CSS px (one grand staff). 0 / missing → null.
+  Future<double?> stripInkHeight() async {
+    final info = await _scoreInfo();
+    final raw = info?['inkHeight'];
+    if (raw is num && raw >= 80) return raw.toDouble();
+    return null;
+  }
+
+  Future<void> pushResize(
+    Size viewport, {
+    String? layoutMode,
+  }) async {
     if (!_toolkitReady || !scoreLoaded) return;
+    final mode = layoutMode ?? _layoutMode;
     final prev = lastViewport;
     if (prev != null &&
         (prev.width - viewport.width).abs() < 8 &&
-        (prev.height - viewport.height).abs() < 8) {
+        (prev.height - viewport.height).abs() < 8 &&
+        mode == _layoutMode) {
       return;
     }
-    final opts = jsonEncode(layoutOpts(viewport));
+    final opts = jsonEncode(layoutOpts(viewport, layoutMode: mode));
     try {
       await host.runJs('pfResize($opts);');
       lastViewport = viewport;
+      _layoutMode = mode;
     } catch (e) {
       _verovioLog('pfResize script failed: $e');
       rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>?> pageInfo() async {
+    if (!_toolkitReady) return null;
+    try {
+      final raw = await host.runJs('window.pfPageInfo()');
+      if (raw == null) return null;
+      var s = raw is String ? raw : raw.toString();
+      if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+        s = jsonDecode(s) as String;
+      }
+      final decoded = jsonDecode(s);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) {
+        return decoded.map((k, v) => MapEntry(k.toString(), v));
+      }
+    } catch (e) {
+      _verovioLog('pageInfo parse error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> setBrowsePage(int page) async {
+    if (!_toolkitReady || !scoreLoaded) return false;
+    try {
+      final raw = await host.runJs('window.pfSetPage($page)');
+      return raw == true || raw == 'true' || raw == 1;
+    } catch (e) {
+      _verovioLog('setBrowsePage failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> nextBrowsePage() async {
+    if (!_toolkitReady || !scoreLoaded) return false;
+    try {
+      final raw = await host.runJs('window.pfNextPage()');
+      return raw == true || raw == 'true' || raw == 1;
+    } catch (e) {
+      _verovioLog('nextBrowsePage failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> prevBrowsePage() async {
+    if (!_toolkitReady || !scoreLoaded) return false;
+    try {
+      final raw = await host.runJs('window.pfPrevPage()');
+      return raw == true || raw == 'true' || raw == 1;
+    } catch (e) {
+      _verovioLog('prevBrowsePage failed: $e');
+      return false;
     }
   }
 
@@ -566,6 +729,7 @@ class VerovioRuntime {
     double? beatsPerSec,
   }) async {
     if (!_toolkitReady || !scoreLoaded) return;
+    if (_layoutMode == 'paged') return;
     final rate = beatsPerSec;
     final sameBeats = _lastPushedBeats.isFinite &&
         (beats - _lastPushedBeats).abs() < 0.002;
@@ -639,7 +803,7 @@ class VerovioRuntime {
     }
   }
 
-  bool hasScoreFor(SongScore score, Hand hand) {
-    return scoreLoaded && lastScoreKey == scoreKey(score, hand);
+  bool hasScoreFor(SongScore score, Hand hand, {String layout = 'strip'}) {
+    return scoreLoaded && lastScoreKey == scoreKey(score, hand, layout: layout);
   }
 }

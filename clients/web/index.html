@@ -119,15 +119,9 @@
             <button type="button" id="btn-login" class="chip">登录</button>
             <button type="button" id="btn-logout" class="chip" hidden>退出</button>
           </div>
-          <h3 class="section-title">今日练习</h3>
-          <div class="surface-box">
-            <div class="row-between"><span id="today-label">今日 0 / 20 分钟</span><span class="accent" id="today-pct">0%</span></div>
-            <div class="progress"><i id="today-bar"></i></div>
-          </div>
           <h3 class="section-title">练习概览</h3>
           <div class="surface-box stats-row">
             <div><b id="stat-sessions">0</b><span>练习次数</span></div>
-            <div><b id="stat-minutes">0</b><span>累计分钟</span></div>
             <div><b id="stat-songs">0</b><span>曲目数</span></div>
           </div>
           <div class="surface-box action-list">
@@ -156,6 +150,7 @@
         <div id="practice-title" class="ptitle"></div>
         <div id="practice-meta" class="pmeta"></div>
       </div>
+      <button type="button" id="btn-practice-settings" class="chip" title="设置">设置</button>
       <button type="button" id="btn-fav" class="chip" title="收藏">☆</button>
       <div id="grade" class="grade"></div>
       <div id="status" class="status"></div>
@@ -168,7 +163,8 @@
         </div>
       </div>
       <div class="staff-panel">
-        <iframe id="staff-frame" class="staff" title="Verovio" src="./vendor/verovio/viewer.html"></iframe>
+        <iframe id="staff-frame" class="staff" title="Verovio" src="./vendor/verovio/viewer.html?v=72"></iframe>
+        <div id="staff-scrub" class="staff-scrub" aria-label="五线谱拖动进度"></div>
       </div>
     </div>
     <div class="bottombar">
@@ -182,7 +178,8 @@
       <div class="ctrl-modes">
         <span class="ctrl-label">模式</span>
         <button type="button" id="btn-auto" class="ctrl-seg">自动</button>
-        <button type="button" id="btn-follow" class="ctrl-seg">跟弹</button>
+        <button type="button" id="btn-follow" class="ctrl-seg">练习</button>
+        <button type="button" id="btn-fx" class="ctrl-seg">装饰特效</button>
       </div>
       <div class="ctrl-groups">
         <div class="ctrl-group">
@@ -193,23 +190,6 @@
             <button type="button" id="btn-hand-right" class="ctrl-seg">右手</button>
           </div>
         </div>
-        <div class="ctrl-group">
-          <span class="ctrl-label">选项</span>
-          <div class="ctrl-btns">
-            <button type="button" id="btn-guide" class="ctrl-seg">示范音</button>
-            <button type="button" id="btn-metro" class="ctrl-seg">节拍器</button>
-          </div>
-        </div>
-      </div>
-      <div class="ctrl-sliders">
-        <label class="ctrl-slider">
-          <span id="volume-label">音量</span>
-          <input id="volume" type="range" min="10" max="100" value="85" />
-        </label>
-        <label class="ctrl-slider">
-          <span id="speed-label">速度 100%</span>
-          <input id="speed" type="range" min="40" max="200" value="100" />
-        </label>
       </div>
     </div>
     <div id="hit-flash" class="hit-flash" hidden></div>
@@ -217,12 +197,12 @@
   </section>
 
   <dialog id="settle-dlg">
-    <h3>本段结算</h3>
+    <h3>考试结算</h3>
     <p id="settle-msg"></p>
     <button type="button" id="settle-listen" class="chip" hidden>聆听录音</button>
     <div class="dlg-actions">
       <button type="button" id="settle-weak" hidden>练薄弱段</button>
-      <button type="button" id="settle-again">再练一次</button>
+      <button type="button" id="settle-again">再考一次</button>
       <button type="button" id="settle-lib">回曲库</button>
     </div>
   </dialog>
@@ -243,7 +223,9 @@
   <dialog id="settings-dlg">
     <h3>设置</h3>
     <p>曲库含正式校对谱与 OMR 草稿；草稿未逐音校对，勿当教材。</p>
-    <label class="check-row"><input type="checkbox" id="settings-visual-fx" checked /> 视觉特效（命中环/光柱）</label>
+    <label class="speed-lab">速度 <input id="speed" type="range" min="40" max="200" value="100" /> <span id="speed-label">100%</span></label>
+    <label class="speed-lab">音量 <input id="volume" type="range" min="10" max="100" value="85" /></label>
+    <label class="check-row"><input type="checkbox" id="settings-visual-fx" checked /> 装饰特效（命中环/光柱）</label>
     <p id="settings-pitch-engine" class="page-sub"></p>
     <p class="page-sub">PianoFlow Web · 功能对齐 Windows</p>
     <button type="button" id="settings-close" class="cta">关闭</button>

@@ -1,6 +1,6 @@
 # OMR 草稿校对状态 / Proofread Status
 
-更新：2026-08-09（机器-only：时长层 bad=0 + type←duration 对齐 1040 音；**无一升 formal**）  
+更新：2026-09-04（《诀别书》转正启动：SOP + 校对入口；**仍无一升 formal**）  
 规则：未完成开/中/尾 PDF 逐音抽检前 **禁止** `scoreKind: formal`。用户确认不做人眼校对 → 只改进 `omrDraft`，不放宽升格。
 
 ## 汇总
@@ -24,7 +24,7 @@
 | `jay_chou_qing_tian` | 晴天 | 开篇+时长垫片；声部时长 bad=0 | 音高后段待细校 |
 | `christina_perri_a_thousand_years` | A Thousand Years | intro–m18 | m19+ 待续（曲长） |
 | `xiang_yun_duan` | 向云端 | m1–6；tiny-over trim；时长 bad=0 | 音高后段待续 |
-| `jue_bie_shu` | 诀别书 | m1–7 | m8+ 待续 |
+| `jue_bie_shu` | 诀别书 | **转正 R13**：中段按扫描重写一批（m48–51、73–79、81、86–88、92–95、98、100、103） | **m56–68、m61–64、m104 等未签完，仍 omrDraft** |
 | `radwimps_suzume` | 铃芽之旅 | **m0–26 已大幅对齐 PDF；尾短拍已垫** | 见 `radwimps_suzume_SOP.md`；m27–29 几何读音不稳未猜改音高；时长 mismatch=0；**仍 omrDraft** |
 | `haruhikage` | 春日影 | m1–8；m5 type-2x 已减半；时长 bad=0 | m9+ 音高待续；大跳仍 OMR 风险 |
 | `hisaishi_castle_in_the_sky` | 天空之城 | 开篇+m49；**m21–24 未改** | SOP 多源不一致，禁止猜改 |
@@ -69,4 +69,4 @@ python .\scripts\omr_promote_formal.py --id <id> --confirm-sop-passed
 
 ## 诚实声明
 
-用户不做人眼看谱；机器继续改进可练性与时值，但 **formal×11 + omrDraft×15 不变**，禁止把草稿标正式谱。
+用户不做人眼看谱；机器继续改进可练性与时值，但 **formal×11 + omrDraft×15 不变**（含诀别书转正启动仍 omrDraft），禁止把草稿标正式谱。

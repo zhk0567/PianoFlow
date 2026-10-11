@@ -33,9 +33,11 @@
       display: flex;
       flex-direction: row;
       flex-wrap: nowrap;
-      align-items: flex-start; /* top-align: never clip clef under keyboard */
+      /* Top-align by default — centering a tall grand staff clips bass clef. */
+      align-items: flex-start;
       height: auto;
-      min-height: 100%;
+      /* Hug the engraved system. A 100% min-height painted cream under a short staff. */
+      min-height: 0;
       width: max-content;
       max-height: none;
       will-change: transform;
@@ -76,13 +78,46 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 8px;
+      /* Screen-space bar (~Flowkey). JS may narrow with strip fit; never stretch. */
+      width: 12px;
       height: 100%;
-      background: rgba(232, 168, 73, 0.92);
+      background: rgba(232, 168, 73, 0.55);
       pointer-events: none;
       z-index: 5;
       display: none;
-      box-shadow: 0 0 0 1px rgba(232, 168, 73, 0.35);
+      box-shadow: none;
+      border-radius: 2px;
+      max-width: 12px;
+      min-width: 5px;
+      transform: none;
+      box-sizing: border-box;
+    }
+    /* Full-score browse: vertical page stack + native scroll. */
+    body.pf-browse #wrap {
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    body.pf-browse #svg {
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: center;
+      width: 100%;
+      min-height: 0;
+      height: auto;
+      transform: none !important;
+      will-change: auto;
+      gap: 12px;
+      padding: 8px 0 24px;
+      box-sizing: border-box;
+    }
+    body.pf-browse #svg > svg {
+      display: block;
+      margin: 0 auto;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+    }
+    body.pf-browse #playhead {
+      display: none !important;
     }
   </style>
 </head>
@@ -108,8 +143,6 @@
     let beatXPoints = [];
     /** Playhead locked near 30% of viewport during playback; score scrolls underneath. */
     const ANCHOR = 0.30;
-    /** At piece start / lead-in, pin playhead near the left edge of the viewport. */
-    const START_ANCHOR = 0.02;
     /**
      * Keep in sync with PracticeConstants.playbackLeadInBeats.
      * Negative transport beats ease the playhead from lead-in toward the first note.
@@ -133,7 +166,7 @@
     let startLeadFloorX = 0;
     /**
      * First *sounding* onset q (before seedStartBeatX may unshift q=0).
-     * Lead-in / START_ANCHOR must use this — not beatXPoints[0].q — so late-onset
+     * Lead-in / start park must use this — not beatXPoints[0].q — so late-onset
      * pieces parked at onset−lead still show the playhead at the staff left.
      */
     let firstSoundingQ = 0;
@@ -144,12 +177,26 @@
     let lastBeats = 0;
     let displayBeats = 0;
     let scrollX = 0; // fractional content offset (replaces scrollLeft)
+    /**
+     * When engraved strip width < lane width, shift so the strip sits centered
+     * (idle / short scores / wide windows). Scroll sx still subtracts from this.
+     */
+    let contentCenterPadX = 0;
     let scrollRaf = null;
     let forceSnap = false;
     /** Dart transport rate (beats/sec). 0 = paused. No independent JS clock. */
     let beatsPerSec = 0;
     let lastSyncTime = 0;
     let liveUntil = 0;
+    /** Queued when pfLoadFromUrlAsync runs before WASM toolkit is ready. */
+    let pendingLoad = null;
+    /**
+     * 'strip' = practice continuous horizontal system (default).
+     * 'paged' = full-score browse: Verovio page breaks + vertical stack.
+     */
+    let layoutMode = 'strip';
+    /** 1-based current page while browsing (for pfSetPage / buttons). */
+    let currentBrowsePage = 1;
 
     function postToHost(payload) {
       var s = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -169,6 +216,30 @@
     window.pfReady = function () {
       return !!(toolkit && typeof verovio !== 'undefined');
     };
+
+    window.pfToolkitReady = function () {
+      return !!toolkit;
+    };
+
+    function ensureToolkit() {
+      if (toolkit) return true;
+      if (typeof verovio === 'undefined' || !verovio.toolkit) return false;
+      try {
+        toolkit = new verovio.toolkit();
+        setStatus('谱面引擎就绪');
+        postToHost({ type: 'ready' });
+        if (pendingLoad) {
+          const p = pendingLoad;
+          pendingLoad = null;
+          pfLoadFromUrlAsync(p.url, p.options);
+        }
+        return true;
+      } catch (e) {
+        setStatus('谱面引擎初始化失败: ' + e);
+        logHost('ensureToolkit fail ' + e);
+        return false;
+      }
+    }
 
     function logHost(msg) {
       try { console.log('[PianoFlow]', msg); } catch (_) {}
@@ -196,8 +267,7 @@
     /** Reset visual scroll before measuring note X in content space. */
     function resetScrollTransform() {
       scrollX = 0;
-      const host = document.getElementById('svg');
-      if (host) host.style.transform = 'translate3d(0, 0, 0)';
+      applyScrollTransform(0);
       const wrap = document.getElementById('wrap');
       if (wrap) wrap.scrollLeft = 0;
     }
@@ -212,7 +282,8 @@
       const box = head.getBoundingClientRect();
       if (!(box.width > 0 || box.height > 0)) return null;
       const wbox = wrap.getBoundingClientRect();
-      return scrollX + (box.left - wbox.left);
+      // Subtract center pad so beat→X stays in strip-local space.
+      return scrollX + (box.left - wbox.left) - contentCenterPadX;
     }
 
     /** Leftmost engraved note — independent of timemap id resolution. */
@@ -225,7 +296,7 @@
       for (let i = 0; i < nodes.length; i++) {
         const box = nodes[i].getBoundingClientRect();
         if (!(box.width > 0 || box.height > 0)) continue;
-        const x = scrollX + (box.left - wbox.left);
+        const x = scrollX + (box.left - wbox.left) - contentCenterPadX;
         if (best == null || x < best) best = x;
       }
       return best;
@@ -239,7 +310,7 @@
       const box = meas.getBoundingClientRect();
       const wbox = wrap.getBoundingClientRect();
       if (!(box.width > 0 || box.height > 0)) return null;
-      return scrollX + (box.left - wbox.left);
+      return scrollX + (box.left - wbox.left) - contentCenterPadX;
     }
 
     /** Right edge of the last engraved measure (五线谱最右). */
@@ -252,7 +323,7 @@
       for (let i = 0; i < measures.length; i++) {
         const box = measures[i].getBoundingClientRect();
         if (!(box.width > 0 || box.height > 0)) continue;
-        const right = scrollX + (box.right - wbox.left);
+        const right = scrollX + (box.right - wbox.left) - contentCenterPadX;
         if (best == null || right > best) best = right;
       }
       if (best != null && isFinite(best)) return best;
@@ -482,23 +553,97 @@
 
     /**
      * Playhead is a viewport overlay (#stage). Convert content X → view X.
-     * Scroll targets (contentX - anchor*width). During lead-in the orange line
-     * sits near the left edge; after the first onset it locks near ANCHOR while
-     * the score slides underneath.
+     * Scroll keeps the strip left until focus X reaches ANCHOR; then the orange
+     * line locks there and the score slides underneath.
      */
     function paintPlayhead(ph, contentX, sx) {
       ph.style.display = 'block';
       ph.style.height = '100%';
-      const viewX = (contentX - sx);
+      // Keep ~12px at full scale; shrink with strip fit so a fat bar never
+      // dwarfs noteheads after the staff lane resizes (16px was too thick).
+      const fit = (typeof window.__pfStripFit === 'number' && window.__pfStripFit > 0)
+        ? window.__pfStripFit
+        : 1;
+      const barW = Math.max(5, Math.min(12, Math.round(12 * Math.min(1, fit))));
+      ph.style.width = barW + 'px';
+      ph.style.maxWidth = barW + 'px';
+      ph.style.minWidth = barW + 'px';
+      ph.style.transform = 'none';
+      const halfW = barW / 2;
+      // contentX is strip-local; add center pad for wide-lane idle layout.
+      const viewX = (contentX - sx + contentCenterPadX) - halfW;
       ph.style.left = viewX + 'px';
+    }
+
+    /**
+     * Opening: scroll stays 0 so the playhead walks from the left toward
+     * ANCHOR. Mid-piece: lock the line at ANCHOR and scroll the strip.
+     *
+     * Do not ease a smaller start-anchor into ANCHOR — that briefly asks for
+     * scroll>0 then clamps back to 0, and the whole staff jumps right once
+     * when playback starts.
+     */
+    function scrollTargetForFocusX(focusX, viewW, maxS) {
+      const anchorX = viewW * ANCHOR;
+      if (!(viewW > 0) || !(focusX > anchorX)) return 0;
+      return Math.max(0, Math.min(maxS, focusX - anchorX));
     }
 
     function applyScrollTransform(sx) {
       scrollX = sx;
       const host = document.getElementById('svg');
       if (host) {
-        host.style.transform = 'translate3d(' + (-sx) + 'px, 0, 0)';
+        const x = contentCenterPadX - sx;
+        host.style.transform = 'translate3d(' + x + 'px, 0, 0)';
       }
+    }
+
+    /**
+     * Idle / wide-lane placement: center the engraved strip horizontally when
+     * narrower than the viewport. Always top-align vertically — centering in a
+     * taller lane creates large cream margins above/below the staff while the
+     * Flutter stage still looks staff-heavy. Follow-scroll unchanged.
+     */
+    function placeEngravingInLane(host) {
+      const wrap = document.getElementById('wrap');
+      if (!host || !wrap) return;
+      const laneW = wrap.clientWidth || 0;
+      const laneH = wrap.clientHeight || 0;
+      let contentW = 0;
+      let contentH = 0;
+      rootPageSvgs(host).forEach((pageSvg) => {
+        const w = parseFloat(pageSvg.style.width);
+        const h = parseFloat(pageSvg.style.height);
+        if (w > 0) contentW += w;
+        else {
+          try {
+            const r = pageSvg.getBoundingClientRect();
+            if (r.width > 0) contentW += r.width;
+          } catch (_) { /* ignore */ }
+        }
+        if (h > contentH) contentH = h;
+      });
+      if (!(contentW > 0)) {
+        contentW = host.scrollWidth || 0;
+      }
+      if (!(contentH > 0)) {
+        try {
+          contentH = host.getBoundingClientRect().height || 0;
+        } catch (_) { contentH = 0; }
+      }
+      // Top-align always (bass ledger safety + no floating-in-tall-box look).
+      host.style.alignItems = 'flex-start';
+      contentCenterPadX = (laneW > 0 && contentW > 0 && contentW < laneW - 0.5)
+        ? Math.floor((laneW - contentW) / 2)
+        : 0;
+      if (contentCenterPadX > 0 || (laneH > 0 && contentH > 0 && laneH - contentH > 12)) {
+        logHost(
+          'placeEngraving padX=' + contentCenterPadX +
+          ' contentW=' + Math.round(contentW) + ' laneW=' + Math.round(laneW) +
+          ' contentH=' + Math.round(contentH) + ' laneH=' + Math.round(laneH),
+        );
+      }
+      applyScrollTransform(scrollX);
     }
 
     /** Ease ≤ MAX_EXTRAPOLATE_SEC after last Dart beat — never a second clock. */
@@ -536,19 +681,8 @@
       }
       targetContentX = focusX;
 
-      const firstQ = (typeof firstSoundingQ === 'number' && isFinite(firstSoundingQ))
-        ? firstSoundingQ
-        : (beatXPoints.length ? beatXPoints[0].q : 0);
-      const park = firstQ - PLAYBACK_LEAD_IN_BEATS;
-      let anchorFrac = ANCHOR;
-      // Lead-in: keep the orange line at the far left; ease to ANCHOR by first onset.
-      if (displayBeats < firstQ - 1e-9 && PLAYBACK_LEAD_IN_BEATS > 0) {
-        const t = Math.max(0, Math.min(1, (displayBeats - park) / PLAYBACK_LEAD_IN_BEATS));
-        anchorFrac = START_ANCHOR + (ANCHOR - START_ANCHOR) * t;
-      }
-      const anchorX = wrap.clientWidth * anchorFrac;
       const maxS = maxScrollX(wrap);
-      const targetScroll = Math.max(0, Math.min(maxS, focusX - anchorX));
+      const targetScroll = scrollTargetForFocusX(focusX, wrap.clientWidth, maxS);
       const dist = targetScroll - scrollX;
       // Playing: hard-track Dart beats. Paused: soft ease / snap on seek.
       const hard = forceSnap || beatsPerSec > 0 ||
@@ -630,6 +764,390 @@
       return out;
     }
 
+    /* pf-equal-start */
+    /**
+     * Pure helpers for equal barline spacing. Practice strip keeps one system;
+     * these remap engraved X so every measure has the same width. DOM glue is
+     * equalizeMeasureWidths. Node tests eval this block.
+     */
+    function fmtNum(n) {
+      if (!isFinite(n)) return '0';
+      const r = Math.round(n * 100) / 100;
+      if (Object.is(r, -0)) return '0';
+      return String(r);
+    }
+
+    /**
+     * spans: [{left, right}] in one system, left-to-right, typically abutting.
+     * Total ink width is preserved (last right edge stays) so scroll length and
+     * the playhead's end anchor do not grow.
+     */
+    function buildEqualMap(spans) {
+      const origin = spans[0].left;
+      let total = 0;
+      const slots = [];
+      for (let i = 0; i < spans.length; i++) {
+        const sp = spans[i];
+        const oldW = sp.right - sp.left;
+        total += oldW;
+        slots.push({ left: sp.left, right: sp.right, oldW: oldW });
+      }
+      const target = total / spans.length;
+      for (let i = 0; i < slots.length; i++) {
+        slots[i].newLeft = origin + i * target;
+        slots[i].newRight = origin + (i + 1) * target;
+      }
+      function slotIndex(x) {
+        if (x < slots[0].left) return 0;
+        for (let i = 0; i < slots.length; i++) {
+          if (i === slots.length - 1 || x < slots[i].right) return i;
+        }
+        return slots.length - 1;
+      }
+      function mapX(x) {
+        if (!isFinite(x)) return x;
+        if (x <= slots[0].left) return slots[0].newLeft + (x - slots[0].left);
+        const i = slotIndex(x);
+        const s = slots[i];
+        const t = s.oldW > 0 ? (x - s.left) / s.oldW : 0;
+        return s.newLeft + t * target;
+      }
+      function sxAt(x) {
+        const s = slots[slotIndex(x)];
+        return s.oldW > 0 ? target / s.oldW : 1;
+      }
+      return { target: target, mapX: mapX, sxAt: sxAt, slots: slots };
+    }
+
+    function remapPathD(d, mapX) {
+      const tokens = d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)/g);
+      if (!tokens) return d;
+      let i = 0;
+      let cmd = '';
+      const out = [];
+      function nextNum() {
+        return tokens[i++];
+      }
+      while (i < tokens.length) {
+        if (/[A-Za-z]/.test(tokens[i])) {
+          cmd = tokens[i++];
+          out.push(cmd);
+          if (cmd === 'Z' || cmd === 'z') continue;
+        }
+        const abs = cmd === cmd.toUpperCase();
+        const c = cmd.toUpperCase();
+        if (c === 'H') {
+          const x = parseFloat(nextNum());
+          out.push(abs ? fmtNum(mapX(x)) : fmtNum(x));
+          continue;
+        }
+        if (c === 'V') {
+          out.push(nextNum());
+          continue;
+        }
+        let pairs = 1;
+        if (c === 'C') pairs = 3;
+        else if (c === 'S' || c === 'Q') pairs = 2;
+        for (let k = 0; k < pairs; k++) {
+          const x = parseFloat(nextNum());
+          const y = nextNum();
+          out.push(abs ? fmtNum(mapX(x)) : fmtNum(x));
+          out.push(y);
+        }
+      }
+      return out.join(' ');
+    }
+
+    function remapPoints(points, mapX) {
+      return points.trim().split(/\s+/).map((pair) => {
+        const bits = pair.split(',');
+        if (bits.length < 2) return pair;
+        const x = parseFloat(bits[0]);
+        if (!isFinite(x)) return pair;
+        bits[0] = fmtNum(mapX(x));
+        return bits.join(',');
+      }).join(' ');
+    }
+
+    /** Move a Verovio <use> and scale it on X so squeezed bars do not overlap. */
+    function remapTranslateScale(transform, mapX, sx) {
+      let out = transform.replace(
+        /translate\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/,
+        (_, x, y) => 'translate(' + fmtNum(mapX(parseFloat(x))) + ', ' + y + ')',
+      );
+      if (isFinite(sx) && Math.abs(sx - 1) > 1e-4) {
+        out = out.replace(
+          /scale\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/,
+          (_, a, b) => 'scale(' + fmtNum(parseFloat(a) * sx) + ', ' + b + ')',
+        );
+      }
+      return out;
+    }
+    /* pf-equal-end */
+
+    /**
+     * Verovio spaces by duration plus clef / meter / tempo inside the bar
+     * (spacingNonLinear does not force equal barlines). After engraving, remap
+     * every absolute X in each system so barline-to-barline width is identical.
+     * Glyphs scale on X with their bar. The playhead is measured afterwards
+     * from noteheads, so it stays on the attack.
+     */
+    function equalizeMeasureWidths(host) {
+      if (!host) return;
+      const systems = host.querySelectorAll('g.system');
+      systems.forEach((system) => {
+        const measures = Array.from(system.children).filter((el) => {
+          const c = el.getAttribute && el.getAttribute('class');
+          return c && c.split(/\s+/).indexOf('measure') >= 0;
+        });
+        if (measures.length < 2) return;
+        const spans = [];
+        for (let i = 0; i < measures.length; i++) {
+          const sp = measureStaffSpan(measures[i]);
+          if (!sp) {
+            logHost('equal bars skip: measure without staff span');
+            return;
+          }
+          spans.push(sp);
+        }
+        let minW = Infinity;
+        let maxW = 0;
+        for (let i = 0; i < spans.length; i++) {
+          const w = spans[i].right - spans[i].left;
+          if (w < minW) minW = w;
+          if (w > maxW) maxW = w;
+        }
+        if (maxW > minW + 0.5) {
+          const built = buildEqualMap(spans);
+          const mapX = built.mapX;
+          const nodes = system.querySelectorAll('*');
+          for (let n = 0; n < nodes.length; n++) {
+            const el = nodes[n];
+            if (equalizeSkip(el, system)) continue;
+            const tag = (el.tagName || '').toLowerCase();
+            if (tag === 'rect') {
+              const x = parseFloat(el.getAttribute('x'));
+              const w = parseFloat(el.getAttribute('width'));
+              if (isFinite(x)) {
+                el.setAttribute('x', fmtNum(mapX(x)));
+                if (isFinite(w)) {
+                  el.setAttribute('width', fmtNum(mapX(x + w) - mapX(x)));
+                }
+              }
+            } else if (tag !== 'svg' && el.hasAttribute('x')) {
+              const x = parseFloat(el.getAttribute('x'));
+              if (isFinite(x)) el.setAttribute('x', fmtNum(mapX(x)));
+            }
+            if (el.hasAttribute('points')) {
+              el.setAttribute('points', remapPoints(el.getAttribute('points'), mapX));
+            }
+            if (tag === 'path' && el.hasAttribute('d')) {
+              el.setAttribute('d', remapPathD(el.getAttribute('d'), mapX));
+            }
+            if (el.hasAttribute('transform') && el.getAttribute('transform').indexOf('translate') >= 0) {
+              const tr = el.getAttribute('transform');
+              const mx = /translate\(\s*(-?[\d.]+)/.exec(tr);
+              const x0 = mx ? parseFloat(mx[1]) : NaN;
+              const sx = isFinite(x0) ? built.sxAt(x0) : 1;
+              el.setAttribute('transform', remapTranslateScale(tr, mapX, sx));
+            }
+          }
+          logHost(
+            'equal bars n=' + spans.length +
+            ' target=' + Math.round(built.target) +
+            ' was=' + Math.round(minW) + '-' + Math.round(maxW),
+          );
+        }
+        // Staff ends are now one width. Closing barlines sit a few units inside
+        // that end (more on repeats), so snap only the rightmost stroke onto it.
+        snapClosingBarlines(system, measures);
+      });
+    }
+
+    /** X of a vertical path, or null. */
+    function verticalPathX(pathEl) {
+      const d = (pathEl && pathEl.getAttribute && pathEl.getAttribute('d')) || '';
+      const m = d.match(/M\s*(-?[\d.]+)\s+(-?[\d.]+)\s+L\s*(-?[\d.]+)\s+(-?[\d.]+)/i);
+      if (!m) return null;
+      const x1 = parseFloat(m[1]);
+      const y1 = parseFloat(m[2]);
+      const x2 = parseFloat(m[3]);
+      const y2 = parseFloat(m[4]);
+      if (!isFinite(x1) || Math.abs(x1 - x2) > 1.5) return null;
+      if (Math.abs(y1 - y2) < 40) return null;
+      return x1;
+    }
+
+    function setVerticalPathX(pathEl, x) {
+      const d = pathEl.getAttribute('d') || '';
+      const next = d.replace(
+        /M\s*(-?[\d.]+)(\s+)(-?[\d.]+)(\s+)L\s*(-?[\d.]+)(\s+)(-?[\d.]+)/i,
+        'M' + fmtNum(x) + '$2$3$4L' + fmtNum(x) + '$6$7',
+      );
+      if (next !== d) pathEl.setAttribute('d', next);
+    }
+
+    function shiftTranslateX(el, dx) {
+      const tr = el.getAttribute('transform') || '';
+      if (tr.indexOf('translate') < 0) {
+        el.setAttribute('transform', ('translate(' + fmtNum(dx) + ',0) ' + tr).trim());
+        return;
+      }
+      el.setAttribute(
+        'transform',
+        tr.replace(
+          /translate\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/,
+          (_, x, y) => 'translate(' + fmtNum(parseFloat(x) + dx) + ', ' + y + ')',
+        ),
+      );
+    }
+
+    /**
+     * Staff lines are one width after the remap. Move each measure's barline
+     * group onto that edge without collapsing a double bar or a repeat:
+     * a group on the right lands on the staff end, a group on the left
+     * (opening repeat) lands on the staff start.
+     */
+    function snapClosingBarlines(system, measures) {
+      if (!system || !measures || !measures.length) return;
+      const first = measureStaffSpan(measures[0]);
+      if (first) {
+        const kids = system.children || [];
+        for (let i = 0; i < kids.length; i++) {
+          const el = kids[i];
+          if ((el.tagName || '').toLowerCase() !== 'path') continue;
+          if (verticalPathX(el) == null) continue;
+          setVerticalPathX(el, first.left);
+          break;
+        }
+      }
+      for (let i = 0; i < measures.length; i++) {
+        const sp = measureStaffSpan(measures[i]);
+        if (!sp) continue;
+        const groups = measures[i].querySelectorAll('g.barLine');
+        const verts = [];
+        for (let g = 0; g < groups.length; g++) {
+          const paths = groups[g].querySelectorAll('path');
+          for (let k = 0; k < paths.length; k++) {
+            const x = verticalPathX(paths[k]);
+            if (x == null) continue;
+            verts.push({ el: paths[k], x: x, group: groups[g] });
+          }
+        }
+        if (!verts.length) continue;
+        let minX = verts[0].x;
+        let maxX = verts[0].x;
+        for (let k = 1; k < verts.length; k++) {
+          if (verts[k].x < minX) minX = verts[k].x;
+          if (verts[k].x > maxX) maxX = verts[k].x;
+        }
+        const mid = (sp.left + sp.right) / 2;
+        const dx = maxX >= mid ? sp.right - maxX : sp.left - minX;
+        if (Math.abs(dx) < 0.5) continue;
+        const touched = [];
+        for (let k = 0; k < verts.length; k++) {
+          setVerticalPathX(verts[k].el, verts[k].x + dx);
+          if (touched.indexOf(verts[k].group) < 0) touched.push(verts[k].group);
+        }
+        for (let g = 0; g < touched.length; g++) {
+          const dots = touched[g].querySelectorAll('use');
+          for (let u = 0; u < dots.length; u++) shiftTranslateX(dots[u], dx);
+        }
+      }
+    }
+
+    function equalizeSkip(el, system) {
+      let p = el;
+      while (p && p !== system) {
+        const c = p.getAttribute && p.getAttribute('class');
+        if (c) {
+          const parts = c.split(/\s+/);
+          if (parts.indexOf('grpSym') >= 0 || parts.indexOf('label') >= 0 || parts.indexOf('labelAbbr') >= 0) {
+            return true;
+          }
+        }
+        p = p.parentNode;
+      }
+      return false;
+    }
+
+    function inLedgerLines(el) {
+      let p = el;
+      while (p) {
+        const c = p.getAttribute && p.getAttribute('class');
+        if (c && c.split(/\s+/).indexOf('ledgerLines') >= 0) return true;
+        p = p.parentNode;
+      }
+      return false;
+    }
+
+    /** Horizontal staff-line extent of one measure (the long staff strokes). */
+    function measureStaffSpan(meas) {
+      let left = Infinity;
+      let right = -Infinity;
+      let longest = 0;
+      const segs = [];
+      function considerHorizontal(x1, y1, x2, y2) {
+        if (Math.abs(y1 - y2) > 1.5) return;
+        const lo = Math.min(x1, x2);
+        const hi = Math.max(x1, x2);
+        const w = hi - lo;
+        if (w > longest) longest = w;
+        segs.push({ lo: lo, hi: hi, w: w });
+      }
+      const staffs = meas.querySelectorAll('g.staff');
+      for (let s = 0; s < staffs.length; s++) {
+        const paths = staffs[s].querySelectorAll('path');
+        for (let k = 0; k < paths.length; k++) {
+          if (inLedgerLines(paths[k])) continue;
+          const d = paths[k].getAttribute('d') || '';
+          const tokens = d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)/g);
+          if (!tokens) continue;
+          let i = 0;
+          let cmd = '';
+          let cx = 0;
+          let cy = 0;
+          function num() {
+            return parseFloat(tokens[i++]);
+          }
+          while (i < tokens.length) {
+            if (/[A-Za-z]/.test(tokens[i])) cmd = tokens[i++];
+            if (!cmd) break;
+            const abs = cmd === cmd.toUpperCase();
+            const c = cmd.toUpperCase();
+            if (c === 'Z') continue;
+            if (c === 'M' || c === 'L') {
+              const x = num();
+              const y = num();
+              const nx = abs ? x : cx + x;
+              const ny = abs ? y : cy + y;
+              if (c === 'L') considerHorizontal(cx, cy, nx, ny);
+              cx = nx;
+              cy = ny;
+            } else if (c === 'H') {
+              const x = num();
+              const nx = abs ? x : cx + x;
+              considerHorizontal(cx, cy, nx, cy);
+              cx = nx;
+            } else if (c === 'V') {
+              const y = num();
+              cy = abs ? y : cy + y;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+      const minLen = Math.max(40, longest * 0.55);
+      for (let i = 0; i < segs.length; i++) {
+        if (segs[i].w < minLen) continue;
+        if (segs[i].lo < left) left = segs[i].lo;
+        if (segs[i].hi > right) right = segs[i].hi;
+      }
+      if (!(right > left)) return null;
+      return { left: left, right: right };
+    }
+
     /**
      * Verovio places .mnum at the left barline; shift to measure center.
      * Hide measure ≤1 (pickup / first bar) — mnumInterval:1 otherwise shows them.
@@ -665,8 +1183,9 @@
     /** Phone / narrow staff lane — readable notes, horizontal follow scroll only. */
     function isNarrowLane(cssW, cssH) {
       const w = cssW || 0;
-      const h = cssH || 0;
-      return w > 0 && w < 520 || h > 0 && h < 340;
+      // Width only. A short desktop staff lane must not flip into the phone
+      // page-width formula (that reflows bars). Height is the visual hug.
+      return w > 0 && w < 520;
     }
 
     /** Fit Verovio page metrics to the WebView box (units: 1/10 mm). */
@@ -675,10 +1194,37 @@
       const cssW = (options && options.cssWidth) || wrap.clientWidth || window.innerWidth || 800;
       const cssH = (options && options.cssHeight) || wrap.clientHeight || window.innerHeight || 220;
       const measures = countMeasures(musicXml || '');
+      const mode = (options && options.layoutMode) === 'paged' ? 'paged' : 'strip';
       const narrow = !!((options && options.mobile) || isNarrowLane(cssW, cssH));
-      const scale = narrow
-        ? Math.max(54, (options && options.scale) || 58)
-        : ((options && options.scale) || 60);
+      // Fixed engraver scale across all scores — hosts may pass scale; never
+      // derive from lane height / measure count (that made notes uneven).
+      const scale = Math.max(40, Math.min(100, (options && options.scale) || 60));
+      if (mode === 'paged') {
+        // Vertical browse: same engraver scale as practice strip; wrap systems
+        // by page height only (spacing/margins match strip in applyToolkitOptions).
+        const pageWidth = Math.max(
+          1200,
+          Math.min(4000, (options && options.pageWidth) || Math.floor(cssW * 100 / scale)),
+        );
+        const pageHeight = Math.max(
+          1600,
+          Math.min(
+            6000,
+            (options && options.pageHeight) || Math.floor(Math.max(cssH, 480) * 100 / scale),
+          ),
+        );
+        return {
+          scale: scale,
+          pageWidth,
+          pageHeight,
+          cssW,
+          cssH,
+          measures,
+          rawWidth: pageWidth,
+          breaks: 'auto',
+          layoutMode: 'paged',
+        };
+      }
       if (narrow) {
         // One continuous system, wide strip — never crush all measures into viewport width.
         const pageWidth = Math.max(
@@ -699,6 +1245,7 @@
           rawWidth: pageWidth,
           breaks: 'none',
           mobile: true,
+          layoutMode: 'strip',
         };
       }
       // Flowkey-like continuous grand staff: ONE horizontal system for the whole
@@ -729,33 +1276,33 @@
         measures,
         rawWidth: pageWidth,
         breaks: 'none',
+        layoutMode: 'strip',
       };
     }
 
     function applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode) {
       const breaks = breaksMode || (lay && lay.breaks) || 'none';
+      const paged = breaks === 'auto' || (lay && lay.layoutMode === 'paged');
       toolkit.setOptions({
         scale: scale,
         pageWidth: pageWidth,
         pageHeight: pageHeight,
         adjustPageHeight: true,
-        // With breaks:none, expand page to fit the single continuous system
-        // (never crush all measures into a viewport-sized strip).
-        adjustPageWidth: true,
+        // Strip: expand width for one continuous system.
+        // Paged browse: keep pageWidth so systems wrap vertically — engraving
+        // metrics otherwise match practice strip (same note look).
+        adjustPageWidth: !paged,
         breaks: breaks,
         footer: 'none',
         header: 'none',
         svgViewBox: true,
         pageMarginTop: 36,
-        pageMarginBottom: 36,
+        pageMarginBottom: 48,
         pageMarginLeft: 48,
         pageMarginRight: 28,
         spacingStaff: 14,
-        spacingSystem: 8,
-        // Equal measure width (time-proportional): spacingNonLinear=1 makes
-        // space ∝ duration so same-meter bars share the same horizontal span
-        // (Flowkey-like follow-along). Pair with a small spacingLinear so the
-        // layout does not explode; noJustification avoids uneven last-system stretch.
+        // Slightly more air between systems when stacked vertically.
+        spacingSystem: paged ? 12 : 8,
         spacingLinear: 0.05,
         spacingNonLinear: 1.0,
         noJustification: true,
@@ -763,6 +1310,14 @@
         justifyVertically: false,
         mnumInterval: 1,
       });
+    }
+
+    function setBrowseChrome(on) {
+      try {
+        document.body.classList.toggle('pf-browse', !!on);
+      } catch (_) { /* ignore */ }
+      const ph = document.getElementById('playhead');
+      if (ph && on) ph.style.display = 'none';
     }
 
     /** Top-level page SVGs only — never nested svg.definition-scale. */
@@ -784,19 +1339,162 @@
     }
 
     /**
-     * Size page SVGs for the Flutter lane.
-     * Prefer 1 CSS px = 1 viewBox unit. If taller than the lane, uniform-scale
-     * ALL pages by the same factor (max page height) so later pages cannot
-     * shrink/crop the bass staff into a white strip.
+     * Vertical span of g.system in the page SVG's user space (viewBox units).
+     * Screen rects first; CTM if the element is not laid out yet.
+     */
+    function systemSpanY(pageSvg) {
+      const systems = pageSvg.querySelectorAll('g.system');
+      if (!systems.length) return null;
+      try {
+        const pageBox = pageSvg.getBoundingClientRect();
+        if (pageBox && pageBox.height > 1) {
+          let top = Infinity;
+          let bottom = -Infinity;
+          const vb = pageSvg.viewBox.baseVal;
+          const scaleY = vb.height / pageBox.height;
+          systems.forEach((sys) => {
+            const r = sys.getBoundingClientRect();
+            if (!(r.height > 0)) return;
+            const y0 = (r.top - pageBox.top) * scaleY;
+            const y1 = (r.bottom - pageBox.top) * scaleY;
+            if (y0 < top) top = y0;
+            if (y1 > bottom) bottom = y1;
+          });
+          if (isFinite(top) && bottom > top) return { top: top, bottom: bottom };
+        }
+      } catch (_) { /* fall through */ }
+      try {
+        const pageCTM = pageSvg.getScreenCTM();
+        if (!pageCTM) return null;
+        const inv = pageCTM.inverse();
+        let top = Infinity;
+        let bottom = -Infinity;
+        systems.forEach((sys) => {
+          const b = sys.getBBox();
+          const ctm = sys.getScreenCTM();
+          if (!ctm || !(b.height > 0)) return;
+          const m = inv.multiply(ctm);
+          [b.y, b.y + b.height].forEach((y) => {
+            [b.x, b.x + b.width].forEach((x) => {
+              const pt = pageSvg.createSVGPoint();
+              pt.x = x;
+              pt.y = y;
+              const r = pt.matrixTransform(m);
+              if (r.y < top) top = r.y;
+              if (r.y > bottom) bottom = r.y;
+            });
+          });
+        });
+        if (isFinite(top) && bottom > top) return { top: top, bottom: bottom };
+      } catch (_) { /* ignore */ }
+      return null;
+    }
+
+    /**
+     * Strip pages are one grand staff plus a tall Verovio page (margins).
+     * Crop vertically to g.system so the lane is the engraved line, not an
+     * empty cream page. X / width stay put — measure equalization and the
+     * playhead both read horizontal positions.
+     *
+     * Verovio nests the ink in svg.definition-scale and maps that full
+     * definition page into the CSS box. Setting CSS height to the cropped
+     * slice while leaving the nested viewBox on the whole page squeezed each
+     * score by crop/page — a short page (小星星) shrank, a full page (诀别书)
+     * stayed near native. Crop the nested viewBox to the same slice so
+     * 1 page unit stays 1 CSS px for every score.
+     * Returns the cropped height in page units (1:1 with CSS px), or 0.
+     */
+    function cropStripViewBoxToSystem(pageSvg) {
+      if (!pageSvg || layoutMode === 'paged') return 0;
+      const nested = pageSvg.querySelector('svg.definition-scale');
+      let full = pageSvg.__pfFullVb;
+      if (!full) {
+        let vb;
+        try { vb = pageSvg.viewBox && pageSvg.viewBox.baseVal; } catch (_) { return 0; }
+        if (!vb || !(vb.width > 0) || !(vb.height > 0)) return 0;
+        full = { x: vb.x, y: vb.y, w: vb.width, h: vb.height };
+        pageSvg.__pfFullVb = full;
+      }
+      let nv = nested && nested.__pfFullVb;
+      if (nested && !nv) {
+        let b;
+        try { b = nested.viewBox && nested.viewBox.baseVal; } catch (_) { b = null; }
+        if (b && b.width > 0 && b.height > 0) {
+          nv = { x: b.x, y: b.y, w: b.width, h: b.height };
+          nested.__pfFullVb = nv;
+        }
+      }
+      const systems = pageSvg.querySelectorAll('g.system');
+      if (!systems.length) return 0;
+      // Measure against the full page. A second pass (afterLayout) must not
+      // crop an already-cropped viewBox again.
+      pageSvg.setAttribute(
+        'viewBox',
+        full.x + ' ' + full.y + ' ' + full.w + ' ' + full.h,
+      );
+      pageSvg.style.width = full.w + 'px';
+      pageSvg.style.height = full.h + 'px';
+      if (nested && nv) {
+        nested.setAttribute('viewBox', nv.x + ' ' + nv.y + ' ' + nv.w + ' ' + nv.h);
+        nested.removeAttribute('width');
+        nested.removeAttribute('height');
+        nested.removeAttribute('x');
+        nested.removeAttribute('y');
+      }
+      const span = systemSpanY(pageSvg);
+      if (!span) return 0;
+      const pad = 14;
+      let y0 = span.top - pad;
+      let y1 = span.bottom + pad;
+      if (y0 < full.y) y0 = full.y;
+      if (y1 > full.y + full.h) y1 = full.y + full.h;
+      const h = y1 - y0;
+      if (!(h > 40)) return 0;
+      pageSvg.setAttribute('viewBox', full.x + ' ' + y0 + ' ' + full.w + ' ' + h);
+      if (nested && nv && full.h > 0) {
+        const k = nv.h / full.h;
+        const ny = nv.y + (y0 - full.y) * k;
+        const nh = h * k;
+        nested.setAttribute(
+          'viewBox',
+          nv.x + ' ' + ny + ' ' + nv.w + ' ' + nh,
+        );
+        // User units of the cropped outer viewBox, which CSS maps 1:1.
+        // Do not use 100% — that collapsed the ink in WebView2.
+        nested.setAttribute('x', '0');
+        nested.setAttribute('y', '0');
+        nested.setAttribute('width', String(full.w));
+        nested.setAttribute('height', String(h));
+        nested.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+      }
+      logHost(
+        'cropStaff ink=' + Math.round(h) + ' page=' + Math.round(full.h),
+      );
+      return h;
+    }
+
+    /**
+     * Size page SVGs for the host lane.
+     * Engraver scale is fixed (hosts pass scale=60). Cropping keeps 1 page
+     * unit = 1 CSS px, so a short score is not squeezed smaller than 诀别书.
+     * Strip height is the cropped system, not the page viewBox.
+     * If that line is still taller than the lane, shrink ALL pages by the same
+     * fit so the bass staff is not clipped — never crop the ink.
      */
     function sizeEngravingFixedScale(host) {
       if (!host) return;
+      if (layoutMode === 'paged') {
+        sizeEngravingPaged(host);
+        return;
+      }
       const wrap = document.getElementById('wrap');
       const laneH = wrap && wrap.clientHeight > 40 ? wrap.clientHeight : 0;
       const pages = rootPageSvgs(host);
       const dims = [];
       let maxVbH = 0;
+      let inkReport = 0;
       pages.forEach((pageSvg) => {
+        const cropped = cropStripViewBoxToSystem(pageSvg);
         let vbW = 0;
         let vbH = 0;
         try {
@@ -806,29 +1504,32 @@
             vbH = vb.height;
           }
         } catch (_) { /* ignore */ }
-        if (!(vbW > 0 && vbH > 0)) {
-          try {
-            const b = pageSvg.getBBox();
-            vbW = b.width;
-            vbH = b.height;
-          } catch (_) { /* ignore */ }
+        // Cropped system height wins. Page getBBox includes the empty page rect
+        // and would paint the cream well back under the staff.
+        if (cropped > 40) {
+          vbH = cropped;
+          if (cropped > inkReport) inkReport = cropped;
         }
         if (!(vbW > 0)) vbW = 800;
         if (!(vbH > 0)) vbH = 220;
         dims.push({ vbW: vbW, vbH: vbH });
         if (vbH > maxVbH) maxVbH = vbH;
       });
+      // Only the cropped system — a full page viewBox must not become the lane.
+      window.__pfStripInkPx = inkReport > 40 ? Math.round(inkReport) : 0;
+      // Extra pad so bass ledger lines stay above #wrap clip edge.
+      const BOTTOM_PAD = 16;
       let fit = 1;
-      const narrow = wrap && wrap.clientWidth > 0 && wrap.clientWidth < 520;
-      if (laneH > 0 && maxVbH > laneH) {
-        fit = laneH / maxVbH;
-        // Narrow lane: keep staff readable; clip vertically, scroll horizontally.
-        if (narrow) fit = Math.max(0.72, fit);
+      if (laneH > 0 && maxVbH > 0) {
+        const avail = Math.max(40, laneH - BOTTOM_PAD);
+        if (maxVbH > avail) fit = avail / maxVbH;
       }
+      window.__pfStripFit = fit;
+      // Always top-align before measuring placement (avoids mid-frame center clip).
+      host.style.alignItems = 'flex-start';
       pages.forEach((pageSvg, i) => {
         try {
           const d = dims[i] || { vbW: 800, vbH: 220 };
-          // Same fit for every page; height at least fitted max so rows align.
           const w = Math.max(120, Math.round(d.vbW * fit));
           const h = Math.max(80, Math.round(Math.max(d.vbH, maxVbH) * fit));
           pageSvg.removeAttribute('height');
@@ -844,6 +1545,70 @@
           pageSvg.style.overflow = 'visible';
         } catch (_) { /* ignore */ }
       });
+      placeEngravingInLane(host);
+      // Re-assert bar width after layout so a prior fat width cannot stick.
+      const ph = document.getElementById('playhead');
+      if (ph) {
+        const barW = Math.max(5, Math.min(12, Math.round(12 * Math.min(1, fit))));
+        ph.style.width = barW + 'px';
+        ph.style.maxWidth = barW + 'px';
+        ph.style.minWidth = barW + 'px';
+        ph.style.transform = 'none';
+      }
+    }
+
+    /** Fit each Verovio page to the browse lane width.
+     *
+     * Do **not** derive CSS size from measureStaffSpan ÷ viewBox: staff path
+     * coordinates live in definition-scale space while page viewBox is in page
+     * units — that ratio collapses every page into a thin centered column.
+     * Within-system equal bar widths still come from equalizeMeasureWidths.
+     */
+    function sizeEngravingPaged(host) {
+      if (!host) return;
+      const wrap = document.getElementById('wrap');
+      const laneW = wrap && wrap.clientWidth > 40 ? wrap.clientWidth : (window.innerWidth || 800);
+      const availW = Math.max(200, laneW - 16);
+      const pages = rootPageSvgs(host);
+      host.style.display = 'flex';
+      host.style.flexDirection = 'column';
+      host.style.flexWrap = 'nowrap';
+      host.style.alignItems = 'center';
+      host.style.width = '100%';
+      host.style.minHeight = '0';
+      host.style.transform = 'none';
+      pages.forEach((pageSvg, i) => {
+        try {
+          let vbW = 800;
+          let vbH = 1100;
+          try {
+            const vb = pageSvg.viewBox && pageSvg.viewBox.baseVal;
+            if (vb && vb.width > 0 && vb.height > 0) {
+              vbW = vb.width;
+              vbH = vb.height;
+            }
+          } catch (_) { /* ignore */ }
+          const fit = availW / Math.max(1, vbW);
+          const w = Math.max(200, Math.round(availW));
+          const h = Math.max(120, Math.round(vbH * fit));
+          pageSvg.removeAttribute('height');
+          pageSvg.removeAttribute('width');
+          pageSvg.setAttribute('preserveAspectRatio', 'xMidYMin meet');
+          pageSvg.setAttribute('data-pf-page', String(i + 1));
+          pageSvg.style.height = h + 'px';
+          pageSvg.style.width = w + 'px';
+          pageSvg.style.maxWidth = '100%';
+          pageSvg.style.maxHeight = 'none';
+          pageSvg.style.display = 'block';
+          pageSvg.style.flex = '0 0 auto';
+          pageSvg.style.background = '#FFFBF5';
+          pageSvg.style.overflow = 'visible';
+        } catch (_) { /* ignore */ }
+      });
+      contentCenterPadX = 0;
+      scrollX = 0;
+      window.__pfStripFit = 1;
+      logHost('pagedFit pages=' + pages.length + ' availW=' + Math.round(availW));
     }
 
     function renderSvgHost() {
@@ -854,12 +1619,27 @@
       }
       const host = document.getElementById('svg');
       host.innerHTML = html;
-      // Multi-page must be a horizontal strip — vertical stack breaks beat→X scroll.
-      host.style.display = 'flex';
-      host.style.flexDirection = 'row';
-      host.style.flexWrap = 'nowrap';
-      // Top-align: centering clipped the grand-staff brace/clef under the keyboard.
-      host.style.alignItems = 'flex-start';
+      if (layoutMode === 'paged') {
+        host.style.display = 'flex';
+        host.style.flexDirection = 'column';
+        host.style.flexWrap = 'nowrap';
+        host.style.alignItems = 'center';
+        host.style.minHeight = '0';
+        host.style.width = '100%';
+        host.style.transform = 'none';
+        setBrowseChrome(true);
+      } else {
+        // Multi-page must be a horizontal strip — vertical stack breaks beat→X scroll.
+        host.style.display = 'flex';
+        host.style.flexDirection = 'row';
+        host.style.flexWrap = 'nowrap';
+        host.style.minHeight = '0';
+        host.style.width = 'max-content';
+        // Top-align before sizing; placeEngravingInLane keeps top + may pad X.
+        host.style.alignItems = 'flex-start';
+        setBrowseChrome(false);
+      }
+      equalizeMeasureWidths(host);
       polishMeasureNumbers(host);
       sizeEngravingFixedScale(host);
       const notes = host.querySelectorAll('g.note').length;
@@ -898,6 +1678,7 @@
           heads: heads,
           width: w,
           height: h,
+          inkHeight: window.__pfStripInkPx || 0,
           ready: !!ready,
           htmlLen: (host.innerHTML || '').length,
         };
@@ -935,10 +1716,14 @@
         beatsPerSec = 0;
         lastSyncTime = 0;
         forceSnap = true;
+        layoutMode = 'strip';
+        currentBrowsePage = 1;
+        setBrowseChrome(false);
         resetScrollTransform();
         const host = document.getElementById('svg');
         if (host) host.innerHTML = '';
         lastLoadErr = null;
+        window.__pfStripInkPx = 0;
         setStatus('');
         logHost('pfClearScore');
         return true;
@@ -992,11 +1777,11 @@
      */
     window.pfLoadFromUrlAsync = function (url, options) {
       lastLoadErr = null;
-      if (!toolkit) {
-        lastLoadErr = 'not-ready';
-        setStatus('谱面引擎未就绪');
-        logHost('pfLoadFromUrlAsync not-ready');
-        return false;
+      if (!ensureToolkit()) {
+        pendingLoad = { url: url, options: options || {} };
+        setStatus('等待谱面引擎…');
+        logHost('pfLoadFromUrlAsync queued (toolkit pending)');
+        return 'pending';
       }
       setStatus('正在加载乐谱…');
       logHost('pfLoadFromUrlAsync ' + url);
@@ -1089,21 +1874,26 @@
 
         function engrave(mode) {
           const lay = layoutOptions(options || {}, lastMusicXml);
+          layoutMode = lay.layoutMode === 'paged' ? 'paged' : 'strip';
           let scale = (options && options.scale) || lay.scale;
           let pageHeight = lay.pageHeight;
           let pageWidth = lay.pageWidth;
-          // Always continuous single system — never reintroduce mid-scroll braces.
-          const breaksMode = 'none';
-          if (mode === 'safe') {
+          // Strip: continuous single system. Paged: Verovio auto page breaks.
+          const breaksMode = layoutMode === 'paged' ? 'auto' : 'none';
+          if (layoutMode === 'paged') {
+            applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
+            logHost('engrave PAGED pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale + ' breaks=auto');
+          } else if (mode === 'safe') {
             // Keep breaks:none; slightly shorter page + modest width floor.
             pageWidth = Math.max(4000, Math.min(pageWidth, Math.max(4000, lay.measures * 200)));
             pageHeight = Math.max(520, Math.min(pageHeight, 720));
             applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
             logHost('engrave SAFE pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale + ' breaks=none');
           } else if (mode === 'narrow') {
+            // Keep the same engraver scale — only shrink page metrics so notes
+            // stay the same size as successful NORM engraves.
             pageWidth = Math.max(4000, Math.min(pageWidth, Math.max(4000, lay.measures * 180)));
             pageHeight = Math.max(500, Math.min(pageHeight, 700));
-            scale = Math.min(scale, 50);
             applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
             logHost('engrave NARROW pageWidth=' + pageWidth + ' pageHeight=' + pageHeight + ' scale=' + scale + ' breaks=none');
           } else {
@@ -1129,11 +1919,11 @@
         }
 
         let ok = engrave('norm');
-        if (!ok) {
+        if (!ok && layoutMode !== 'paged') {
           logHost('retry engrave with safe options');
           ok = engrave('safe');
         }
-        if (!ok) {
+        if (!ok && layoutMode !== 'paged') {
           logHost('retry engrave with narrow+none');
           ok = engrave('narrow');
         }
@@ -1153,12 +1943,20 @@
         beatsPerSec = 0;
         lastSyncTime = 0;
         forceSnap = true;
+        currentBrowsePage = 1;
         ready = true;
         afterLayout(() => {
-          // Size first, then measure — sizing after rebuildBeatXPoints invalidates X.
-          sizeEngravingFixedScale(document.getElementById('svg'));
-          rebuildBeatXPoints();
-          updatePlayhead(lastBeats, true);
+          // Size + lane placement first, then measure (pad affects content X).
+          const host = document.getElementById('svg');
+          sizeEngravingFixedScale(host);
+          if (layoutMode === 'paged') {
+            const wrap = document.getElementById('wrap');
+            if (wrap) wrap.scrollTop = 0;
+            currentBrowsePage = 1;
+          } else {
+            rebuildBeatXPoints();
+            updatePlayhead(lastBeats, true);
+          }
         });
         return ok;
       } catch (e) {
@@ -1177,13 +1975,15 @@
     window.pfResize = function (options) {
       if (!toolkit || !ready || !lastMusicXml) return false;
       const lay = layoutOptions(options || {}, lastMusicXml);
+      layoutMode = lay.layoutMode === 'paged' ? 'paged' : 'strip';
       const scale = (options && options.scale) || lay.scale;
       const pageHeight = (options && options.pageHeight) || lay.pageHeight;
       const pageWidth = lay.pageWidth;
       const wrap = document.getElementById('wrap');
       const keepBeats = lastBeats;
+      const breaksMode = layoutMode === 'paged' ? 'auto' : 'none';
 
-      applyToolkitOptions(lay, scale, pageHeight, pageWidth, 'none');
+      applyToolkitOptions(lay, scale, pageHeight, pageWidth, breaksMode);
       try {
         if (typeof toolkit.redoLayout === 'function') {
           toolkit.redoLayout();
@@ -1201,19 +2001,128 @@
       renderSvgHost();
       afterLayout(() => {
         sizeEngravingFixedScale(document.getElementById('svg'));
-        rebuildBeatXPoints();
-        updatePlayhead(keepBeats, true);
+        if (layoutMode === 'paged') {
+          pfSetPage(currentBrowsePage || 1);
+        } else {
+          rebuildBeatXPoints();
+          updatePlayhead(keepBeats, true);
+        }
       });
       return true;
     };
 
+    /** Browse mode: page count + current page (1-based). */
+    window.pfPageInfo = function () {
+      try {
+        const count = toolkit && typeof toolkit.getPageCount === 'function'
+          ? toolkit.getPageCount()
+          : 0;
+        const host = document.getElementById('svg');
+        const rendered = host ? rootPageSvgs(host).length : 0;
+        return JSON.stringify({
+          layoutMode: layoutMode,
+          pageCount: Math.max(count, rendered, 1),
+          page: currentBrowsePage || 1,
+          ready: !!ready,
+        });
+      } catch (e) {
+        return JSON.stringify({
+          layoutMode: layoutMode,
+          pageCount: 0,
+          page: 1,
+          ready: !!ready,
+          err: String(e),
+        });
+      }
+    };
+
+    /** Jump to 1-based page; scrolls that SVG into view (browse mode). */
+    window.pfSetPage = function (page) {
+      if (!ready) return false;
+      const host = document.getElementById('svg');
+      const wrap = document.getElementById('wrap');
+      if (!host || !wrap) return false;
+      const pages = rootPageSvgs(host);
+      const count = Math.max(1, pages.length);
+      let p = Math.floor(Number(page) || 1);
+      if (p < 1) p = 1;
+      if (p > count) p = count;
+      currentBrowsePage = p;
+      const el = pages[p - 1];
+      if (!el) return false;
+      try {
+        const top = el.offsetTop - 8;
+        wrap.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      } catch (_) {
+        wrap.scrollTop = Math.max(0, el.offsetTop - 8);
+      }
+      return true;
+    };
+
+    window.pfNextPage = function () {
+      return pfSetPage((currentBrowsePage || 1) + 1);
+    };
+
+    window.pfPrevPage = function () {
+      return pfSetPage((currentBrowsePage || 1) - 1);
+    };
+
+    window.pfTransportReady = function () {
+      if (!ready || !toolkit) return false;
+      try {
+        const host = document.getElementById('svg');
+        if (!host) return false;
+        const notes = host.querySelectorAll('g.note, .notehead').length;
+        if (!(notes > 0)) return false;
+        return beatXPoints.length > 0 || timemap.length > 0;
+      } catch (_) {
+        return false;
+      }
+    };
+
     /**
-     * @param beats quarter-note position (same as Dart positionBeats / waterfall)
+     * Host scrub mapping: content CSS px ↔ transport beats (grab-the-score feel).
+     * Used by Flutter / Android / Web gesture layers — not for programmatic follow-scroll.
+     */
+    window.pfScrubMetrics = function () {
+      try {
+        const wrap = document.getElementById('wrap');
+        const viewW = wrap ? (wrap.clientWidth || 0) : 0;
+        let contentW = 0;
+        if (wrap) {
+          contentW = maxScrollX(wrap) + viewW;
+        }
+        if (!(contentW > 0)) {
+          const host = document.getElementById('svg');
+          if (host) contentW = host.scrollWidth || 0;
+        }
+        let endQ = 0;
+        if (beatXPoints.length) {
+          endQ = beatXPoints[beatXPoints.length - 1].q || 0;
+        } else if (timemap.length) {
+          endQ = timemap[timemap.length - 1].qstamp || 0;
+        }
+        return JSON.stringify({
+          contentW: contentW,
+          endQ: endQ,
+          viewW: viewW,
+          ready: !!ready,
+        });
+      } catch (e) {
+        return JSON.stringify({
+          contentW: 0, endQ: 0, viewW: 0, ready: !!ready, err: String(e),
+        });
+      }
+    };
+
+    /**
      * @param snap  jump scroll immediately (load / intentional seek)
      * @param rate  beats/sec from Dart (0 = paused). Omit → keep previous rate.
      */
     window.pfSetPosition = function (beats, snap, rate) {
       if (!ready || !toolkit) return;
+      // Full-score browse owns vertical scroll — ignore transport follow.
+      if (layoutMode === 'paged') return;
       const raw = Number(beats);
       let b = Number.isFinite(raw) ? raw : 0;
       const now = performance.now();
@@ -1230,6 +2139,8 @@
       lastSyncTime = now;
       updatePlayhead(b, seekSnap || forceSnap);
       if (seekSnap) forceSnap = false;
+      // System WebView may throttle rAF — advance scroll/playhead on every bridge tick.
+      tickSmoothScroll(now);
     };
 
     function onVisibilityResume() {
@@ -1246,11 +2157,14 @@
       }
       document.addEventListener('visibilitychange', onVisibilityResume);
       window.addEventListener('focus', onVisibilityResume);
-      verovio.module.onRuntimeInitialized = function () {
-        toolkit = new verovio.toolkit();
-        setStatus('谱面引擎就绪');
-        postToHost({ type: 'ready' });
-      };
+      const mod = verovio.module;
+      if (mod && (mod.calledRun || mod.ready)) {
+        ensureToolkit();
+      } else if (mod) {
+        mod.onRuntimeInitialized = function () {
+          ensureToolkit();
+        };
+      }
     }
     boot();
   </script>

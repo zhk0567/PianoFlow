@@ -22,9 +22,9 @@ class HomeShell extends StatelessWidget {
   static List<_NavItem> get _items {
     const core = <_NavItem>[
       _NavItem(
-        icon: Icons.home_outlined,
-        selectedIcon: Icons.home_rounded,
-        label: '首页',
+        icon: Icons.piano_outlined,
+        selectedIcon: Icons.piano_rounded,
+        label: '练习',
       ),
       _NavItem(
         icon: Icons.library_music_outlined,
@@ -64,10 +64,11 @@ class HomeShell extends StatelessWidget {
       builder: (context, wide) {
         if (wide) {
           return Scaffold(
+            backgroundColor: AppColors.background,
             body: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _SideRail(
+                _PracticeRail(
                   selectedIndex: navigationShell.currentIndex,
                   items: items,
                   onSelect: _goBranch,
@@ -110,9 +111,9 @@ class _NavItem {
   final String label;
 }
 
-/// Compact custom rail — replaces stock NavigationRail look.
-class _SideRail extends StatelessWidget {
-  const _SideRail({
+/// Narrow rail: switch sections only. Song lists stay in the page.
+class _PracticeRail extends StatelessWidget {
+  const _PracticeRail({
     required this.selectedIndex,
     required this.items,
     required this.onSelect,
@@ -122,57 +123,43 @@ class _SideRail extends StatelessWidget {
   final List<_NavItem> items;
   final ValueChanged<int> onSelect;
 
-  static const double width = 88;
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: width,
+      width: 92,
       decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(
-          right: BorderSide(color: AppColors.borderSubtle, width: 1),
-        ),
+        color: AppColors.surface,
+        border: Border(right: BorderSide(color: AppColors.borderSubtle)),
       ),
       child: SafeArea(
         right: false,
         child: Column(
           children: [
-            const SizedBox(height: 20),
-            // Brand mark
+            const SizedBox(height: 18),
             Container(
               width: 40,
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.accent.withValues(alpha: 0.95),
-                    AppColors.accent.withValues(alpha: 0.55),
-                  ],
-                ),
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 'P',
-                style: AppTheme.display(
-                  fontSize: 22,
-                  color: Colors.black,
-                  letterSpacing: 0,
+                style: AppTheme.body(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.onAccent,
                 ),
               ),
             ),
-            const SizedBox(height: 28),
-            for (var i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(height: 6),
+            const SizedBox(height: 22),
+            for (var i = 0; i < items.length; i++)
               _RailButton(
                 item: items[i],
                 selected: selectedIndex == i,
                 onTap: () => onSelect(i),
               ),
-            ],
           ],
         ),
       ),
@@ -180,7 +167,7 @@ class _SideRail extends StatelessWidget {
   }
 }
 
-class _RailButton extends StatefulWidget {
+class _RailButton extends StatelessWidget {
   const _RailButton({
     required this.item,
     required this.selected,
@@ -192,57 +179,53 @@ class _RailButton extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_RailButton> createState() => _RailButtonState();
-}
-
-class _RailButtonState extends State<_RailButton> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final selected = widget.selected;
-    final fg = selected
-        ? AppColors.accent
-        : (_hover ? AppColors.textPrimary : AppColors.textSecondary);
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
+    final fg = selected ? AppColors.accent : AppColors.textSecondary;
+    const radius = BorderRadius.all(Radius.circular(14));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+      child: SizedBox(
+        width: double.infinity,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          width: 72,
-          margin: const EdgeInsets.symmetric(horizontal: 8),
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accent.withValues(alpha: 0.12)
-                : (_hover
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : Colors.transparent),
-            borderRadius: BorderRadius.circular(12),
+            color: selected ? AppColors.accentSoft : Colors.transparent,
+            borderRadius: radius,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                selected ? widget.item.selectedIcon : widget.item.icon,
-                size: 22,
-                color: fg,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                widget.item.label,
-                style: AppTheme.body(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: fg,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: radius,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: radius,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      selected ? item.selectedIcon : item.icon,
+                      size: 22,
+                      color: fg,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: AppTheme.body(
+                        fontSize: 11,
+                        height: 1.1,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: fg,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),

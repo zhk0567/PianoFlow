@@ -13,6 +13,18 @@ void main() {
     expect(wav.length, SilentWarmWav.headerBytes + 1103 * 2);
   });
 
+  test('keeper buffer is several seconds of zeros', () {
+    const rate = SilentWarmWav.defaultSampleRate;
+    final wav = SilentWarmWav.render(
+      sampleRate: rate,
+      durationSeconds: SilentWarmWav.keeperDurationSeconds,
+    );
+    expect(SilentWarmWav.isZeroPcm16Mono(wav), isTrue);
+    final frames = (rate * SilentWarmWav.keeperDurationSeconds).round();
+    expect(wav.length, SilentWarmWav.headerBytes + frames * 2);
+    expect(frames, greaterThanOrEqualTo(rate * 2));
+  });
+
   test('default duration produces at least one zero frame', () {
     final wav = SilentWarmWav.render(durationSeconds: 0);
     expect(SilentWarmWav.isZeroPcm16Mono(wav), isTrue);

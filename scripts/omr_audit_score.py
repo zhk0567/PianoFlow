@@ -94,7 +94,10 @@ def xml_structure_flags(root: ET.Element) -> dict:
             except ValueError:
                 pass
     return {
-        "clefs": sorted(set(clefs)),
+        "clefs": sorted(
+            set(clefs),
+            key=lambda t: tuple("" if x is None else str(x) for x in t),
+        ),
         "keys": Counter(keys),
         "times": Counter(times),
         "octave_changes": Counter(oct_changes),

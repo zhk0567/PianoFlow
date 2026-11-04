@@ -55,17 +55,32 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .song-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .album-card-wrap { position: relative; }
 .album-card {
-  width: 100%; aspect-ratio: 1; border: 0; border-radius: 14px; padding: 14px;
+  width: 100%; aspect-ratio: 1; border: 1.25px solid #c4b6a4; border-radius: 14px; padding: 14px;
   display: flex; flex-direction: column; justify-content: flex-end; text-align: left;
-  color: var(--text); cursor: pointer; position: relative;
+  color: #1f1a16; cursor: pointer; position: relative;
+  box-shadow: 0 5px 14px rgba(31, 26, 22, 0.16);
 }
-.album-card .kind { position: absolute; top: 10px; left: 10px; font-size: 11px; background: rgba(0,0,0,0.35); padding: 2px 8px; border-radius: 6px; }
+.album-card strong { color: #1f1a16; }
+.album-card small { color: #4a433c; }
+.album-card.is-fav {
+  border: 2px solid #4a6b4c;
+  box-shadow: 0 6px 14px rgba(74, 107, 76, 0.18);
+}
+.album-card .kind {
+  position: absolute; top: 10px; left: 10px; font-size: 11px;
+  background: #dce8c8; color: #4a6b4c; padding: 2px 8px; border-radius: 6px; font-weight: 600;
+}
+.album-card .fav-badge {
+  position: absolute; top: 40px; left: 10px; font-size: 11px; font-weight: 700;
+  background: #4a6b4c; color: #fff9f0; padding: 2px 8px; border-radius: 6px;
+}
 .fav-btn, .del-btn {
-  position: absolute; top: 8px; background: rgba(0,0,0,0.45); border: 0; color: #fff;
-  border-radius: 6px; padding: 4px 8px; cursor: pointer;
+  position: absolute; top: 8px; background: rgba(250, 246, 238, 0.92); border: 0; color: #6b6258;
+  border-radius: 999px; width: 32px; height: 32px; padding: 0; cursor: pointer; font-size: 16px; line-height: 1;
 }
 .fav-btn { right: 8px; }
-.del-btn { right: 44px; font-size: 11px; }
+.fav-btn.is-on { color: #4a6b4c; background: #dce8c8; }
+.del-btn { right: 44px; font-size: 11px; color: #a84f4f; border-radius: 6px; width: auto; height: auto; padding: 4px 8px; }
 .exam-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .exam-list { list-style: none; padding: 0; margin: 0; background: var(--surface); border-radius: 14px; border: 1px solid var(--border); max-height: 420px; overflow: auto; }
 .exam-list li { padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
@@ -75,10 +90,6 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .profile-user { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
 .avatar { width: 48px; height: 48px; border-radius: 50%; background: rgba(232,168,73,0.2); color: var(--accent); display: grid; place-items: center; font-weight: 700; }
 .uname { font-size: 18px; font-weight: 700; }
-.row-between { display: flex; justify-content: space-between; }
-.accent { color: var(--accent); font-weight: 600; }
-.progress { margin-top: 8px; height: 8px; background: #1a212c; border-radius: 6px; overflow: hidden; }
-.progress i { display: block; height: 100%; width: 0; background: var(--accent); }
 .stats-row { display: flex; text-align: center; }
 .stats-row > div { flex: 1; }
 .stats-row b { display: block; font-size: 22px; }
@@ -107,7 +118,21 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 .titles { flex: 1; min-width: 0; }
 .ptitle { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pmeta { color: var(--muted); font-size: 12px; }
-.grade { color: var(--accent); font-weight: 700; font-size: 13px; }
+.grade {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 22px;
+  min-height: 1.2em;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.grade.grade-flash {
+  animation: pfGradeFlash 0.42s ease-out;
+}
+@keyframes pfGradeFlash {
+  0% { opacity: 0; transform: scale(0.92) translateY(6px); }
+  18% { opacity: 1; transform: scale(1.08) translateY(0); }
+  100% { opacity: 0.15; transform: scale(1) translateY(-8px); }
+}
 .status { color: var(--success); font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .practice-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stage-scroll { flex: 0 0 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 0 8px; display: flex; flex-direction: column; }
@@ -149,8 +174,15 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   color: #ffd078;
   text-shadow: 0 0 20px rgba(255,208,120,0.8), 0 2px 16px rgba(0,0,0,0.7);
 }
-.staff-panel { flex: 1 1 0; min-height: 180px; background: var(--paper); border-top: 1px solid var(--border); }
+.staff-panel { flex: 1 1 0; min-height: 180px; background: var(--paper); border-top: 1px solid var(--border); position: relative; }
 .staff { width: 100%; height: 100%; border: 0; display: block; }
+.staff-scrub {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  touch-action: pan-y;
+  cursor: ew-resize;
+}
 
 /* Practice bottom controls — large touch targets, grouped layout */
 .bottombar {
@@ -193,8 +225,36 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font-weight: 600;
   cursor: pointer;
 }
-.ctrl-seek-wrap { flex: 1; min-width: 0; padding: 0 4px; }
-.ctrl-seek { width: 100%; height: 28px; accent-color: var(--accent); cursor: pointer; }
+.ctrl-seek-wrap { flex: 1 1 160px; min-width: 140px; padding: 0 8px; }
+.ctrl-seek {
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.ctrl-seek:disabled { cursor: not-allowed; opacity: 0.55; }
+/* Enlarge thumb hit target without losing accent progress fill */
+.ctrl-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #121820;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+.ctrl-seek::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #121820;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
 
 .ctrl-modes,
 .ctrl-groups { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

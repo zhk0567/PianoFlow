@@ -22,18 +22,19 @@ void main() {
     expect(xml, isNotNull);
     expect(xml!.available, isTrue);
     expect(midi!.available, isTrue);
-    expect(midi.badge, '草稿可用');
+    expect(midi.badge, '可用');
     expect(audio!.available, isTrue);
-    expect(audio.badge, '草稿可用');
-    expect(audio.subtitle, contains('秒级'));
-    expect(audio.subtitle, contains('自动进练习'));
+    expect(audio.badge, '可用');
+    expect(audio.subtitle, contains('Demucs'));
+    expect(audio.subtitle, contains('进练习'));
     expect(pdf!.available, isTrue);
-    expect(pdf.badge, '引导可用');
+    expect(pdf.badge, '可用');
     expect(pdf.subtitle, contains('一键'));
     expect(edit!.available, isTrue);
-    expect(edit.badge, '音符表可用');
-    expect(edit.subtitle, contains('音符表'));
-    expect(other!.available, isFalse);
+    expect(edit.badge, '可用');
+    expect(edit.subtitle, contains('自导入'));
+    expect(other!.available, isTrue);
+    expect(other.badge, '指引');
     expect(WorkshopTool.all.length, greaterThanOrEqualTo(6));
   });
 

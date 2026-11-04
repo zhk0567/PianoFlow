@@ -52,6 +52,74 @@ void main() {
     });
   });
 
+  group('shouldThrottlePlayPush', () {
+    test('throttles mid-play ticks under 32ms', () {
+      expect(
+        VerovioTransportSync.shouldThrottlePlayPush(
+          beatsPerSec: 2.0,
+          msSinceLastPush: 16,
+          posDelta: 0.03,
+          playChanged: false,
+          forceImmediate: false,
+        ),
+        isTrue,
+      );
+      expect(
+        VerovioTransportSync.shouldThrottlePlayPush(
+          beatsPerSec: 2.0,
+          msSinceLastPush: VerovioTransportSync.playPushMinIntervalMs,
+          posDelta: 0.03,
+          playChanged: false,
+          forceImmediate: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('does not throttle seek, freeze snap, pause, or play edge', () {
+      expect(
+        VerovioTransportSync.shouldThrottlePlayPush(
+          beatsPerSec: 2.0,
+          msSinceLastPush: 8,
+          posDelta: 0.03,
+          playChanged: false,
+          forceImmediate: true,
+        ),
+        isFalse,
+      );
+      expect(
+        VerovioTransportSync.shouldThrottlePlayPush(
+          beatsPerSec: 2.0,
+          msSinceLastPush: 8,
+          posDelta: VerovioTransportSync.seekSnapBeats + 0.01,
+          playChanged: false,
+          forceImmediate: false,
+        ),
+        isFalse,
+      );
+      expect(
+        VerovioTransportSync.shouldThrottlePlayPush(
+          beatsPerSec: 0,
+          msSinceLastPush: 8,
+          posDelta: 0.03,
+          playChanged: false,
+          forceImmediate: false,
+        ),
+        isFalse,
+      );
+      expect(
+        VerovioTransportSync.shouldThrottlePlayPush(
+          beatsPerSec: 2.0,
+          msSinceLastPush: 8,
+          posDelta: 0.03,
+          playChanged: true,
+          forceImmediate: false,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('shouldSnapSeek', () {
     test('boundary: equal 0.35 eases; above snaps', () {
       expect(
@@ -139,6 +207,25 @@ void main() {
         VerovioTransportSync.shouldSnapForRateZeroCrossing(
           previousRate: 0,
           currentRate: 0,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('shouldSnapForFreezeRateCrossing', () {
+    test('snaps only when rate drops to zero (freeze / pause)', () {
+      expect(
+        VerovioTransportSync.shouldSnapForFreezeRateCrossing(
+          previousRate: 2.0,
+          currentRate: 0,
+        ),
+        isTrue,
+      );
+      expect(
+        VerovioTransportSync.shouldSnapForFreezeRateCrossing(
+          previousRate: 0,
+          currentRate: 2.0,
         ),
         isFalse,
       );

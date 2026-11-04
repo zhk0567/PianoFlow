@@ -15,19 +15,42 @@ class RecordAlbumCard extends ConsumerWidget {
 
   final SongSummary song;
 
-  /// Stable accent pair from song id (visual variety without “random” feel).
-  (Color, Color) _ink(String id) {
+  /// Warm-paper accent wash from song id (Echo family — readable on page bg).
+  (Color, Color) _wash(String id) {
     const pairs = <(Color, Color)>[
-      (Color(0xFFE8A849), Color(0xFF2A2118)),
-      (Color(0xFF6DB3F2), Color(0xFF152030)),
-      (Color(0xFFF2A06D), Color(0xFF2A1A12)),
-      (Color(0xFF5CBF8A), Color(0xFF122018)),
-      (Color(0xFFB08CFF), Color(0xFF1A1528)),
-      (Color(0xFFE26A6A), Color(0xFF281414)),
-      (Color(0xFF7EC8E3), Color(0xFF122028)),
-      (Color(0xFFD4A574), Color(0xFF241810)),
+      // sage → tinted cream
+      (Color(0xFFB5CFA0), Color(0xFFE8F0DC)),
+      // walnut → tinted cream
+      (Color(0xFFD4B090), Color(0xFFF0E4D4)),
+      // soft peach → tinted cream
+      (Color(0xFFE0B090), Color(0xFFF2E2D4)),
+      // soft teal → tinted cream
+      (Color(0xFF9CBCBC), Color(0xFFDCE8E8)),
+      // olive → tinted cream
+      (Color(0xFFC0C890), Color(0xFFE8EAD8)),
+      // clay → tinted cream
+      (Color(0xFFD0A890), Color(0xFFF0E0D4)),
+      // sand → tinted cream
+      (Color(0xFFD0BC90), Color(0xFFF0E8D4)),
+      // moss → tinted cream
+      (Color(0xFFA0BC9C), Color(0xFFDCE8D8)),
     ];
     return pairs[id.hashCode.abs() % pairs.length];
+  }
+
+  /// Stronger ink for motif / chip — still on-theme.
+  Color _accentFor(String id) {
+    const accents = <Color>[
+      AppColors.accent,
+      AppColors.accentWarm,
+      AppColors.leftHand,
+      AppColors.rightHand,
+      Color(0xFF5A6E48),
+      Color(0xFF8A6448),
+      Color(0xFF6B6258),
+      Color(0xFF4A7A54),
+    ];
+    return accents[id.hashCode.abs() % accents.length];
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
@@ -70,9 +93,10 @@ class RecordAlbumCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fav = ref.watch(userLibraryProvider).favorites.contains(song.id);
-    final ink = _ink(song.id);
-    final hue = ink.$1;
-    final deep = ink.$2;
+    final wash = _wash(song.id);
+    final top = wash.$1;
+    final bottom = wash.$2;
+    final accent = _accentFor(song.id);
     final canDelete = song.isUserImport;
 
     return Material(
@@ -83,34 +107,37 @@ class RecordAlbumCard extends ConsumerWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadii.lg),
-            border: Border.all(color: AppColors.borderSubtle),
+            border: Border.all(
+              color: fav
+                  ? AppColors.accent.withValues(alpha: 0.9)
+                  : const Color(0xFFC4B6A4),
+              width: fav ? 2 : 1.25,
+            ),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color.lerp(hue, deep, 0.15)!,
-                deep,
-                Color.lerp(deep, Colors.black, 0.35)!,
-              ],
-              stops: const [0.0, 0.55, 1.0],
+              colors: [top, bottom, AppColors.paper],
+              stops: const [0.0, 0.5, 1.0],
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
+                color: fav
+                    ? AppColors.accent.withValues(alpha: 0.22)
+                    : const Color(0x281F1A16),
+                blurRadius: fav ? 16 : 12,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Decorative “vinyl / staff” motif.
+              // Decorative motif — soft on paper.
               Positioned(
                 right: -20,
                 top: -10,
                 child: Opacity(
-                  opacity: 0.14,
+                  opacity: 0.28,
                   child: Icon(
                     switch (song.scoreKind) {
                       ScoreKind.formal => Icons.menu_book_rounded,
@@ -119,7 +146,7 @@ class RecordAlbumCard extends ConsumerWidget {
                       ScoreKind.userImport => Icons.upload_file_rounded,
                     },
                     size: 140,
-                    color: hue,
+                    color: accent,
                   ),
                 ),
               ),
@@ -130,20 +157,23 @@ class RecordAlbumCard extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    color: AppColors.accentSoft.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.22),
+                    ),
                   ),
                   child: Text(
                     song.difficultyLabel,
                     style: AppTheme.body(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: hue,
+                      color: AppColors.accent,
                     ),
                   ),
                 ),
               ),
-              // Bottom title band.
+              // Bottom title band — paper fade, dark ink.
               Positioned(
                 left: 0,
                 right: 0,
@@ -158,9 +188,9 @@ class RecordAlbumCard extends ConsumerWidget {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.75),
-                        Colors.black.withValues(alpha: 0.92),
+                        bottom.withValues(alpha: 0),
+                        AppColors.paper.withValues(alpha: 0.94),
+                        AppColors.paper,
                       ],
                       stops: const [0.0, 0.45, 1.0],
                     ),
@@ -204,7 +234,9 @@ class RecordAlbumCard extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Material(
-                      color: Colors.black.withValues(alpha: 0.35),
+                      color: fav
+                          ? AppColors.accentSoft
+                          : AppColors.surface.withValues(alpha: 0.88),
                       shape: const CircleBorder(),
                       child: IconButton(
                         tooltip: fav ? '取消收藏' : '收藏',
@@ -216,23 +248,25 @@ class RecordAlbumCard extends ConsumerWidget {
                           fav
                               ? Icons.star_rounded
                               : Icons.star_border_rounded,
-                          color: fav ? AppColors.accent : Colors.white70,
-                          size: 22,
+                          color: fav
+                              ? AppColors.accent
+                              : AppColors.textMuted,
+                          size: fav ? 24 : 22,
                         ),
                       ),
                     ),
                     if (canDelete) ...[
                       const SizedBox(height: 4),
                       Material(
-                        color: Colors.black.withValues(alpha: 0.35),
+                        color: AppColors.surface.withValues(alpha: 0.88),
                         shape: const CircleBorder(),
                         child: IconButton(
                           tooltip: '删除自导入',
                           visualDensity: VisualDensity.compact,
                           onPressed: () => _confirmDelete(context, ref),
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.delete_outline_rounded,
-                            color: Colors.white70,
+                            color: AppColors.danger.withValues(alpha: 0.85),
                             size: 22,
                           ),
                         ),
@@ -241,6 +275,27 @@ class RecordAlbumCard extends ConsumerWidget {
                   ],
                 ),
               ),
+              if (fav)
+                Positioned(
+                  left: 16,
+                  top: 48,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '已收藏',
+                      style: AppTheme.body(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.onAccent,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

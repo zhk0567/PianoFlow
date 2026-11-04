@@ -10,7 +10,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 enum class PracticeMode { Auto, Follow }
 
@@ -95,6 +94,14 @@ class PracticeController(
     private val missBeats = mutableListOf<Double>()
     private var frozenMissLogged = false
     private var settlementArmed = false
+    private val guideGate = GuideRetriggerGate()
+    private val attackLatch = PracticeAttackLatch()
+    private val cueBleed = CueBleedGuard()
+    private var echoSuppressedMidis: Set<Int> = emptySet()
+    /** Last frame reported an HF onset (for noteOn bleed check). */
+    @Volatile private var lastFrameOnset: Boolean = false
+    var pitchEngineLabel: String = ""
+        private set
 
     fun load(song: SongSummary) {
         this.song = song
@@ -184,6 +191,8 @@ class PracticeController(
 
     fun seek(beats: Float) {
         if (exam) return
+        // Slider / staff scrub while playing → pause; no auto-resume on release.
+        if (playing) pause()
         val b = beats.coerceIn(0f, durationBeats.toFloat())
         positionBeats = if (b <= 0.05f) {
             -PracticeConsts.playbackLeadInBeats.toFloat()
@@ -196,6 +205,10 @@ class PracticeController(
         pressedMidi = emptySet()
         frozenMissLogged = false
         lastCueChordStart = -1.0
+        guideGate.clear()
+        attackLatch.clear()
+        cueBleed.clear()
+        echoSuppressedMidis = emptySet()
         updateFocus()
         emitChange()
     }
@@ -210,9 +223,13 @@ class PracticeController(
             emitChange()
             return
         }
+        val wasPlaying = playing
         playing = true
         settlementArmed = true
         if (sessionStartedAt == null) sessionStartedAt = System.currentTimeMillis()
+        if ((mode == PracticeMode.Follow || exam) && !wasPlaying) {
+            PracticeHitLatency.reset()
+        }
         statusHint = if (mode == PracticeMode.Follow) "跟弹中" else "自动播放"
         if (mode == PracticeMode.Follow) startMic()
         if (exam && examRecordAudio) {
@@ -244,12 +261,17 @@ class PracticeController(
         satisfied.clear()
         frozenMissLogged = false
         lastCueChordStart = -1.0
+        guideGate.clear()
+        attackLatch.clear()
+        cueBleed.clear()
+        echoSuppressedMidis = emptySet()
         if (clearStats) {
             perfects = 0
             goods = 0
             combo = 0
             lastGradeLabel = null
             missBeats.clear()
+            sessionStartedAt = null
         }
         updateFocus()
     }
@@ -307,18 +329,8 @@ class PracticeController(
     fun staffLayoutOptsJson(cssW: Int, cssH: Int): String {
         val w = cssW.coerceAtLeast(200)
         val h = cssH.coerceAtLeast(120)
-        // 横屏手机谱区偏矮：略加大 scale、压低 pageHeight，避免整谱被压扁
-        val scale = when {
-            h < 200 -> 82
-            h < 280 -> 78
-            else -> 76
-        }
-        val pageHeight = when {
-            h < 200 -> 640
-            h < 280 -> 720
-            else -> 820
-        }
-        return """{"cssWidth":$w,"cssHeight":$h,"scale":$scale,"pageHeight":$pageHeight,"mobile":true}"""
+        // 与 Windows PracticeConstants.verovioScale=60 一致：全曲同一刻度，禁止按谱区高度改 scale
+        return """{"cssWidth":$w,"cssHeight":$h,"scale":60,"pageHeight":900,"mobile":true}"""
     }
 
     fun loadScoreScript(port: Int, cssW: Int, cssH: Int): String {
@@ -380,6 +392,9 @@ class PracticeController(
                     toCue.forEach { tones.playMidi(it) }
                     echoSuppressUntilMs =
                         System.currentTimeMillis() + PracticeConsts.echoSuppressGuideMs
+                    echoSuppressedMidis = toCue.toSet()
+                    guideGate.arm(toCue)
+                    cueBleed.arm(toCue)
                 }
             }
             if (!frozenMissLogged && waitingFor.isNotEmpty()) {
@@ -435,9 +450,15 @@ class PracticeController(
     private fun startMic() {
         stopMic()
         mic = MicPitchTracker(
-            onMidis = { midis ->
+            context = appContext,
+            onNoteOns = { midis, captureAt ->
                 scope.launch(Dispatchers.Main) {
-                    for (m in midis) onPitch(m)
+                    for (m in midis) onNoteOn(m, captureAt)
+                }
+            },
+            onFrame = { midis, captureAt, onset ->
+                scope.launch(Dispatchers.Main) {
+                    onPitchFrame(midis, captureAt, onset)
                 }
             },
             onError = { msg ->
@@ -447,11 +468,18 @@ class PracticeController(
                     emitChange()
                 }
             },
+            onEngine = { label ->
+                scope.launch(Dispatchers.Main) {
+                    pitchEngineLabel = label
+                    Log.i("PianoFlow/Pitch", "follow engine=$label")
+                }
+            },
             onPcm16 = { buf, n ->
                 if (exam && examRecordAudio && examRecorder.isActive) {
                     examRecorder.addPcm16(buf, n)
                 }
             },
+            priorMidis = { PitchMatch.priorBins(waitingFor) },
         ).also { it.start() }
     }
 
@@ -460,33 +488,142 @@ class PracticeController(
         mic = null
     }
 
-    private fun onPitch(midi: Int) {
+    private fun onPitchFrame(midis: Set<Int>, captureAt: Long, onset: Boolean) {
         if (mode != PracticeMode.Follow || !playing) return
         val now = System.currentTimeMillis()
-        if (now < echoSuppressUntilMs) return
-
-        val pos = positionBeats.toDouble()
-        val expected = WaitLogic.expectedAt(notes, pos)
-        if (expected.isEmpty()) return
-
-        val chordStart = WaitLogic.chordStart(notes, expected, pos) ?: return
-        val remaining = expected - satisfied
-
-        // Wrong note while frozen ? miss
-        val freeze = WaitLogic.shouldFreeze(pos, chordStart)
-        if (freeze && remaining.isNotEmpty() && remaining.none { abs(it - midi) <= 1 }) {
-            if (!frozenMissLogged) {
-                frozenMissLogged = true
-                missBeats.add(chordStart)
-                combo = 0
-                Log.i("PianoFlow/Practice", "miss at=$chordStart heard=$midi want=$remaining")
+        val heard = if (now < echoSuppressUntilMs) {
+            midis.filter { m ->
+                echoSuppressedMidis.none { PitchMatch.isNear(it, m) }
+            }.toSet()
+        } else {
+            midis
+        }.let { raw ->
+            if (waitingFor.isEmpty()) raw
+            else PitchMatch.conditionHeard(raw, waitingFor)
+        }
+        attackLatch.onHeard(heard)
+        lastFrameOnset = onset
+        if (onset && heard.isNotEmpty()) {
+            val before = attackLatch.spentCount
+            attackLatch.releaseOnOnset(heard)
+            if (attackLatch.spentCount < before) {
+                PracticeHitLatency.noteOnsetRelease()
             }
+        }
+        pressedMidi = heard
+        if (waitingFor.isEmpty()) {
+            emitChange()
+            return
+        }
+        val stillSuppressed = if (now < echoSuppressUntilMs) {
+            echoSuppressedMidis
+        } else {
+            emptySet()
+        }
+        val hits = guideGate.acceptHits(
+            heard = heard,
+            waitingFor = waitingFor,
+            stillSuppressed = stillSuppressed,
+        )
+        for (m in hits) {
+            if (attackLatch.blocks(m)) {
+                PracticeHitLatency.noteLatchBlock()
+                continue
+            }
+            if (cueBleed.isBleed(m, hasOnset = onset, heardAll = heard, nowMs = now)) {
+                PracticeHitLatency.noteCueBleed()
+                continue
+            }
+            registerWaitHit(m, heardMidi = m, captureAt = captureAt, path = "frame")
+        }
+        emitChange()
+    }
+
+    private fun onNoteOn(midi: Int, captureAt: Long) {
+        if (mode != PracticeMode.Follow || !playing) return
+        val now = System.currentTimeMillis()
+        val echoActive = now < echoSuppressUntilMs &&
+            echoSuppressedMidis.any { PitchMatch.isNear(it, midi) }
+        if (echoActive) return
+
+        if (cueBleed.isBleed(
+                midi,
+                hasOnset = lastFrameOnset,
+                heardAll = setOf(midi) + pressedMidi,
+                nowMs = now,
+            )
+        ) {
+            PracticeHitLatency.noteCueBleed()
+            Log.i("PianoFlow/Practice", "cue-bleed block noteOn midi=$midi")
+            emitChange()
             return
         }
 
-        val hit = remaining.firstOrNull { abs(it - midi) <= 1 } ?: return
-        satisfied.add(hit)
-        pressedMidi = setOf(hit)
+        val gateBlocks = guideGate.blocks(midi)
+        pressedMidi = setOf(midi)
+
+        val expected = WaitLogic.expectedAt(notes, positionBeats.toDouble())
+        if (expected.isEmpty()) {
+            emitChange()
+            return
+        }
+        val remaining = expected - satisfied
+        val chordStart = WaitLogic.chordStart(notes, expected, positionBeats.toDouble())
+        val freeze = chordStart != null && WaitLogic.shouldFreeze(positionBeats.toDouble(), chordStart)
+
+        val matched = PitchMatch.matchNoteOn(midi, remaining)
+        if (matched != null) {
+            if (attackLatch.blocks(midi) || attackLatch.blocks(matched)) {
+                PracticeHitLatency.noteLatchBlock()
+                Log.i("PianoFlow/Practice", "latch-block noteOn midi=$midi matched=$matched")
+                emitChange()
+                return
+            }
+            // Fresh noteOn after suppress: disarm quiet gap (Windows parity).
+            guideGate.disarm(listOf(matched))
+            if (heardMidiSoft(matched, midi)) PracticeHitLatency.noteSoftMatch()
+            registerWaitHit(matched, heardMidi = midi, captureAt = captureAt, path = "noteOn")
+            emitChange()
+            return
+        }
+
+        if (gateBlocks) {
+            emitChange()
+            return
+        }
+
+        if (freeze && remaining.isNotEmpty() &&
+            !PitchMatch.isForgivableWrongPitch(midi, remaining)
+        ) {
+            if (!frozenMissLogged) {
+                frozenMissLogged = true
+                PracticeHitLatency.noteMiss()
+                missBeats.add(chordStart!!)
+                combo = 0
+                Log.i("PianoFlow/Practice", "miss at=$chordStart heard=$midi want=$remaining")
+            }
+        }
+        emitChange()
+    }
+
+    private fun heardMidiSoft(matched: Int, heard: Int): Boolean =
+        matched != heard && PitchMatch.isNear(matched, heard)
+
+    private fun registerWaitHit(
+        midi: Int,
+        heardMidi: Int,
+        captureAt: Long,
+        path: String,
+    ) {
+        val pos = positionBeats.toDouble()
+        val expected = WaitLogic.expectedAt(notes, pos)
+        val remaining = expected - satisfied
+        if (midi !in remaining) return
+        if (attackLatch.blocks(midi) || attackLatch.blocks(heardMidi)) return
+
+        val chordStart = WaitLogic.chordStart(notes, expected, pos) ?: return
+        satisfied.add(midi)
+        attackLatch.markConsumed(midi, heardMidi = heardMidi)
 
         val delta = pos - chordStart
         val grade = JudgeLogic.grade(delta)
@@ -503,18 +640,24 @@ class PracticeController(
             }
         }
 
+        val captureMs = (System.currentTimeMillis() - captureAt).coerceAtLeast(0)
+        PracticeHitLatency.record(captureMs.toInt(), guideOn = guideAudio, path = path)
+        Log.i(
+            "PianoFlow/Practice",
+            "hit-capture-ms=$captureMs grade=$grade midi=$midi path=$path guide=$guideAudio",
+        )
+
         val left = expected - satisfied
         waitingFor = left
         if (left.isEmpty()) {
-            // Chord complete ? nudge past, don't teleport
             positionBeats = WaitLogic.nudgePast(notes, chordStart).toFloat()
             satisfied.clear()
             frozenMissLogged = false
             lastCueChordStart = -1.0
             waitingFor = emptySet()
+            echoSuppressedMidis = emptySet()
         }
         updateFocus()
-        emitChange()
     }
 
     private fun finishRun() {
@@ -524,17 +667,17 @@ class PracticeController(
         if (exam && examRecordAudio) {
             lastExamRecordingPath = examRecorder.stop()
         }
+        if (mode == PracticeMode.Follow || exam) {
+            PracticeHitLatency.logIfPractice()
+        }
         statusHint = "本段结束"
         emitChange()
+        // 跟弹/考试结束都回调：平时只记账不弹窗，考试弹结算（见 PracticeActivity）。
         if (settlementArmed && (mode == PracticeMode.Follow || exam)) {
             settlementArmed = false
             onSettlement()
         }
     }
-
-    fun sessionSeconds(): Int = sessionStartedAt?.let {
-        ((System.currentTimeMillis() - it) / 1000).toInt()
-    } ?: 0
 
     private var sessionStartedAt: Long? = null
 

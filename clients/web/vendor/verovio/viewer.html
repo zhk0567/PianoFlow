@@ -1443,9 +1443,12 @@
       }
       const span = systemSpanY(pageSvg);
       if (!span) return 0;
-      const pad = 14;
-      let y0 = span.top - pad;
-      let y1 = span.bottom + pad;
+      // Extra top pad: high tied notes (诀别书 A5 延音弧) sit above the
+      // system ink bbox and were getting clipped by the strip crop.
+      const padTop = 28;
+      const padBottom = 16;
+      let y0 = span.top - padTop;
+      let y1 = span.bottom + padBottom;
       if (y0 < full.y) y0 = full.y;
       if (y1 > full.y + full.h) y1 = full.y + full.h;
       const h = y1 - y0;

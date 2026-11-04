@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../shared/theme/app_theme.dart';
 import '../score_audio_player.dart';
 
 /// Compact beat pulse next to the metronome toggle — same clock as audio clicks.
@@ -87,11 +86,12 @@ class _VisualMetronomeDotState extends ConsumerState<VisualMetronomeDot>
         // Attack at tick (t=0), decay over the beat period.
         final t = running ? (1.0 - _pulse.value).clamp(0.0, 1.0) : 0.0;
         final scale = running ? 1.0 + (accent ? 0.28 : 0.14) * t : 1.0;
+        final scheme = Theme.of(context).colorScheme;
         final color = !running
-            ? AppColors.border
+            ? scheme.outline
             : Color.lerp(
-                accent ? AppColors.accentSoft : AppColors.border,
-                accent ? AppColors.accent : AppColors.textSecondary,
+                accent ? scheme.primaryContainer : scheme.outline,
+                scheme.primary,
                 t,
               )!;
 
@@ -110,8 +110,8 @@ class _VisualMetronomeDotState extends ConsumerState<VisualMetronomeDot>
                     color: color,
                     border: Border.all(
                       color: running
-                          ? AppColors.accent.withValues(alpha: 0.35 + 0.4 * t)
-                          : AppColors.border,
+                          ? scheme.primary.withValues(alpha: 0.35 + 0.4 * t)
+                          : scheme.outline,
                       width: 1,
                     ),
                   ),
@@ -127,11 +127,11 @@ class _VisualMetronomeDotState extends ConsumerState<VisualMetronomeDot>
                       : FontWeight.w500,
                   color: running
                       ? Color.lerp(
-                          AppColors.textSecondary,
-                          AppColors.accent,
+                          scheme.onSurface.withValues(alpha: 0.72),
+                          scheme.primary,
                           accent ? t : t * 0.4,
                         )
-                      : AppColors.textSecondary,
+                      : scheme.onSurface.withValues(alpha: 0.72),
                 ),
               ),
             ],

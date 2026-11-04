@@ -92,18 +92,18 @@ void main() {
       expect(sum, 1040);
     });
 
-    test('midiKeyLabel uses naturals and flat accidentals', () {
+    test('midiKeyLabel uses naturals and sharp accidentals', () {
       expect(KeyboardGeometry.midiKeyLabel(60), 'C');
-      expect(KeyboardGeometry.midiKeyLabel(61), 'Db');
+      expect(KeyboardGeometry.midiKeyLabel(61), 'C#');
       expect(KeyboardGeometry.midiKeyLabel(62), 'D');
-      expect(KeyboardGeometry.midiKeyLabel(63), 'Eb');
+      expect(KeyboardGeometry.midiKeyLabel(63), 'D#');
       expect(KeyboardGeometry.midiKeyLabel(64), 'E');
       expect(KeyboardGeometry.midiKeyLabel(65), 'F');
-      expect(KeyboardGeometry.midiKeyLabel(66), 'Gb');
+      expect(KeyboardGeometry.midiKeyLabel(66), 'F#');
       expect(KeyboardGeometry.midiKeyLabel(67), 'G');
-      expect(KeyboardGeometry.midiKeyLabel(68), 'Ab');
+      expect(KeyboardGeometry.midiKeyLabel(68), 'G#');
       expect(KeyboardGeometry.midiKeyLabel(69), 'A');
-      expect(KeyboardGeometry.midiKeyLabel(70), 'Bb');
+      expect(KeyboardGeometry.midiKeyLabel(70), 'A#');
       expect(KeyboardGeometry.midiKeyLabel(71), 'B');
     });
 
@@ -113,8 +113,9 @@ void main() {
       expect(KeyboardGeometry.midiWhiteKeyLabel(48), 'C3');
       expect(KeyboardGeometry.midiWhiteKeyLabel(71), 'B4');
       expect(KeyboardGeometry.midiWhiteKeyLabel(21), 'A0');
-      expect(KeyboardGeometry.midiPitchLabel(68), 'Ab4');
-      expect(KeyboardGeometry.midiPitchLabel(61), 'Db4');
+      expect(KeyboardGeometry.midiPitchLabel(68), 'G#4');
+      expect(KeyboardGeometry.midiPitchLabel(61), 'C#4');
+      expect(KeyboardGeometry.midiPitchLabel(37), 'C#2');
     });
 
     test('midiOctave follows scientific pitch notation', () {

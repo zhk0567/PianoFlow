@@ -96,17 +96,12 @@ export function getStats() {
   });
 }
 
-export function recordSession(songId, seconds, { exam = false, perfects = 0, goods = 0, combo = 0, recordExam = true } = {}) {
+export function recordSession(songId, { exam = false, perfects = 0, goods = 0, combo = 0, recordExam = true } = {}) {
   const s = getStats();
-  const day = new Date().toISOString().slice(0, 10);
   s.totalSessions = (s.totalSessions || 0) + 1;
-  s.totalSeconds = (s.totalSeconds || 0) + Math.max(0, seconds | 0);
-  if (!s.today || s.today.day !== day) s.today = { day, seconds: 0 };
-  s.today.seconds += Math.max(0, seconds | 0);
   s.bySong = s.bySong || {};
   const cur = s.bySong[songId] || { sessions: 0, seconds: 0, lit: false, examSessions: 0 };
   cur.sessions += 1;
-  cur.seconds += Math.max(0, seconds | 0);
   cur.lit = true;
   if (exam && recordExam) {
     cur.examSessions = (cur.examSessions || 0) + 1;

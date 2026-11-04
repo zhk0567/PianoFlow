@@ -8,6 +8,14 @@ import '../../shared/theme/app_theme.dart';
 import '../library/library_repository.dart';
 import '../practice/practice_stats_store.dart';
 
+/// 略暖的深墨夜空。
+const _ink = Color(0xFF100E0B);
+const _inkLift = Color(0xFF181410);
+const _ivory = Color(0xFFE7DDD0);
+const _ivoryQuiet = Color(0xFF8E8376);
+const _candle = Color(0xFFE4C08A);
+const _ember = Color(0xFFC49255);
+
 class ConstellationPage extends ConsumerWidget {
   const ConstellationPage({super.key});
 
@@ -18,32 +26,71 @@ class ConstellationPage extends ConsumerWidget {
 
     return catalog.when(
       loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: _ink,
+        body: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.2,
+              color: _ivoryQuiet,
+            ),
+          ),
+        ),
       ),
       error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('练习星座')),
-        body: Center(child: Text('曲库加载失败：$e')),
+        backgroundColor: _ink,
+        appBar: _nightBar(),
+        body: Center(
+          child: Text(
+            '曲库加载失败：$e',
+            style: AppTheme.body(
+              fontSize: 13,
+              fontWeight: FontWeight.w300,
+              color: _ivoryQuiet,
+            ),
+          ),
+        ),
       ),
       data: (songs) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0B1020),
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            foregroundColor: Colors.white,
-            title: const Text('练习星座'),
-          ),
+          backgroundColor: _ink,
+          appBar: _nightBar(),
           body: Column(
             children: [
+              const SizedBox(height: 12),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                padding: const EdgeInsets.only(left: 6),
                 child: Text(
-                  '练过的曲子会点亮。点一颗星进入练习。',
-                  style: AppTheme.body(fontSize: 13, color: Colors.white70),
+                  '练习星座',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.body(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w300,
+                    color: _ivory,
+                    height: 1.2,
+                  ).copyWith(letterSpacing: 6),
                 ),
               ),
+              const SizedBox(height: 18),
+              Text(
+                '点一颗星，进入练习',
+                textAlign: TextAlign.center,
+                style: AppTheme.body(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w300,
+                  color: _ivoryQuiet,
+                  height: 1.4,
+                ).copyWith(letterSpacing: 1.4),
+              ),
+              const SizedBox(height: 40),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
+                    final sky = Size(
+                      constraints.maxWidth,
+                      constraints.maxHeight,
+                    );
                     return CustomPaint(
                       painter: _ConstellationPainter(
                         songIds: [for (final s in songs) s.id],
@@ -58,11 +105,7 @@ class ConstellationPage extends ConsumerWidget {
                             _StarHit(
                               index: i,
                               total: songs.length,
-                              size: Size(
-                                constraints.maxWidth,
-                                constraints.maxHeight,
-                              ),
-                              lit: stats.bySong[songs[i].id]?.lit ?? false,
+                              size: sky,
                               title: songs[i].title,
                               onTap: () =>
                                   context.push('/practice/${songs[i].id}'),
@@ -81,12 +124,34 @@ class ConstellationPage extends ConsumerWidget {
   }
 }
 
+AppBar _nightBar() {
+  return AppBar(
+    backgroundColor: Colors.transparent,
+    surfaceTintColor: Colors.transparent,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+    foregroundColor: _ivoryQuiet,
+    iconTheme: const IconThemeData(color: _ivoryQuiet, size: 20),
+  );
+}
+
+Offset _starOffset(int index, int total, Size size) {
+  final rng = math.Random(index * 97 + 13);
+  final ring = 0.18 + (index % 5) * 0.12;
+  final angle = (index / math.max(1, total)) * math.pi * 2 + rng.nextDouble();
+  final cx = size.width * 0.5 + math.cos(angle) * size.width * ring * 0.85;
+  final cy = size.height * 0.5 + math.sin(angle) * size.height * ring * 0.7;
+  return Offset(
+    cx.clamp(28, math.max(28, size.width - 28)),
+    cy.clamp(28, math.max(28, size.height - 28)),
+  );
+}
+
 class _StarHit extends StatelessWidget {
   const _StarHit({
     required this.index,
     required this.total,
     required this.size,
-    required this.lit,
     required this.title,
     required this.onTap,
   });
@@ -94,25 +159,12 @@ class _StarHit extends StatelessWidget {
   final int index;
   final int total;
   final Size size;
-  final bool lit;
   final String title;
   final VoidCallback onTap;
 
-  Offset _pos() {
-    final rng = math.Random(index * 97 + 13);
-    final ring = 0.18 + (index % 5) * 0.12;
-    final angle = (index / math.max(1, total)) * math.pi * 2 + rng.nextDouble();
-    final cx = size.width * 0.5 + math.cos(angle) * size.width * ring * 0.85;
-    final cy = size.height * 0.5 + math.sin(angle) * size.height * ring * 0.7;
-    return Offset(
-      cx.clamp(24, size.width - 24),
-      cy.clamp(24, size.height - 24),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final p = _pos();
+    final p = _starOffset(index, total, size);
     return Positioned(
       left: p.dx - 18,
       top: p.dy - 18,
@@ -120,13 +172,18 @@ class _StarHit extends StatelessWidget {
       height: 36,
       child: Tooltip(
         message: title,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Icon(
-            lit ? Icons.star_rounded : Icons.star_border_rounded,
-            color: lit ? const Color(0xFFFFD27A) : Colors.white24,
-            size: lit ? 28 : 20,
+        child: Semantics(
+          button: true,
+          label: title,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              customBorder: const CircleBorder(),
+              splashColor: const Color(0x14E4C08A),
+              highlightColor: Colors.transparent,
+              child: const SizedBox.expand(),
+            ),
           ),
         ),
       ),
@@ -142,50 +199,73 @@ class _ConstellationPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_inkLift, _ink],
+        ).createShader(Offset.zero & size),
+    );
+
+    final pool = Offset(size.width * 0.5, size.height * 0.46);
+    final poolRadius = size.shortestSide * 0.46;
     canvas.drawCircle(
-      Offset(size.width * 0.55, size.height * 0.4),
-      size.width * 0.35,
+      pool,
+      poolRadius,
       Paint()
         ..shader = RadialGradient(
           colors: [
-            const Color(0xFF3A4A7A).withValues(alpha: 0.35),
-            Colors.transparent,
+            const Color(0xFF3A2C1C).withValues(alpha: 0.28),
+            const Color(0xFF3A2C1C).withValues(alpha: 0.0),
           ],
-        ).createShader(
-          Rect.fromCircle(
-            center: Offset(size.width * 0.55, size.height * 0.4),
-            radius: size.width * 0.35,
-          ),
-        ),
+        ).createShader(Rect.fromCircle(center: pool, radius: poolRadius)),
     );
 
-    final points = <Offset>[];
-    for (var i = 0; i < songIds.length; i++) {
-      final rng = math.Random(i * 97 + 13);
-      final ring = 0.18 + (i % 5) * 0.12;
-      final angle =
-          (i / math.max(1, songIds.length)) * math.pi * 2 + rng.nextDouble();
-      final cx = size.width * 0.5 + math.cos(angle) * size.width * ring * 0.85;
-      final cy =
-          size.height * 0.5 + math.sin(angle) * size.height * ring * 0.7;
-      points.add(
-        Offset(
-          cx.clamp(24, size.width - 24),
-          cy.clamp(24, size.height - 24),
-        ),
-      );
-    }
+    final points = <Offset>[
+      for (var i = 0; i < songIds.length; i++)
+        _starOffset(i, songIds.length, size),
+    ];
 
+    final line = Paint()
+      ..color = _candle.withValues(alpha: 0.09)
+      ..strokeWidth = 0.6
+      ..strokeCap = StrokeCap.round;
     for (var i = 0; i < songIds.length - 1; i++) {
       if (!lit.contains(songIds[i]) || !lit.contains(songIds[i + 1])) continue;
-      canvas.drawLine(
-        points[i],
-        points[i + 1],
-        Paint()
-          ..color = const Color(0xFFFFD27A).withValues(alpha: 0.28)
-          ..strokeWidth = 1.2,
-      );
+      canvas.drawLine(points[i], points[i + 1], line);
     }
+
+    for (var i = 0; i < songIds.length; i++) {
+      _paintStar(canvas, points[i], lit.contains(songIds[i]));
+    }
+  }
+
+  void _paintStar(Canvas canvas, Offset p, bool on) {
+    if (on) {
+      const glowRadius = 14.0;
+      canvas.drawCircle(
+        p,
+        glowRadius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              _candle.withValues(alpha: 0.30),
+              _ember.withValues(alpha: 0.07),
+              const Color(0x00E4C08A),
+            ],
+            stops: const [0.0, 0.38, 1.0],
+          ).createShader(Rect.fromCircle(center: p, radius: glowRadius)),
+      );
+      canvas.drawCircle(p, 1.5, Paint()..color = const Color(0xFFF3E6CC));
+      return;
+    }
+    canvas.drawCircle(
+      p,
+      1.05,
+      Paint()..color = _ivory.withValues(alpha: 0.14),
+    );
   }
 
   @override

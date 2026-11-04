@@ -134,3 +134,20 @@ final userLibraryProvider =
     NotifierProvider<UserLibraryController, UserLibraryState>(
   UserLibraryController.new,
 );
+
+/// 曲库「仅看收藏」筛选（跨首页→曲库跳转保留；由曲库 chip 切换）。
+class LibraryFavoritesOnlyController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setEnabled(bool value) => state = value;
+
+  void toggle() => state = !state;
+
+  void clear() => state = false;
+}
+
+final libraryFavoritesOnlyProvider =
+    NotifierProvider<LibraryFavoritesOnlyController, bool>(
+  LibraryFavoritesOnlyController.new,
+);

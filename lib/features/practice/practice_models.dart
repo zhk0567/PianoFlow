@@ -38,7 +38,7 @@ class PracticeSettings {
     this.loopEnd = 4.0,
     this.guideAudio = true,
     this.metronome = false,
-    this.visualFxEnabled = false,
+    this.visualFxEnabled = true,
     this.examRecordAudio = false,
     this.showGhost = false,
   });
@@ -53,7 +53,7 @@ class PracticeSettings {
   final bool guideAudio;
   final bool metronome;
 
-  /// 视觉特效：整条下落瀑布 + 命中爆发等；关则舞台只留琴键与五线谱。默认关。
+  /// 视觉特效：整条下落瀑布 + 命中爆发等；关则舞台只留琴键与五线谱。默认开。
   final bool visualFxEnabled;
   final bool examRecordAudio;
   final bool showGhost;
@@ -233,15 +233,18 @@ class PracticeSnapshot {
   }
 
   Map<int, Hand> highlightByHandAt(double atBeats) {
-    final Set<int> midis;
     if (settings.mode.isAutoPlay) {
-      midis = {
-        for (final n in filteredNotes)
-          if (atBeats >= n.start && atBeats < n.end) n.midi,
-      };
-    } else {
-      midis = {...activeMidi, ...waitingFor};
+      // One pass. The old per-midi rescan was quadratic in dense, sustained
+      // textures and ran on every transport tick (same turn as input).
+      final map = <int, Hand>{};
+      for (final n in filteredNotes) {
+        if (atBeats >= n.start && atBeats < n.end) {
+          map.putIfAbsent(n.midi, () => n.hand);
+        }
+      }
+      return map;
     }
+    final midis = {...activeMidi, ...waitingFor};
     if (midis.isEmpty) return const {};
 
     final map = <int, Hand>{};

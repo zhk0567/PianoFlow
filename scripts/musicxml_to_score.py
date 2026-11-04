@@ -352,12 +352,27 @@ def parse_musicxml(root: ET.Element) -> dict:
                 if duration <= 0:
                     continue
 
+                # MusicXML <tie type="start|stop"> — merge for practice JSON so a
+                # tied continuation is not a second wait-hit / waterfall onset.
+                tie_start = False
+                tie_stop = False
+                for child in el:
+                    if local(child.tag) != "tie":
+                        continue
+                    t = (child.attrib.get("type") or "").lower()
+                    if t == "start":
+                        tie_start = True
+                    elif t == "stop":
+                        tie_stop = True
+
                 notes_out.append(
                     {
                         "midi": midi,
                         "start": round(start, 6),
                         "duration": round(duration, 6),
                         "hand": hand,
+                        "tieStart": tie_start,
+                        "tieStop": tie_stop,
                     }
                 )
 
@@ -384,11 +399,46 @@ def parse_musicxml(root: ET.Element) -> dict:
     deduped: list[dict] = []
     seen: set[tuple] = set()
     for n in notes_out:
-        key = (n["midi"], n["start"], n["duration"], n["hand"])
+        key = (
+            n["midi"],
+            n["start"],
+            n["duration"],
+            n["hand"],
+            n.get("tieStart"),
+            n.get("tieStop"),
+        )
         if key in seen:
             continue
         seen.add(key)
         deduped.append(n)
+
+    # Merge tied notes: stop extends the open start (same midi+hand).
+    merged: list[dict] = []
+    open_tie: dict[tuple[int, str], int] = {}
+    for n in deduped:
+        key = (int(n["midi"]), str(n["hand"]))
+        tie_stop = bool(n.pop("tieStop", False))
+        tie_start = bool(n.pop("tieStart", False))
+        if tie_stop and key in open_tie:
+            i = open_tie[key]
+            end = float(n["start"]) + float(n["duration"])
+            start0 = float(merged[i]["start"])
+            merged[i]["duration"] = round(end - start0, 6)
+            if tie_start:
+                open_tie[key] = i
+            else:
+                open_tie.pop(key, None)
+            continue
+        merged.append(
+            {
+                "midi": n["midi"],
+                "start": n["start"],
+                "duration": n["duration"],
+                "hand": n["hand"],
+            }
+        )
+        if tie_start:
+            open_tie[key] = len(merged) - 1
 
     return {
         "title": title,
@@ -397,7 +447,7 @@ def parse_musicxml(root: ET.Element) -> dict:
         "timeNum": time_num,
         "timeDen": time_den,
         "keySignature": key_sig,
-        "notes": deduped,
+        "notes": merged,
         "warnings": warnings,
     }
 

@@ -2,27 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  static const background = Color(0xFF0B0E13);
-  static const surface = Color(0xFF141920);
-  static const surfaceAlt = Color(0xFF1A212C);
-  static const border = Color(0xFF2A3342);
-  static const borderSubtle = Color(0xFF222A36);
-  static const accent = Color(0xFFE8A849);
-  static const accentSoft = Color(0x33E8A849);
-  static const textPrimary = Color(0xFFF5F2EB);
-  static const textSecondary = Color(0xFF9AA3B2);
-  static const textMuted = Color(0xFF6E7686);
-  static const success = Color(0xFF5CBF8A);
-  static const danger = Color(0xFFE26A6A);
+  /// Echo-like paper shell: warm page, cream cards, sage accent.
+  static const background = Color(0xFFEDE6D8);
+  static const surface = Color(0xFFFAF6EE);
+  static const surfaceAlt = Color(0xFFF5EFE6);
+  static const paper = Color(0xFFFFF9F0);
+  static const border = Color(0xFFD9CFC0);
+  static const borderSubtle = Color(0xFFE8DFD4);
+  static const accent = Color(0xFF4A6B4C);
+  static const accentHover = Color(0xFF3D5A3F);
+  /// Selected nav / chip wash: sage at the same lightness, blue pulled down so it stays warm paper.
+  static const accentSoft = Color(0xFFDCE8C8);
+  static const accentWarm = Color(0xFFA88458);
+  static const accentWarmSoft = Color(0xFFF0E4D4);
+  /// Ink on [accent] (sage is dark enough for white labels).
+  static const onAccent = Color(0xFFFFF9F0);
+  static const textPrimary = Color(0xFF1F1A16);
+  static const textSecondary = Color(0xFF4A433C);
+  static const textMuted = Color(0xFF6B6258);
+  static const success = Color(0xFF4A7A54);
+  static const danger = Color(0xFFA84F4F);
   /// Cool teal — right-hand highlights (keyboard + falling notes).
-  static const rightHand = Color(0xFF4EB6C8);
-  /// Warm peach-amber — left-hand highlights (near [accent], not identical).
-  static const leftHand = Color(0xFFF2A06D);
-  static const pianoWhite = Color(0xFFF7F3EA);
-  static const pianoBlack = Color(0xFF1A1A1A);
+  static const rightHand = Color(0xFF3D8A9A);
+  /// Warm peach — left-hand highlights.
+  static const leftHand = Color(0xFFC4784A);
+  static const pianoWhite = Color(0xFFFFFCF7);
+  static const pianoBlack = Color(0xFF241C16);
+  /// Waiting / pressed key — warm amber, readable on both white and black keys.
+  static const keyWait = Color(0xFFC9843A);
+  /// Light text that sits on dark covers (album art), not page ink.
+  static const onCover = Color(0xFFFFF6EC);
+  static const onCoverMuted = Color(0xFFE4D3C0);
 
-  static const heroDeep = Color(0xFF080C14);
-  static const heroGlow = Color(0x44E8A849);
+  static const shadow = Color(0x141F1A16);
+
+  /// Label color that stays readable on [fill] (sage → cream, gold → ink).
+  static Color onFill(Color fill) =>
+      fill.computeLuminance() > 0.45 ? textPrimary : onAccent;
 }
 
 class AppRadii {
@@ -91,16 +107,16 @@ class AppTheme {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          AppColors.heroDeep,
+          Color(0xFFF7F1E6),
           AppColors.background,
-          Color(0xFF121018),
+          Color(0xFFE4DBC9),
         ],
         stops: [0.0, 0.55, 1.0],
       );
 
-  static ThemeData dark() {
+  static ThemeData light() {
     final bodyBase =
-        GoogleFonts.notoSansScTextTheme(ThemeData.dark().textTheme);
+        GoogleFonts.notoSansScTextTheme(ThemeData.light().textTheme);
     final textTheme = bodyBase.copyWith(
       displayLarge: GoogleFonts.syne(textStyle: bodyBase.displayLarge),
       displayMedium: GoogleFonts.syne(textStyle: bodyBase.displayMedium),
@@ -111,27 +127,42 @@ class AppTheme {
 
     final base = ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       textTheme: textTheme.apply(
         bodyColor: AppColors.textPrimary,
         displayColor: AppColors.textPrimary,
       ),
-      colorScheme: const ColorScheme.dark(
+      colorScheme: const ColorScheme.light(
         surface: AppColors.surface,
         primary: AppColors.accent,
-        secondary: AppColors.rightHand,
+        onPrimary: AppColors.onAccent,
+        primaryContainer: AppColors.accentSoft,
+        onPrimaryContainer: AppColors.accent,
+        secondary: AppColors.accentWarm,
+        onSecondary: AppColors.onAccent,
+        secondaryContainer: AppColors.accentWarmSoft,
+        onSecondaryContainer: Color(0xFF5C4630),
         error: AppColors.danger,
-        onPrimary: Colors.black,
+        onError: AppColors.onAccent,
         onSurface: AppColors.textPrimary,
+        onSurfaceVariant: AppColors.textSecondary,
+        outline: AppColors.border,
+        outlineVariant: AppColors.borderSubtle,
+        surfaceContainerHighest: AppColors.surfaceAlt,
+        surfaceContainerHigh: AppColors.paper,
+        surfaceContainer: AppColors.surface,
       ),
     );
 
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
+      canvasColor: AppColors.background,
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: GoogleFonts.notoSansSc(
           fontSize: 18,
@@ -141,12 +172,51 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
+        shadowColor: AppColors.shadow,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.lg),
-          side: const BorderSide(color: AppColors.border),
+          side: const BorderSide(color: AppColors.borderSubtle),
         ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.textPrimary,
+        contentTextStyle: GoogleFonts.notoSansSc(
+          color: AppColors.onAccent,
+          fontSize: 14,
+        ),
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: AppColors.textSecondary,
+        textColor: AppColors.textPrimary,
+      ),
+      dividerTheme: const DividerThemeData(color: AppColors.borderSubtle),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.accent,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.onAccent;
+          return AppColors.paper;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.accent;
+          return AppColors.border;
+        }),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -170,7 +240,7 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.accent,
-          foregroundColor: Colors.black,
+          foregroundColor: AppColors.onAccent,
           minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
@@ -195,6 +265,7 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
         indicatorColor: AppColors.accentSoft,
         height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {

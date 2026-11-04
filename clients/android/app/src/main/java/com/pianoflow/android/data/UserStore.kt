@@ -80,7 +80,6 @@ class UserStore(ctx: Context) {
 
     fun recordSession(
         songId: String,
-        seconds: Int,
         exam: Boolean,
         recordExam: Boolean,
         perfects: Int,
@@ -89,19 +88,10 @@ class UserStore(ctx: Context) {
     ) {
         val s = getStats()
         s.put("totalSessions", s.optInt("totalSessions") + 1)
-        s.put("totalSeconds", s.optInt("totalSeconds") + seconds.coerceAtLeast(0))
-        val day = java.time.LocalDate.now().toString()
-        val today = s.optJSONObject("today") ?: JSONObject()
-        if (today.optString("day") != day) {
-            today.put("day", day)
-            today.put("seconds", 0)
-        }
-        today.put("seconds", today.optInt("seconds") + seconds.coerceAtLeast(0))
-        s.put("today", today)
         val bySong = s.optJSONObject("bySong") ?: JSONObject()
         val cur = bySong.optJSONObject(songId) ?: JSONObject()
         cur.put("sessions", cur.optInt("sessions") + 1)
-        cur.put("seconds", cur.optInt("seconds") + seconds.coerceAtLeast(0))
+        if (!cur.has("seconds")) cur.put("seconds", 0)
         cur.put("lit", true)
         if (exam && recordExam) {
             cur.put("examSessions", cur.optInt("examSessions") + 1)

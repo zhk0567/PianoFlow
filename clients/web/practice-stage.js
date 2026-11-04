@@ -121,28 +121,39 @@ export function drawLaneGuides(ctx, geo, hitY, { fx, phase }) {
   }
 }
 
+/** LH / RH identity only — never voice/staff; Hand.both shares RH. */
+export function colorForHand(hand) {
+  return hand === "left" ? STAGE.leftHand : STAGE.rightHand;
+}
+
+function waitingFillForHand(hand) {
+  // Lighten hand hue for wait emphasis — do not swap to accent (3rd identity).
+  const hex = colorForHand(hand).replace("#", "");
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const mix = (c) => Math.round(c + (255 - c) * 0.28);
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+}
+
 export function drawFallingNote(ctx, { cx, top, bottom, nw, hand, waiting, fx, phase }) {
   const h = Math.max(10, bottom - top);
   const y = top;
-  const base = hand === "left" ? STAGE.leftHand : STAGE.rightHand;
-  const fill = waiting && fx ? STAGE.accent : base;
+  const fill = waiting ? waitingFillForHand(hand) : colorForHand(hand);
   const r = Math.min(14, Math.max(3, nw * 0.45));
 
   if (fx && waiting) {
-    ctx.fillStyle = `rgba(255,208,120,${0.22 + 0.08 * phase})`;
+    const base = colorForHand(hand);
+    const hr = parseInt(base.slice(1, 3), 16);
+    const hg = parseInt(base.slice(3, 5), 16);
+    const hb = parseInt(base.slice(5, 7), 16);
+    ctx.fillStyle = `rgba(${hr},${hg},${hb},${0.22 + 0.08 * phase})`;
     roundRectPath(ctx, cx - nw / 2 - 2, y - 2, nw + 4, h + 4, r);
     ctx.fill();
   }
 
-  const body = ctx.createLinearGradient(cx, y, cx, y + h);
-  if (fx) {
-    body.addColorStop(0, fill);
-    body.addColorStop(1, hand === "left" ? "#c87848" : "#3a9aaa");
-  } else {
-    body.addColorStop(0, fill);
-    body.addColorStop(1, fill);
-  }
-  ctx.fillStyle = body;
+  // Solid hand fill only — no darken gradient (looked like a 2nd RH color).
+  ctx.fillStyle = fill;
   roundRectPath(ctx, cx - nw / 2, y, nw, h, r);
   ctx.fill();
 

@@ -7,6 +7,7 @@ import '../../shared/widgets/ui_bits.dart';
 import '../library/library_catalog_filter.dart';
 import '../library/library_repository.dart';
 import '../library/song_card.dart';
+import '../library/user_library_store.dart';
 import '../practice/verovio_runtime.dart';
 import '../practice/verovio_web_host_factory.dart';
 
@@ -35,19 +36,27 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
     }
   }
 
-  List<SongSummary> _filter(List<SongSummary> songs) {
+  List<SongSummary> _filter(
+    List<SongSummary> songs, {
+    required bool favoritesOnly,
+    required Set<String> favoriteIds,
+  }) {
     return LibraryCatalogFilter.apply(
       songs,
       query: _query,
       difficulty: _difficulty,
       genre: _genre,
       scoreKind: _scoreKind,
+      favoritesOnly: favoritesOnly,
+      favoriteIds: favoriteIds,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final catalog = ref.watch(catalogProvider);
+    final favoritesOnly = ref.watch(libraryFavoritesOnlyProvider);
+    final favoriteIds = ref.watch(userLibraryProvider).favorites;
     final wide = MediaQuery.sizeOf(context).width >= 900;
 
     return catalog.when(
@@ -60,7 +69,11 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
       ),
       data: (songs) {
         final genres = songs.map((s) => s.genre).toSet().toList()..sort();
-        final filtered = _filter(songs);
+        final filtered = _filter(
+          songs,
+          favoritesOnly: favoritesOnly,
+          favoriteIds: favoriteIds,
+        );
 
         return CustomScrollView(
           slivers: [
@@ -75,7 +88,13 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('曲库', style: AppTheme.display(fontSize: wide ? 40 : 32)),
+                    Text(
+                      '曲库',
+                      style: AppTheme.body(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       '按谱种、难度或风格挑一张，直接开练',
@@ -101,9 +120,14 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
                       difficulty: _difficulty,
                       genre: _genre,
                       genres: genres,
+                      favoritesOnly: favoritesOnly,
+                      favoriteCount: favoriteIds.length,
                       onScoreKind: (v) => setState(() => _scoreKind = v),
                       onDifficulty: (v) => setState(() => _difficulty = v),
                       onGenre: (v) => setState(() => _genre = v),
+                      onFavoritesOnly: (v) => ref
+                          .read(libraryFavoritesOnlyProvider.notifier)
+                          .setEnabled(v),
                     ),
                     if (_scoreKind == ScoreKind.omrDraft) ...[
                       const SizedBox(height: 10),
@@ -118,8 +142,10 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
                     const SizedBox(height: 18),
                     Text(
                       filtered.isEmpty
-                          ? '无匹配曲目'
-                          : '${filtered.length} 张唱片',
+                          ? (favoritesOnly ? '暂无收藏' : '无匹配曲目')
+                          : favoritesOnly
+                              ? '${filtered.length} 首收藏'
+                              : '${filtered.length} 张唱片',
                       style: AppTheme.body(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -132,9 +158,16 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
               ),
             ),
             if (filtered.isEmpty)
-              const SliverFillRemaining(
+              SliverFillRemaining(
                 hasScrollBody: false,
-                child: EmptyState(message: '没有匹配的曲目，试试换个筛选或关键词'),
+                child: EmptyState(
+                  message: favoritesOnly
+                      ? '还没有收藏。点封面右上角星标即可收藏，再回到这里查看。'
+                      : '没有匹配的曲目，试试换个筛选或关键词',
+                  icon: favoritesOnly
+                      ? Icons.star_border_rounded
+                      : Icons.music_off_outlined,
+                ),
               )
             else
               RecordShelfGrid(songs: filtered, wide: wide),
@@ -152,9 +185,12 @@ class _FilterStrip extends StatelessWidget {
     required this.difficulty,
     required this.genre,
     required this.genres,
+    required this.favoritesOnly,
+    required this.favoriteCount,
     required this.onScoreKind,
     required this.onDifficulty,
     required this.onGenre,
+    required this.onFavoritesOnly,
   });
 
   final List<SongSummary> songs;
@@ -162,9 +198,12 @@ class _FilterStrip extends StatelessWidget {
   final int? difficulty;
   final String? genre;
   final List<String> genres;
+  final bool favoritesOnly;
+  final int favoriteCount;
   final ValueChanged<ScoreKind?> onScoreKind;
   final ValueChanged<int?> onDifficulty;
   final ValueChanged<String?> onGenre;
+  final ValueChanged<bool> onFavoritesOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -191,6 +230,12 @@ class _FilterStrip extends StatelessWidget {
           child: ListView(
             scrollDirection: Axis.horizontal,
             children: [
+              _ShelfChip(
+                label: favoriteCount > 0 ? '★ 收藏 ($favoriteCount)' : '★ 收藏',
+                selected: favoritesOnly,
+                onTap: () => onFavoritesOnly(!favoritesOnly),
+              ),
+              const SizedBox(width: 8),
               for (final (value, label) in kindChips) ...[
                 _ShelfChip(
                   label: label,
@@ -284,7 +329,7 @@ class _ShelfChip extends StatelessWidget {
             style: AppTheme.body(
               fontSize: 13,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? Colors.black : AppColors.textSecondary,
+              color: selected ? AppColors.onAccent : AppColors.textSecondary,
             ),
           ),
         ),
@@ -306,8 +351,9 @@ class RecordShelfGrid extends StatelessWidget {
   static int columnsForWidth(double width) {
     if (width < 420) return 1;
     if (width < 720) return 2;
-    if (width < 1100) return 3;
-    return 4;
+    if (width < 980) return 3;
+    if (width < 1280) return 4;
+    return 5;
   }
 
   @override

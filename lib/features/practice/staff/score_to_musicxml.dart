@@ -10,7 +10,8 @@ import '../../../shared/models/song.dart';
 /// calls SetDur when type is present; duration alone → stemless noteheads.
 String songScoreToMusicXml(SongScore score, {Hand hand = Hand.both}) {
   final notes = score.notesForHand(hand);
-  const divisions = 4; // quarter = 4
+  // Higher divisions reduce MIDI/JSON onset quantization drift vs waterfall.
+  const divisions = 16; // quarter = 16
   final fifths = score.keySignature;
   final beats = score.timeNum;
   final beatType = score.timeDen;
@@ -159,22 +160,17 @@ void _writeStaffVoice(
     return;
   }
 
+  // Polyphonic MIDI/JSON often stacks long held tones under a faster melody.
+  // MusicXML chords share one duration, so we:
+  // 1) never skip an onset (was: skip when onset <= cursor → staff ≠ waterfall)
+  // 2) advance by min(shortest in group, gap to next onset, remain)
+  // 3) <backup> when the next onset is earlier than the written cursor
   final events = <_StaffEvent>[];
   var cursor = 0.0;
   var i = 0;
   while (i < notes.length) {
     final n = notes[i];
     final onset = (n.start - measureStart).clamp(0.0, measureBeats);
-    if (onset <= cursor - 0.001) {
-      i++;
-      continue;
-    }
-    if (onset > cursor + 0.001) {
-      final restBeats = onset - cursor;
-      final d = (restBeats * divisions).round().clamp(1, 9999);
-      events.add(_StaffEvent.rest(d));
-      cursor += d / divisions;
-    }
 
     final group = <ScoreNote>[n];
     var j = i + 1;
@@ -183,12 +179,44 @@ void _writeStaffVoice(
       j++;
     }
 
-    final remain = measureBeats - cursor;
-    if (remain < 0.05) break;
-    final durBeats = n.duration.clamp(0.05, remain);
+    var nextOnset = measureBeats;
+    if (j < notes.length) {
+      nextOnset = (notes[j].start - measureStart).clamp(0.0, measureBeats);
+    }
+
+    if (onset > cursor + 0.001) {
+      final restBeats = onset - cursor;
+      final d = (restBeats * divisions).round();
+      // Do NOT force d>=1: sub-division gaps must not become a full 16th rest
+      // (that accumulated timing drift and dropped later notes).
+      if (d >= 1) {
+        events.add(_StaffEvent.rest(d.clamp(1, 9999)));
+        cursor += d / divisions;
+      }
+    } else if (onset < cursor - 0.001) {
+      final back = ((cursor - onset) * divisions).round();
+      if (back >= 1) {
+        events.add(_StaffEvent.backup(back.clamp(1, 9999)));
+        cursor = onset;
+      }
+    }
+    // Snap writing onset to cursor after quantization.
+    final writeOnset = cursor;
+
+    final remain = measureBeats - writeOnset;
+    if (remain < 0.5 / divisions) break;
+    final shortest = group
+        .map((g) => g.duration)
+        .reduce((a, b) => a < b ? a : b);
+    final rawGap = nextOnset - writeOnset;
+    final gap = rawGap > 0 ? (rawGap < remain ? rawGap : remain) : remain;
+    final unit = 1.0 / divisions;
+    var durBeats = shortest < gap ? shortest : gap;
+    if (durBeats > remain) durBeats = remain;
+    if (durBeats < unit) durBeats = unit;
     var d = (durBeats * divisions).round().clamp(1, 9999);
-    if (cursor + d / divisions > measureBeats + 0.001) {
-      d = ((measureBeats - cursor) * divisions).round().clamp(1, 9999);
+    if (writeOnset + d / divisions > measureBeats + 0.001) {
+      d = ((measureBeats - writeOnset) * divisions).round().clamp(1, 9999);
     }
     final tname = _durationToType(d, divisions).name;
     events.add(
@@ -199,14 +227,17 @@ void _writeStaffVoice(
         beamable: _beamable.contains(tname),
       ),
     );
-    cursor += d / divisions;
+    cursor = writeOnset + d / divisions;
     i = j;
-    if (cursor >= measureBeats - 0.001) break;
+    if (writeOnset >= measureBeats - 0.001) break;
   }
 
   if (cursor < measureBeats - 0.05) {
-    final d = ((measureBeats - cursor) * divisions).round().clamp(1, 9999);
-    events.add(_StaffEvent.rest(d));
+    final d = ((measureBeats - cursor) * divisions).round();
+    if (d >= 1) events.add(_StaffEvent.rest(d.clamp(1, 9999)));
+  } else if (cursor > measureBeats + 0.001) {
+    final back = ((cursor - measureBeats) * divisions).round();
+    if (back >= 1) events.add(_StaffEvent.backup(back.clamp(1, 9999)));
   }
 
   final beamVals = <int, String>{};
@@ -239,6 +270,10 @@ void _writeStaffVoice(
 
   for (var idx = 0; idx < events.length; idx++) {
     final ev = events[idx];
+    if (ev.isBackup) {
+      buf.writeln('<backup><duration>${ev.d}</duration></backup>');
+      continue;
+    }
     final tx = _typeXml(ev.d, divisions);
     if (!ev.isNotes) {
       buf.writeln(
@@ -269,6 +304,14 @@ void _writeStaffVoice(
 class _StaffEvent {
   _StaffEvent.rest(this.d)
       : isNotes = false,
+        isBackup = false,
+        group = null,
+        typeName = '',
+        beamable = false;
+
+  _StaffEvent.backup(this.d)
+      : isNotes = false,
+        isBackup = true,
         group = null,
         typeName = '',
         beamable = false;
@@ -278,10 +321,12 @@ class _StaffEvent {
     required List<ScoreNote> this.group,
     required this.typeName,
     required this.beamable,
-  }) : isNotes = true;
+  })  : isNotes = true,
+        isBackup = false;
 
   final int d;
   final bool isNotes;
+  final bool isBackup;
   final List<ScoreNote>? group;
   final String typeName;
   final bool beamable;

@@ -1,0 +1,5 @@
+baseline,onset_f1_50,onset_f1_100,outcome_macro_f1,false_advance_rate,stuck_rate,latency_p50_ms,latency_p95_ms,n_gold,n_pred
+yin,0.9444,0.9444,0.7083,0.1,0.0,38.6,38.6,8,8
+basic_pitch,0.2426,0.2426,0.6833,0.8619,0.0,13.09,13.53,8,51
+basic_pitch_latch,0.641,0.641,0.7083,0.5278,0.0,12.16,12.45,8,15
+ours,0.254,0.254,0.6833,0.8545,0.0,74.09,74.09,8,48

@@ -1,23 +1,28 @@
 package com.pianoflow.android.practice
 
-import kotlin.math.abs
-import kotlin.math.ln
 import kotlin.math.log2
 import kotlin.math.roundToInt
 
-/** Minimal YIN-style f0 → MIDI for follow mode. */
+/** Minimal YIN-style f0 → MIDI for follow mode (A0–C8). */
 object YinPitch {
+    /** A0 — was 60 Hz, which rejected deep bass (C2 ≈ 65 Hz barely passed). */
+    const val minHz = 27.5
+    const val maxHz = 4200.0
+
     fun midiFromPcm16(samples: ShortArray, sampleRate: Int, threshold: Float = 0.12f): Int? {
         if (samples.size < 512) return null
-        val n = samples.size.coerceAtMost(2048)
+        // Need ≥~2 periods of A0 (~73 ms @ 22.05 kHz → ~1600 samples).
+        val n = samples.size.coerceAtMost(8192)
         val x = FloatArray(n) { samples[it] / 32768f }
         var rms = 0.0
         for (v in x) rms += v * v
         rms = kotlin.math.sqrt(rms / n)
-        if (rms < 0.01) return null
+        if (rms < 0.008) return null
 
-        val tauMax = (sampleRate / 60).coerceAtMost(n / 2)
-        val tauMin = (sampleRate / 1000).coerceAtLeast(2)
+        val tauMax = (sampleRate / minHz).toInt().coerceAtMost(n / 2)
+        val tauMin = (sampleRate / maxHz).toInt().coerceAtLeast(2)
+        if (tauMax <= tauMin + 1) return null
+
         val d = FloatArray(tauMax + 1)
         for (tau in tauMin..tauMax) {
             var sum = 0f
@@ -38,10 +43,6 @@ object YinPitch {
         var bestTau = -1
         for (tau in tauMin..tauMax) {
             if (cmnd[tau] < threshold) {
-                while (tau + 1 <= tauMax && cmnd[tau + 1] < cmnd[tau]) {
-                    // climb to local min — simplified: break at first valley start
-                    break
-                }
                 var t = tau
                 while (t + 1 <= tauMax && cmnd[t + 1] < cmnd[t]) t++
                 bestTau = t
@@ -58,8 +59,19 @@ object YinPitch {
             }
             if (minV > 0.45f) return null
         }
+
+        // Octave correct: piano bass H2 often wins first trough.
+        val doubleTau = bestTau * 2
+        if (doubleTau <= tauMax) {
+            val at = cmnd[bestTau]
+            val at2 = cmnd[doubleTau]
+            if (at2 <= at * 1.12f && at2 < 0.26f) {
+                bestTau = doubleTau
+            }
+        }
+
         val hz = sampleRate.toDouble() / bestTau
-        if (hz < 60 || hz > 2000) return null
+        if (hz < minHz || hz > maxHz) return null
         val midi = (69 + 12 * log2(hz / 440.0)).roundToInt()
         return midi.coerceIn(21, 108)
     }

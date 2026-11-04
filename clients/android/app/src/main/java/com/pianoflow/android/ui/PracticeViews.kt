@@ -171,10 +171,11 @@ class FallingNotesView @JvmOverloads constructor(
                 g.whiteWidth * 0.72f
             }
             val nh = (n.duration / lookAhead * h * 0.55f).toFloat().coerceIn(14f, h * 0.45f)
+            // Hand identity only (match Flutter AppColors) — never voice/staff;
+            // Hand.Both shares RH so both-hands mode stays two hues.
             val color = when (n.hand) {
-                Hand.Left -> 0xFF5B8DEF.toInt()
-                Hand.Right -> 0xFF5AD4A0.toInt()
-                Hand.Both -> 0xFFFFD078.toInt()
+                Hand.Left -> 0xFFF2A06D.toInt()
+                Hand.Right, Hand.Both -> 0xFF4EB6C8.toInt()
             }
             notePaint.color = color
             tmp.set(cx - nw / 2f, y - nh, cx + nw / 2f, y)

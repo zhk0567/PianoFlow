@@ -29,7 +29,6 @@ import com.pianoflow.android.data.AudioWorkshopImport
 import com.pianoflow.android.data.PdfWorkshopStage
 import java.io.File
 import com.pianoflow.android.data.WorkshopImport
-import java.time.LocalDate
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -139,6 +138,13 @@ class MainActivity : AppCompatActivity() {
         showHome()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (!::store.isInitialized || !::tabContent.isInitialized) return
+        val nav = findViewById<BottomNavigationView>(R.id.bottomNav)
+        if (nav.selectedItemId == R.id.nav_home) showHome()
+    }
+
     private fun reloadSongs() {
         songs = repo.loadSongs()
     }
@@ -209,9 +215,9 @@ class MainActivity : AppCompatActivity() {
         val favSongs = favIds.mapNotNull { id -> songs.find { it.id == id } }
         root.findViewById<TextView>(R.id.homeFavorites).apply {
             text = if (favSongs.isEmpty()) {
-                "暂无 · 曲库长按收藏"
+                "暂无 · 曲库点星标收藏"
             } else {
-                favSongs.take(3).joinToString("\n") { it.title }
+                favSongs.take(3).joinToString("\n") { "★ ${it.title}" }
             }
             isClickable = true
             setOnClickListener {
@@ -258,7 +264,12 @@ class MainActivity : AppCompatActivity() {
         }
         fun bind() {
             val f = filtered()
-            count.text = if (f.isEmpty()) "无匹配" else "${f.size} 张唱片"
+            count.text = when {
+                f.isEmpty() && libFavoritesOnly -> "暂无收藏"
+                f.isEmpty() -> "无匹配"
+                libFavoritesOnly -> "${f.size} 首收藏"
+                else -> "${f.size} 张唱片"
+            }
             root.findViewById<TextView>(R.id.libOmrHint).visibility =
                 if (libKind == "omrDraft") View.VISIBLE else View.GONE
             list.adapter = AlbumAdapter(f, store, onClick = { openPractice(it) }) { song ->
@@ -294,8 +305,9 @@ class MainActivity : AppCompatActivity() {
         chip("全部", libKind == null && libDifficulty == null && libGenre == null && !libFavoritesOnly) {
             libKind = null; libDifficulty = null; libGenre = null; libFavoritesOnly = false
         }
-        if (store.getFavorites().isNotEmpty()) {
-            chip("★ 收藏", libFavoritesOnly) { libFavoritesOnly = !libFavoritesOnly }
+        val favCount = store.getFavorites().size
+        chip(if (favCount > 0) "★ 收藏 ($favCount)" else "★ 收藏", libFavoritesOnly) {
+            libFavoritesOnly = !libFavoritesOnly
         }
         for (k in listOf("formal", "omrDraft", "simplified", "userImport")) {
             if (songs.none { it.scoreKind == k }) continue
@@ -415,17 +427,7 @@ class MainActivity : AppCompatActivity() {
         root.findViewById<Button>(R.id.btnLogin).visibility = if (auth.guest) View.VISIBLE else View.GONE
         root.findViewById<Button>(R.id.btnLogout).visibility = if (auth.guest) View.GONE else View.VISIBLE
         val stats = store.getStats()
-        val today = stats.optJSONObject("today")
-        val day = LocalDate.now().toString()
-        val todaySec = if (today?.optString("day") == day) today.optInt("seconds") else 0
-        val todayMin = todaySec / 60
-        val goal = 20
-        val pct = (todayMin * 100 / goal).coerceAtMost(100)
-        root.findViewById<TextView>(R.id.todayLabel).text = "今日 $todayMin / $goal 分钟"
-        root.findViewById<TextView>(R.id.todayPct).text = "$pct%"
-        root.findViewById<android.widget.ProgressBar>(R.id.todayProgress).progress = pct
         root.findViewById<TextView>(R.id.statSessions).text = stats.optInt("totalSessions").toString()
-        root.findViewById<TextView>(R.id.statMinutes).text = (stats.optInt("totalSeconds") / 60).toString()
         root.findViewById<TextView>(R.id.statSongs).text =
             (stats.optJSONObject("bySong")?.length() ?: 0).toString()
         root.findViewById<Button>(R.id.btnLogin).setOnClickListener { showLoginDialog { showProfile() } }
@@ -474,6 +476,8 @@ class MainActivity : AppCompatActivity() {
             val artist: TextView = v.findViewById(R.id.songArtist)
             val kind: TextView = v.findViewById(R.id.songKind)
             val meta: TextView = v.findViewById(R.id.songMeta)
+            val favBtn: TextView = v.findViewById(R.id.songFav)
+            val favBadge: TextView = v.findViewById(R.id.songFavBadge)
         }
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
             VH(LayoutInflater.from(parent.context).inflate(R.layout.item_song, parent, false))
@@ -483,7 +487,28 @@ class MainActivity : AppCompatActivity() {
             holder.title.text = s.title
             holder.artist.text = s.artist.orEmpty().ifBlank { "未知艺术家" }
             val fav = userStore.getFavorites().contains(s.id)
-            holder.kind.text = if (fav) "★ ${s.scoreKindLabel}" else s.scoreKindLabel
+            holder.kind.text = s.scoreKindLabel
+            holder.favBadge.visibility = if (fav) View.VISIBLE else View.GONE
+            holder.favBtn.text = if (fav) "★" else "☆"
+            holder.favBtn.setTextColor(if (fav) 0xFF4A6B4C.toInt() else 0xFF6B6258.toInt())
+            holder.favBtn.setBackgroundColor(if (fav) 0xFFDCE8C8.toInt() else 0xE6FAF6EE.toInt())
+            val density = holder.itemView.resources.displayMetrics.density
+            holder.bg.background = GradientDrawable().apply {
+                cornerRadius = 14f * density
+                setColor(albumTintFor(s))
+                if (fav) {
+                    setStroke((2 * density).toInt(), 0xFF4A6B4C.toInt())
+                } else {
+                    setStroke((1 * density).toInt(), 0xFFD9CFC0.toInt())
+                }
+            }
+            holder.title.setTextColor(0xFF1F1A16.toInt())
+            holder.artist.setTextColor(0xFF4A433C.toInt())
+            holder.kind.setTextColor(0xFF4A6B4C.toInt())
+            holder.kind.setBackgroundColor(0xE6DCE8C8.toInt())
+            holder.meta.setTextColor(0xFF6B6258.toInt())
+            holder.favBadge.setBackgroundColor(0xEB4A6B4C.toInt())
+            holder.favBadge.setTextColor(0xFFFFF9F0.toInt())
             val diff = when (s.difficulty) {
                 1 -> "入门"
                 2 -> "初级"
@@ -493,8 +518,17 @@ class MainActivity : AppCompatActivity() {
             }
             val bpm = s.bpm?.let { "$it BPM" } ?: "— BPM"
             holder.meta.text = "$diff · $bpm"
-            holder.bg.setBackgroundColor(albumTintFor(s))
             holder.itemView.setOnClickListener { onClick(s) }
+            holder.favBtn.setOnClickListener {
+                val on = userStore.toggleFavorite(s.id)
+                android.widget.Toast.makeText(
+                    holder.itemView.context,
+                    if (on) "已收藏" else "已取消收藏",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                // 刷新整表，确保收藏筛选 / chip 计数同步
+                showLibrary()
+            }
             holder.itemView.setOnLongClickListener {
                 if (s.isUserImport) {
                     val favLabel = if (userStore.getFavorites().contains(s.id)) "取消收藏" else "收藏"
@@ -509,7 +543,7 @@ class MainActivity : AppCompatActivity() {
                                         if (on) "已收藏" else "已取消收藏",
                                         android.widget.Toast.LENGTH_SHORT,
                                     ).show()
-                                    notifyItemChanged(position)
+                                    showLibrary()
                                 }
                                 1 -> onDelete(s)
                             }
@@ -522,7 +556,7 @@ class MainActivity : AppCompatActivity() {
                         if (on) "已收藏" else "已取消收藏",
                         android.widget.Toast.LENGTH_SHORT,
                     ).show()
-                    notifyItemChanged(position)
+                    showLibrary()
                 }
                 true
             }
@@ -530,13 +564,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun albumTintFor(s: SongSummary): Int {
+        // Echo warm-paper washes (match Flutter RecordAlbumCard — readable on page bg).
         val palette = intArrayOf(
-            0xFF2A2118.toInt(),
-            0xFF1E2A3A.toInt(),
-            0xFF2A1E2E.toInt(),
-            0xFF1E2E24.toInt(),
-            0xFF2E2818.toInt(),
-            0xFF1A2430.toInt(),
+            0xFFB5CFA0.toInt(),
+            0xFFD4B090.toInt(),
+            0xFFE0B090.toInt(),
+            0xFF9CBCBC.toInt(),
+            0xFFC0C890.toInt(),
+            0xFFD0A890.toInt(),
+            0xFFD0BC90.toInt(),
+            0xFFA0BC9C.toInt(),
         )
         return palette[kotlin.math.abs(s.id.hashCode()) % palette.size]
     }
@@ -562,7 +599,14 @@ class MainActivity : AppCompatActivity() {
             holder.artist.text = s.artist.orEmpty()
             holder.kind.text = s.scoreKindLabel
             holder.meta.text = "自导入"
-            holder.bg.setBackgroundColor(0xFF1A212C.toInt())
+            holder.bg.setBackgroundColor(0xFFFAF6EE.toInt())
+            holder.title.setTextColor(0xFF1F1A16.toInt())
+            holder.artist.setTextColor(0xFF4A433C.toInt())
+            holder.kind.setTextColor(0xFF4A6B4C.toInt())
+            holder.kind.setBackgroundColor(0xE6DCE8C8.toInt())
+            holder.meta.setTextColor(0xFF6B6258.toInt())
+            holder.itemView.findViewById<TextView>(R.id.songFav)?.visibility = View.GONE
+            holder.itemView.findViewById<TextView>(R.id.songFavBadge)?.visibility = View.GONE
             holder.itemView.setOnClickListener { onOpen(s) }
             holder.itemView.setOnLongClickListener {
                 AlertDialog.Builder(this@MainActivity)
@@ -599,6 +643,8 @@ class MainActivity : AppCompatActivity() {
             holder.artist.text = s.scoreKindLabel
             holder.kind.text = if (s.id == selectedId) "已选" else ""
             holder.bg.setBackgroundColor(if (s.id == selectedId) 0x33E8A849 else 0xFF141920.toInt())
+            holder.itemView.findViewById<TextView>(R.id.songFav)?.visibility = View.GONE
+            holder.itemView.findViewById<TextView>(R.id.songFavBadge)?.visibility = View.GONE
             holder.itemView.setOnClickListener { onClick(s) }
         }
     }

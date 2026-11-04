@@ -73,7 +73,7 @@ class _HomeAtmospherePainter extends CustomPainter {
     // Thin keyboard silhouette at lower hero.
     final keyY = size.height * 0.42;
     final keyPaint = Paint()
-      ..color = AppColors.pianoWhite.withValues(alpha: 0.06)
+      ..color = AppColors.textPrimary.withValues(alpha: 0.08)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     final keyW = size.width / 28;

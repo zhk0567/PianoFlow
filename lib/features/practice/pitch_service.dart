@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 
 import '../../shared/piano_flow_log.dart';
 import 'basic_pitch.dart';
+import 'onset_flux.dart';
 import 'pitch_yin.dart';
 import 'swift_f0.dart';
 
@@ -14,10 +15,17 @@ enum PitchEngineKind { basicPitch, swiftf0, yin }
 
 /// noteOn edge with capture time (end of PCM hop that produced the lock).
 class PitchNoteOn {
-  const PitchNoteOn({required this.midi, required this.captureAt});
+  const PitchNoteOn({
+    required this.midi,
+    required this.captureAt,
+    this.attackOnset = false,
+  });
 
   final int midi;
   final DateTime captureAt;
+
+  /// True when this edge coincides with an HF-flux attack (re-strike / 连击).
+  final bool attackOnset;
 }
 
 class PitchFrame {
@@ -30,10 +38,13 @@ class PitchFrame {
     this.hz,
     this.midi,
     this.midis = const {},
+    this.sensingMidis = const {},
     this.label,
     this.clarity,
     this.confirmed = false,
     this.captureAt,
+    this.onset = false,
+    this.onsetFlux = 0,
   });
 
   final double rms;
@@ -48,12 +59,21 @@ class PitchFrame {
 
   /// All currently locked MIDI notes (polyphonic).
   final Set<int> midis;
+
+  /// Seen this hop / building toward lock — display only (not noteOn).
+  final Set<int> sensingMidis;
   final String? label;
   final double? clarity;
   final bool confirmed;
 
   /// End of the PCM hop that produced this frame (for capture-time grading).
   final DateTime? captureAt;
+
+  /// Fresh piano attack this hop (HF flux spike) — drives re-edge / latch release.
+  final bool onset;
+
+  /// Debug: last HF flux delta.
+  final double onsetFlux;
 }
 
 /// Microphone → Basic Pitch (poly) / SwiftF0 / YIN → stable MIDI set.
@@ -71,12 +91,21 @@ class PitchService {
   static const _bpRate = BasicPitchEstimator.sampleRate; // 22050
   static const _bpContextSamples = BasicPitchEstimator.audioNSamples; // 43844
 
-  static const rmsGate = 0.005;
-  /// 1 frame lock: with ~30ms hops, keep lock immediate.
-  static const _lockFrames = 1;
-  /// 1 miss frame unlock (~30ms). Was 2 (~80ms@40ms hop) — same-pitch rehits
-  /// while BP stays locked never got a second noteOn edge.
-  static const _releaseFrames = 1;
+  /// Linear RMS gate. Was 0.005 (~−46 dB) — laptop idle ~−42 dB still passed
+  /// and BP invented bass ghosts (G#1). 0.010 ≈ −40 dB rejects quiet room.
+  static const rmsGate = 0.010;
+
+  /// Peak must also clear this (idle peak ~2% was enough to lock G#1).
+  static const peakGate = 0.025;
+  /// 2-frame lock (~60ms @30ms hop). Evidence: `_lockFrames=1` + ambient rms
+  /// above gate caused single-frame mislocks (幽灵闪键 / 假 onset). Still
+  /// snappier than the old 2×40ms path; do not raise hop/quiet here.
+  static const _lockFrames = 2;
+  /// 2 miss frames (~60ms) before unlock. Evidence: `_releaseFrames=1` + BP
+  /// empty hops (infer busy / ambient) → lock flicker, 「锁定中」空键、命中
+  /// 计数狂刷。同音再击由 [PracticeAttackLatch] 在静音后放行，不靠闪断
+  /// 再 noteOn。
+  static const _releaseFrames = 2;
 
   final _recorder = AudioRecorder();
   final _yin = YinPitch(sampleRate: sampleRate, threshold: 0.15);
@@ -97,6 +126,11 @@ class PitchService {
   final Map<int, int> _missCount = {};
   Set<int> _locked = {};
   final Set<int> _emitted = {};
+  final OnsetFluxDetector _onset = OnsetFluxDetector();
+  /// Previous hop's raw midis — onset re-edge only for new peaks / mono.
+  Set<int> _prevRaw = {};
+  /// Soft presses often lock 1 hop after the flux spike; keep onset sticky.
+  int _onsetSticky = 0;
 
   /// Optional PCM16 tee (exam recording).
   void Function(Uint8List pcm)? pcmTee;
@@ -114,6 +148,18 @@ class PitchService {
   /// First window seeds the ring; later hops append only new [_hop] samples.
   bool _bpPrimed = false;
 
+  /// Follow-mode score prior (waiting neighborhood) for BP bin boost.
+  Set<int> _scorePriorMidis = {};
+
+  /// Update expected-pitch prior for score-conditioned Basic Pitch decoding.
+  void setScorePriorMidis(Set<int> midis) {
+    _scorePriorMidis = {...midis};
+  }
+
+  void clearScorePriorMidis() {
+    _scorePriorMidis = {};
+  }
+
   Stream<PitchNoteOn> get noteOnStream => _noteController.stream;
   Stream<PitchFrame> get frameStream => _frameController.stream;
   bool get isRunning => _running;
@@ -129,6 +175,9 @@ class PitchService {
     _missCount.clear();
     _locked = {};
     _emitted.clear();
+    _prevRaw = {};
+    _onsetSticky = 0;
+    _onset.reset();
     _inferBusy = false;
     _latestWhileBusy = null;
     _droppedStale = 0;
@@ -227,6 +276,8 @@ class PitchService {
     _missCount.clear();
     _locked = {};
     _emitted.clear();
+    _prevRaw = {};
+    _onsetSticky = 0;
     _inferBusy = false;
     _latestWhileBusy = null;
     _bpWrite = 0;
@@ -364,7 +415,8 @@ class PitchService {
     try {
       final samples = pcm16ToFloat(pcm16);
       final level = measureLevel(samples);
-      final above = level.rms >= rmsGate;
+      final above =
+          level.rms >= rmsGate && level.peak >= peakGate;
 
       var raw = <int>{};
       double? hz;
@@ -373,7 +425,20 @@ class PitchService {
       if (above) {
         if (_engine == PitchEngineKind.basicPitch && _basic != null) {
           // Incremental 22.05kHz rolling context — no full-window resample.
-          raw = await _basic!.estimateActiveMidi(_bpContextLinear22k());
+          raw = await _basic!.estimateActiveMidi(
+            _bpContextLinear22k(),
+            priorMidis:
+                _scorePriorMidis.isEmpty ? null : _scorePriorMidis,
+          );
+          // Ambient noise often sits above gate with empty BP — do not flood
+          // the console; enable with --dart-define=PIANOFLOW_VERBOSE=true.
+          if (raw.isEmpty && _chunkCount % 40 == 0) {
+            pianoFlowLogVerbose(
+              'Pitch',
+              'BP empty above gate rms=${level.rms.toStringAsFixed(4)} '
+              'db=${amplitudeToDb(level.rms).toStringAsFixed(1)}',
+            );
+          }
         } else if (_engine == PitchEngineKind.swiftf0 && _swift != null) {
           final est = await _swift!.estimateFrom44100(samples);
           if (est != null) {
@@ -394,6 +459,38 @@ class PitchService {
       }
 
       final locked = _updateLock(raw, above);
+      final sensing = {
+        for (final e in _hitCount.entries)
+          if (e.value > 0 && !locked.contains(e.key)) e.key,
+        ...raw.where((m) => !locked.contains(m)),
+      };
+
+      // Prefer attack portion of the hop window for flux (tail).
+      final onsetSamples = samples.length > 2048
+          ? Float64List.sublistView(samples, samples.length - 2048)
+          : samples;
+      final onsetNow = above && _onset.push(onsetSamples);
+      if (onsetNow) {
+        _onsetSticky = 2;
+      }
+      final onsetHit = onsetNow || _onsetSticky > 0;
+      if (_onsetSticky > 0) _onsetSticky--;
+
+      // Re-attack: do NOT clear emitted for every locked linger pitch.
+      // Clearing all locked on any flux was re-firing phrase leftovers and
+      // false-advancing the next wait. Mono 连击 still re-edges; poly only
+      // re-edges pitches that newly appeared in raw this hop.
+      if (onsetNow && locked.isNotEmpty) {
+        if (locked.length == 1) {
+          _emitted.remove(locked.first);
+        } else {
+          final newly = raw.difference(_prevRaw);
+          for (final m in newly) {
+            if (locked.contains(m)) _emitted.remove(m);
+          }
+        }
+      }
+      _prevRaw = {...raw};
 
       final label = locked.isEmpty
           ? null
@@ -411,10 +508,13 @@ class PitchService {
           hz: hz,
           midi: locked.isEmpty ? null : locked.first,
           midis: locked,
+          sensingMidis: sensing,
           label: label,
           clarity: clarity,
           confirmed: locked.isNotEmpty,
           captureAt: captureAt,
+          onset: onsetHit,
+          onsetFlux: _onset.lastFlux,
         ),
       );
 
@@ -422,6 +522,7 @@ class PitchService {
         // Unlock must free noteOn edges immediately — delaying _emitted clear
         // by ~280ms left cue bleed blocking the first post-cue attack.
         _emitted.clear();
+        _prevRaw = {};
         _scheduleClear();
         return;
       }
@@ -431,10 +532,17 @@ class PitchService {
 
       for (final m in locked) {
         if (_emitted.add(m)) {
-          _noteController.add(PitchNoteOn(midi: m, captureAt: captureAt));
+          _noteController.add(
+            PitchNoteOn(
+              midi: m,
+              captureAt: captureAt,
+              attackOnset: onsetHit,
+            ),
+          );
           pianoFlowLogVerbose(
             'Pitch',
-            '+${YinPitch.midiLabel(m)} '
+            '+${YinPitch.midiLabel(m)}'
+            '${onsetHit ? " onset" : ""} '
             'engine=${_engine.name} '
             'set=${locked.map(YinPitch.midiLabel).join(",")} '
             'chunks=$_chunkCount'

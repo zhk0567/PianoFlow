@@ -3,6 +3,7 @@
 import { midiFromPcm16 } from "./yin.js";
 import { midisFromPcm16Poly } from "./poly-yin.js";
 import { asFrameBins, tailMeanScores, selectNotes } from "./basic-pitch-core.js";
+import { OnsetFluxDetector } from "./onset-flux.js";
 
 const SR = 22050;
 const AUDIO_N = 43844;
@@ -13,6 +14,17 @@ let engine = "yin";
 let session = null;
 let ring = new Float32Array(AUDIO_N);
 let ringLen = 0;
+/** @type {Set<number>} */
+let scorePrior = new Set();
+const onsetDet = new OnsetFluxDetector();
+
+export function setScorePriorMidis(midis) {
+  scorePrior = midis instanceof Set ? new Set(midis) : new Set(midis || []);
+}
+
+export function clearScorePriorMidis() {
+  scorePrior = new Set();
+}
 
 function pushRing(f32) {
   if (f32.length >= AUDIO_N) {
@@ -86,10 +98,10 @@ async function inferBasicPitch() {
   } else {
     frames.push(...asFrameBins(Array.from(data)));
   }
-  return selectNotes(tailMeanScores(frames, 4));
+  return selectNotes(tailMeanScores(frames, 4), 0.42, 0.60, scorePrior.size ? scorePrior : null);
 }
 
-/** Process PCM16 chunk; returns active MIDI set. */
+/** Process PCM16 chunk; returns `{ midis: Set, onset: boolean }`. */
 export async function processPitchPcm16(pcm, sampleRate = SR) {
   const f32 = new Float32Array(pcm.length);
   for (let i = 0; i < pcm.length; i++) f32[i] = pcm[i] / 32768;
@@ -103,20 +115,26 @@ export async function processPitchPcm16(pcm, sampleRate = SR) {
     pushRing(f32);
   }
 
+  let midis = new Set();
   if (engine === "basicPitch" && session) {
     try {
       const s = await inferBasicPitch();
-      if (s.size) return s;
+      if (s.size) midis = s;
     } catch (e) {
       console.error("[PianoFlow/Web/Pitch] infer failed", e);
     }
   }
-  if (engine === "polyYin" || engine === "basicPitch") {
+  if (!midis.size && (engine === "polyYin" || engine === "basicPitch")) {
     const poly = midisFromPcm16Poly(pcm, sampleRate);
-    if (poly.length) return new Set(poly);
+    if (poly.length) midis = new Set(poly);
   }
-  const m = midiFromPcm16(pcm, sampleRate);
-  return m != null ? new Set([m]) : new Set();
+  if (!midis.size) {
+    const m = midiFromPcm16(pcm, sampleRate);
+    if (m != null) midis = new Set([m]);
+  }
+  const tail = f32.length > 2048 ? f32.subarray(f32.length - 2048) : f32;
+  const onset = midis.size > 0 && onsetDet.push(tail);
+  return { midis, onset };
 }
 
 export async function transcribeFloat32Mono(audio22050, { offline = true } = {}) {

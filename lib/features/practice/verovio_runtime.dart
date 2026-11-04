@@ -268,9 +268,8 @@ class VerovioRuntime {
       );
     }
 
-    // v72: staff glyphs stay at native page px (诀别书). Crop no longer
-    // squeezes short scores by crop/page.
-    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v72';
+    // v73: extra top crop pad so high ties (诀别书 A5 延音弧) are not clipped.
+    final stamp = '${htmlAsset.lengthInBytes}:${wasmAsset.lengthInBytes}:v73';
     final marker = File('${dir.path}${Platform.pathSeparator}.asset_stamp');
     final htmlOut = File('${dir.path}${Platform.pathSeparator}viewer.html');
     final wasmOut = File(

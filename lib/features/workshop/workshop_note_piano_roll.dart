@@ -498,8 +498,8 @@ class _PianoRollPainter extends CustomPainter {
         Rect.fromLTWH(lane, top, size.width - lane, rowH),
         Paint()
           ..color = black
-              ? const Color(0xFF10151C)
-              : const Color(0xFF161C26),
+              ? const Color(0xFFE4DBC9)
+              : const Color(0xFFFFF9F0),
       );
       if (midi % 12 == 0) {
         canvas.drawRect(
@@ -528,7 +528,7 @@ class _PianoRollPainter extends CustomPainter {
           text: TextSpan(
             text: '$m',
             style: const TextStyle(
-              color: Color(0xFF6E7686),
+              color: AppColors.textMuted,
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
@@ -541,7 +541,7 @@ class _PianoRollPainter extends CustomPainter {
 
     canvas.drawRect(
       Rect.fromLTWH(0, 0, lane, size.height),
-      Paint()..color = const Color(0xFF0E1218),
+      Paint()..color = const Color(0xFFF3EBDF),
     );
     canvas.drawLine(
       Offset(lane, 0),
@@ -556,12 +556,12 @@ class _PianoRollPainter extends CustomPainter {
       if (!black) {
         canvas.drawRect(
           Rect.fromLTWH(2, top + 1, lane - 4, rowH - 2),
-          Paint()..color = const Color(0xFF1C2430),
+          Paint()..color = const Color(0xFFFFFCF7),
         );
       } else {
         canvas.drawRect(
           Rect.fromLTWH(lane * 0.42, top + 1, lane * 0.52, rowH - 2),
-          Paint()..color = const Color(0xFF080A0E),
+          Paint()..color = const Color(0xFF2A241E),
         );
       }
       if (midi % 12 == 0) {
@@ -570,7 +570,7 @@ class _PianoRollPainter extends CustomPainter {
           text: TextSpan(
             text: label,
             style: const TextStyle(
-              color: Color(0xFF9AA3B2),
+              color: AppColors.textSecondary,
               fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
@@ -604,7 +604,7 @@ class _PianoRollPainter extends CustomPainter {
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2
-            ..color = Colors.white.withValues(alpha: 0.85),
+            ..color = AppColors.textPrimary.withValues(alpha: 0.55),
         );
         canvas.drawRRect(
           RRect.fromRectAndRadius(
@@ -616,7 +616,7 @@ class _PianoRollPainter extends CustomPainter {
             ),
             const Radius.circular(2),
           ),
-          Paint()..color = Colors.white.withValues(alpha: 0.55),
+          Paint()..color = AppColors.textPrimary.withValues(alpha: 0.28),
         );
       }
       if (width >= 28) {
@@ -624,7 +624,7 @@ class _PianoRollPainter extends CustomPainter {
           text: TextSpan(
             text: _midiLabel(n.midi),
             style: TextStyle(
-              color: Colors.black.withValues(alpha: 0.78),
+              color: AppColors.onCover,
               fontSize: 10,
               fontWeight: FontWeight.w800,
             ),

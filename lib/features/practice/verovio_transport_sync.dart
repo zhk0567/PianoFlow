@@ -4,6 +4,10 @@ abstract final class VerovioTransportSync {
   static const rateMinDelta = 0.01;
   static const seekSnapBeats = 0.35;
 
+  /// While transport advances, coalesce WebView pushes (~2× 16ms clock).
+  /// Viewer extrapolates with MAX_EXTRAPOLATE_SEC; seek/freeze still immediate.
+  static const playPushMinIntervalMs = 32;
+
   static double positionDelta(double fromBeats, double toBeats) =>
       (fromBeats - toBeats).abs();
 
@@ -18,6 +22,21 @@ abstract final class VerovioTransportSync {
     return !playChanged &&
         posDelta <= posMinDelta &&
         rateDelta <= rateMinDelta;
+  }
+
+  /// Drop mid-play bridge ticks that arrive sooner than [playPushMinIntervalMs].
+  /// Large jumps, play/pause edges, and freeze snaps must not be throttled.
+  static bool shouldThrottlePlayPush({
+    required double beatsPerSec,
+    required int msSinceLastPush,
+    required double posDelta,
+    required bool playChanged,
+    required bool forceImmediate,
+  }) {
+    if (forceImmediate || playChanged) return false;
+    if (beatsPerSec <= rateMinDelta) return false;
+    if (posDelta > seekSnapBeats) return false;
+    return msSinceLastPush < playPushMinIntervalMs;
   }
 
   static bool shouldSnapSeek(
@@ -43,6 +62,22 @@ abstract final class VerovioTransportSync {
     final wasMoving = previousRate > rateMinDelta;
     final isMoving = currentRate > rateMinDelta;
     return wasMoving != isMoving;
+  }
+
+  /// Freeze (rate → 0) must snap so staff does not ease across the wait
+  /// line with a stale throttle sample. Play / unfreeze (rate → positive)
+  /// hard-tracks via beatsPerSec>0 — snapping there only adds play-start jank.
+  static bool shouldSnapForFreezeRateCrossing({
+    required double previousRate,
+    required double currentRate,
+  }) {
+    if (!shouldSnapForRateZeroCrossing(
+      previousRate: previousRate,
+      currentRate: currentRate,
+    )) {
+      return false;
+    }
+    return currentRate <= rateMinDelta;
   }
 
   static bool shouldDeferResize({required bool pushing}) => pushing;

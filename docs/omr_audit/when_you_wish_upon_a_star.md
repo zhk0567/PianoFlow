@@ -1,0 +1,37 @@
+# OMR audit — `when_you_wish_upon_a_star`
+
+- Generated: 2026-10-18 09:48
+- scoreKind: **omrDraft**
+- PDF: `third_party\scores_pdf\when_you_wish_upon_a_star.pdf`
+- MusicXML: `assets\scores\musicxml\when_you_wish_upon_a_star.musicxml`
+- JSON: `assets\scores\when_you_wish_upon_a_star.json`
+- JSON ≡ reparse: **True** (66/66 notes)
+- BPM JSON/parse: 120 / 120
+- keySignature JSON/parse: 0 / 0
+- Promote to formal? **NO** (automated audits never promote)
+
+## Issues
+- (none)
+
+## Warnings
+- omrDraft: PDF image proofreading required before scoreKind=formal
+
+## MusicXML structure
+- clefs: `[('F', '4', None), ('G', '2', None)]`
+- has_key: True
+- has_tempo: True
+- octave_changes: `{}`
+- times: `{"('4', '4')": 1}`
+
+## Same-hand leaps ≥12st
+- (none)
+
+## Promote blockers
+- Human visual proofread against PDF not automated (PDF is image-only).
+- Policy: omrDraft must not become formal without checklist in 曲谱导入SOP.md
+
+## Next human steps
+1. Open PDF + MusicXML in MuseScore side-by-side
+2. Check opening 8 bars, mid 8, ending 8 vs PDF (SOP checklist)
+3. Fix MusicXML, re-run `python .\scripts\musicxml_to_score.py --id ...`
+4. Re-run this audit; only then set `scoreKind: formal`

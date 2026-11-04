@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/models/song.dart';
-import '../../../shared/theme/app_theme.dart';
 import '../keyboard_geometry.dart';
 import '../practice_clock.dart';
 import '../practice_fx_budget.dart';
+import '../practice_fx_onsets.dart';
+import '../practice_models.dart';
 import '../practice_stage_theme.dart';
-import '../practice_judge_logic.dart';
 
 /// Hit bursts + ambient shimmer when「视觉特效」is on.
 ///
-/// Display-only: reads geometry / optional note onsets / grade events.
+/// Display-only: reads geometry / note onsets / graded hits.
 /// No spark particles — rings / pillar / wash only.
+///
+/// One ring per sounding pitch. Chords keep a ring on each note instead of
+/// replacing a single slot. The ticker runs only while rings are alive.
 ///
 /// Performance: [PracticeFxBudget], no [ImageFilter.blur], own
 /// [RepaintBoundary], idle when [enabled] is false.
@@ -20,10 +23,7 @@ class PracticeVisualFxOverlay extends StatefulWidget {
     super.key,
     required this.enabled,
     required this.geometry,
-    required this.grade,
-    required this.midi,
-    required this.nonce,
-    required this.combo,
+    required this.hits,
     this.hitLineYFraction = 0.92,
     this.notes = const [],
     this.clock,
@@ -32,10 +32,9 @@ class PracticeVisualFxOverlay extends StatefulWidget {
 
   final bool enabled;
   final KeyboardGeometry geometry;
-  final HitGrade? grade;
-  final int? midi;
-  final int nonce;
-  final int combo;
+
+  /// Graded practice hits. New entries each get a ring (same-frame chords too).
+  final List<GhostHit> hits;
 
   /// 0–1 from top of the falling lane (hit line near bottom).
   final double hitLineYFraction;
@@ -54,28 +53,39 @@ class PracticeVisualFxOverlay extends StatefulWidget {
       _PracticeVisualFxOverlayState();
 }
 
+class _LiveRipple {
+  _LiveRipple({
+    required this.x,
+    required this.hand,
+    required this.grade,
+    required this.bornMs,
+  });
+
+  final double x;
+  final Hand hand;
+  final HitGrade grade;
+  final int bornMs;
+}
+
 class _PracticeVisualFxOverlayState extends State<PracticeVisualFxOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _burst;
-  HitGrade? _burstGrade;
-  double? _burstX;
-  int _burstCombo = 0;
-  int _lastNonce = 0;
-  bool _burstShowLabel = true;
+  final Stopwatch _age = Stopwatch();
+  final List<_LiveRipple> _ripples = [];
+  int _seenHits = 0;
   double? _lastAutoPos;
-  final Map<int, double> _lastAutoFlashBeat = {};
+  final Set<String> _firedOnsets = {};
 
   @override
   void initState() {
     super.initState();
+    _age.start();
     _burst = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: PracticeFxBudget.burstMs),
-    );
+    )..addListener(_cullRipples);
+    _seenHits = widget.hits.length;
     widget.clock?.addListener(_onClock);
-    if (widget.enabled) {
-      _lastNonce = widget.nonce;
-    }
   }
 
   void _onClock() {
@@ -93,75 +103,123 @@ class _PracticeVisualFxOverlayState extends State<PracticeVisualFxOverlay>
       widget.clock?.addListener(_onClock);
     }
     if (!widget.enabled && oldWidget.enabled) {
+      _stopRings();
+      _lastAutoPos = null;
+      _firedOnsets.clear();
+    }
+    if (!widget.enabled) {
+      _seenHits = widget.hits.length;
+      return;
+    }
+    if (!oldWidget.enabled) {
+      _seenHits = widget.hits.length;
+      _lastAutoPos = null;
+      _firedOnsets.clear();
+    }
+    _syncPracticeHits();
+  }
+
+  void _stopRings() {
+    _ripples.clear();
+    _burst.stop();
+    _burst.value = 0;
+  }
+
+  void _cullRipples() {
+    final now = _age.elapsedMilliseconds;
+    _ripples.removeWhere((r) => now - r.bornMs >= PracticeFxBudget.burstMs);
+    if (_ripples.isEmpty && _burst.isAnimating) {
       _burst.stop();
       _burst.value = 0;
-      _lastAutoPos = null;
-      _lastAutoFlashBeat.clear();
     }
-    if (!widget.enabled) return;
+  }
 
-    if (widget.nonce != _lastNonce &&
-        widget.grade != null &&
-        widget.grade!.showsFeedback) {
-      _lastNonce = widget.nonce;
-      _spawnBurst(
-        grade: widget.grade!,
-        midi: widget.midi,
-        combo: widget.combo,
-        showLabel: true,
+  void _syncPracticeHits() {
+    final log = widget.hits;
+    if (log.length < _seenHits) _seenHits = 0;
+    for (var i = _seenHits; i < log.length; i++) {
+      final g = log[i];
+      if (!g.grade.showsFeedback) continue;
+      _spawnRipple(
+        midi: g.midi,
+        grade: g.grade,
+        hand: _handNear(g.midi, g.beat),
       );
     }
+    _seenHits = log.length;
+  }
+
+  Hand _handNear(int midi, double beat) {
+    Hand? best;
+    var bestDist = double.infinity;
+    for (final n in widget.notes) {
+      if (n.midi != midi) continue;
+      final d = (n.start - beat).abs();
+      if (d < bestDist) {
+        bestDist = d;
+        best = n.hand;
+      }
+    }
+    return best ?? Hand.right;
   }
 
   void _pollAutoplayOnsets(double pos) {
+    if (widget.notes.isEmpty) return;
     final prev = _lastAutoPos;
     _lastAutoPos = pos;
-    if (prev == null) return;
-    if (pos + 0.08 < prev || pos - prev > 1.5) {
-      _lastAutoFlashBeat.clear();
+    // First sample, seek, or a hitch: only notes just under the playhead.
+    // 0.08 beats covers one late frame so the downbeat is not skipped.
+    // The gap itself is not flashed — autoplay audio does not sound it either.
+    if (prev == null || pos + 0.08 < prev || pos - prev > 1.5) {
+      _firedOnsets.clear();
+      _flashWindow(pos - 0.08, pos);
       return;
     }
-    if (widget.notes.isEmpty) return;
-    if (_burst.isAnimating && _burst.value < 0.55) return;
+    _flashWindow(prev, pos);
+  }
 
-    var fired = 0;
-    for (final n in widget.notes) {
-      if (fired >= PracticeFxBudget.autoplayOnsetsPerFrame) break;
-      if (n.start <= prev || n.start > pos) continue;
-      final last = _lastAutoFlashBeat[n.midi];
-      if (last != null &&
-          (pos - last) < PracticeFxBudget.autoplayFlashCooldownBeats) {
-        continue;
-      }
-      _lastAutoFlashBeat[n.midi] = pos;
-      _spawnBurst(
-        grade: HitGrade.perfect,
-        midi: n.midi,
-        combo: 0,
-        showLabel: false,
-      );
-      fired++;
+  void _flashWindow(double prev, double pos) {
+    final crossed = soundingOnsetsCrossing(
+      notes: widget.notes,
+      prev: prev,
+      pos: pos,
+    );
+    for (final n in crossed) {
+      final key = '${n.midi}_${n.start.toStringAsFixed(4)}';
+      if (!_firedOnsets.add(key)) continue;
+      _spawnRipple(midi: n.midi, grade: HitGrade.perfect, hand: n.hand);
     }
   }
 
-  void _spawnBurst({
+  void _spawnRipple({
+    required int midi,
     required HitGrade grade,
-    required int? midi,
-    required int combo,
-    required bool showLabel,
+    required Hand hand,
   }) {
-    final cx = midi != null ? widget.geometry.midiToCenterX(midi) : null;
-    _burstX = cx ?? widget.geometry.width * 0.5;
-    _burstGrade = grade;
-    _burstCombo = combo;
-    _burstShowLabel = showLabel;
-    _burst.forward(from: 0);
+    final x = widget.geometry.midiToCenterX(midi);
+    if (x == null) return;
+    _ripples.add(
+      _LiveRipple(
+        x: x,
+        hand: hand,
+        grade: grade,
+        bornMs: _age.elapsedMilliseconds,
+      ),
+    );
+    while (_ripples.length > PracticeFxBudget.maxLiveRipples) {
+      _ripples.removeAt(0);
+    }
+    if (!_burst.isAnimating) {
+      _burst.repeat();
+    }
   }
 
   @override
   void dispose() {
     widget.clock?.removeListener(_onClock);
+    _burst.removeListener(_cullRipples);
     _burst.dispose();
+    _age.stop();
     super.dispose();
   }
 
@@ -173,23 +231,24 @@ class _PracticeVisualFxOverlayState extends State<PracticeVisualFxOverlay>
         child: AnimatedBuilder(
           animation: _burst,
           builder: (context, _) {
-            final animating = _burst.isAnimating || _burst.value > 0;
+            final now = _age.elapsedMilliseconds;
             return CustomPaint(
               painter: _FxPainter(
-                burstT: animating
-                    ? Curves.easeOutCubic.transform(_burst.value)
-                    : 0,
-                burstLife: animating
-                    ? (1.0 - Curves.easeInQuad.transform(_burst.value))
-                        .clamp(0.0, 1.0)
-                    : 0,
+                nowMs: now,
+                ripples: [
+                  for (final r in _ripples)
+                    _RingPaint(
+                      x: r.x,
+                      hand: r.hand,
+                      perfect: r.grade == HitGrade.perfect,
+                      t: ((now - r.bornMs) / PracticeFxBudget.burstMs).clamp(
+                        0.0,
+                        1.0,
+                      ),
+                    ),
+                ],
                 ambientT: PracticeFxBudget.ambientT,
-                burstX: _burstX,
-                grade: _burstGrade,
-                combo: _burstCombo,
-                showLabel: _burstShowLabel,
                 hitLineYFraction: widget.hitLineYFraction,
-                width: widget.geometry.width,
               ),
               child: const SizedBox.expand(),
             );
@@ -200,35 +259,39 @@ class _PracticeVisualFxOverlayState extends State<PracticeVisualFxOverlay>
   }
 }
 
-class _FxPainter extends CustomPainter {
-  _FxPainter({
-    required this.burstT,
-    required this.burstLife,
-    required this.ambientT,
-    required this.burstX,
-    required this.grade,
-    required this.combo,
-    required this.showLabel,
-    required this.hitLineYFraction,
-    required this.width,
+class _RingPaint {
+  const _RingPaint({
+    required this.x,
+    required this.hand,
+    required this.perfect,
+    required this.t,
   });
 
-  final double burstT;
-  final double burstLife;
+  final double x;
+  final Hand hand;
+  final bool perfect;
+  final double t;
+}
+
+class _FxPainter extends CustomPainter {
+  _FxPainter({
+    required this.nowMs,
+    required this.ripples,
+    required this.ambientT,
+    required this.hitLineYFraction,
+  });
+
+  final int nowMs;
+  final List<_RingPaint> ripples;
   final double ambientT;
-  final double? burstX;
-  final HitGrade? grade;
-  final int combo;
-  final bool showLabel;
   final double hitLineYFraction;
-  final double width;
 
   @override
   void paint(Canvas canvas, Size size) {
     final hitY = size.height * hitLineYFraction;
-    const stage = PracticeStageTheme.midnight;
+    const stage = PracticeStageTheme.decorated;
 
-    final aurora = 0.12 + 0.10 * ambientT;
+    final aurora = 0.10 + 0.08 * ambientT;
     canvas.drawRect(
       Rect.fromLTRB(0, 0, size.width, size.height * 0.5),
       Paint()
@@ -237,7 +300,7 @@ class _FxPainter extends CustomPainter {
           end: Alignment.bottomCenter,
           colors: [
             stage.auroraWarm.withValues(alpha: aurora),
-            stage.auroraCool.withValues(alpha: aurora * 0.55),
+            stage.auroraCool.withValues(alpha: aurora * 0.45),
             Colors.transparent,
           ],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height * 0.5)),
@@ -249,7 +312,7 @@ class _FxPainter extends CustomPainter {
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
           colors: [
-            stage.auroraWarm.withValues(alpha: 0.16 + 0.10 * ambientT),
+            stage.auroraWarm.withValues(alpha: 0.14 + 0.08 * ambientT),
             Colors.transparent,
           ],
         ).createShader(Rect.fromLTRB(0, hitY - 70, size.width, size.height)),
@@ -259,122 +322,95 @@ class _FxPainter extends CustomPainter {
       Offset(0, hitY),
       Offset(size.width, hitY),
       Paint()
-        ..color = stage.accent.withValues(alpha: 0.01 + 0.01 * ambientT)
-        ..strokeWidth = 96
+        ..color = stage.accent.withValues(alpha: 0.035 + 0.02 * ambientT)
+        ..strokeWidth = 28
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawLine(
       Offset(0, hitY),
       Offset(size.width, hitY),
       Paint()
-        ..color = stage.accent.withValues(alpha: 0.04)
-        ..strokeWidth = 24
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawLine(
-      Offset(0, hitY),
-      Offset(size.width, hitY),
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.025 + 0.015 * ambientT)
-        ..strokeWidth = 8
+        ..color = stage.accent.withValues(alpha: 0.10)
+        ..strokeWidth = 3
         ..strokeCap = StrokeCap.round,
     );
 
-    if (burstT <= 0 || burstX == null || grade == null) return;
+    for (final ring in ripples) {
+      final origin = Offset(ring.x, hitY);
+      final burstT = Curves.easeOutCubic.transform(ring.t);
+      final life = (1.0 - Curves.easeInQuad.transform(ring.t)).clamp(0.0, 1.0);
+      final burstColor = PracticeStageTheme.colorForHand(ring.hand);
+      final perfect = ring.perfect;
 
-    final origin = Offset(burstX!, hitY);
-    final life = burstLife.clamp(0.0, 1.0);
-    final perfect = grade == HitGrade.perfect;
-    final burstColor = perfect ? stage.accent : AppColors.success;
-
-    final pillarH = size.height * (perfect ? 0.55 : 0.38);
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(origin.dx, hitY - pillarH * 0.45),
-        width: perfect ? 18 : 12,
-        height: pillarH,
-      ),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [
-            burstColor.withValues(alpha: 0.32 * life),
-            burstColor.withValues(alpha: 0.10 * life),
-            Colors.transparent,
-          ],
-        ).createShader(
-          Rect.fromCenter(
-            center: Offset(origin.dx, hitY - pillarH * 0.45),
-            width: 28,
-            height: pillarH,
-          ),
+      final pillarH = size.height * (perfect ? 0.55 : 0.38);
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(origin.dx, hitY - pillarH * 0.45),
+          width: perfect ? 14 : 10,
+          height: pillarH,
         ),
-    );
+        Paint()
+          ..shader =
+              LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  burstColor.withValues(alpha: 0.34 * life),
+                  burstColor.withValues(alpha: 0.10 * life),
+                  Colors.transparent,
+                ],
+              ).createShader(
+                Rect.fromCenter(
+                  center: Offset(origin.dx, hitY - pillarH * 0.45),
+                  width: 22,
+                  height: pillarH,
+                ),
+              ),
+      );
 
-    // Quiet ripples — modest radius; lifetime from [PracticeFxBudget.burstMs].
-    for (final scale in perfect ? const [1.0, 0.62] : const [1.0]) {
-      final ringR = (8 + burstT * (perfect ? 52 : 36)) * scale;
+      for (final scale in perfect ? const [1.0, 0.62] : const [1.0]) {
+        final ringR = (8 + burstT * (perfect ? 52 : 36)) * scale;
+        canvas.drawCircle(
+          origin,
+          ringR,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (perfect ? 2.2 : 1.6) * (1.35 - 0.25 * scale)
+            ..color = burstColor.withValues(alpha: 0.62 * life * scale),
+        );
+      }
+
       canvas.drawCircle(
         origin,
-        ringR,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = (perfect ? 2.0 : 1.5) * (1.35 - 0.25 * scale)
-          ..color = burstColor.withValues(alpha: 0.42 * life * scale),
+        14 * life,
+        Paint()..color = burstColor.withValues(alpha: 0.22 * life),
       );
-    }
-
-    canvas.drawCircle(
-      origin,
-      16 * life,
-      Paint()..color = burstColor.withValues(alpha: 0.16 * life),
-    );
-    canvas.drawCircle(
-      origin,
-      7 * life,
-      Paint()..color = Colors.white.withValues(alpha: 0.32 * life),
-    );
-
-    if (showLabel && life > 0.12) {
-      final gradeLabel = perfect ? '完美' : '不错';
-      final comboBit = combo >= 3 ? '  ×$combo' : '';
-      final tp = TextPainter(
-        text: TextSpan(
-          text: '$gradeLabel$comboBit',
-          style: AppTheme.body(
-            fontSize: perfect ? 26 : 20,
-            fontWeight: FontWeight.w900,
-            color: Colors.white.withValues(alpha: 0.95 * life),
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final pos = Offset(
-        (origin.dx - tp.width / 2).clamp(4.0, width - tp.width - 4),
-        hitY - 72 - 28 * burstT,
+      canvas.drawCircle(
+        origin,
+        5 * life,
+        Paint()..color = const Color(0xFFFFF9F0).withValues(alpha: 0.55 * life),
       );
-      final bg = RRect.fromRectAndRadius(
-        Rect.fromLTWH(pos.dx - 12, pos.dy - 6, tp.width + 24, tp.height + 12),
-        const Radius.circular(14),
-      );
-      canvas.drawRRect(
-        bg,
-        Paint()..color = burstColor.withValues(alpha: 0.7 * life),
-      );
-      tp.paint(canvas, pos);
     }
   }
 
   @override
   bool shouldRepaint(covariant _FxPainter old) {
-    return old.burstT != burstT ||
-        old.burstLife != burstLife ||
-        old.burstX != burstX ||
-        old.grade != grade ||
-        old.combo != combo ||
-        old.showLabel != showLabel ||
+    if (old.nowMs != nowMs ||
+        old.ambientT != ambientT ||
         old.hitLineYFraction != hitLineYFraction ||
-        old.width != width;
+        old.ripples.length != ripples.length) {
+      return true;
+    }
+    for (var i = 0; i < ripples.length; i++) {
+      final a = old.ripples[i];
+      final b = ripples[i];
+      if (a.x != b.x ||
+          a.hand != b.hand ||
+          a.perfect != b.perfect ||
+          a.t != b.t) {
+        return true;
+      }
+    }
+    return false;
   }
 }

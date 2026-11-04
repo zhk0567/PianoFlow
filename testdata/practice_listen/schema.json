@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pianoflow.local/practice_listen_segment.schema.json",
+  "title": "PracticeListenSegment",
+  "type": "object",
+  "required": ["id", "wav", "guide_audio", "sample_rate", "events"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "wav": { "type": "string", "minLength": 1 },
+    "score_id": { "type": "string" },
+    "guide_audio": { "type": "boolean" },
+    "sample_rate": { "type": "integer", "minimum": 8000 },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["onset_ms", "midi", "label"],
+        "properties": {
+          "onset_ms": { "type": "number", "minimum": 0 },
+          "midi": { "type": "integer", "minimum": 21, "maximum": 108 },
+          "label": {
+            "type": "string",
+            "enum": ["hit", "wrong", "miss", "extra"]
+          },
+          "chord": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 21, "maximum": 108 }
+          }
+        }
+      }
+    },
+    "waiting_chords": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["t_ms", "midis"],
+        "properties": {
+          "t_ms": { "type": "number", "minimum": 0 },
+          "midis": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 21, "maximum": 108 }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

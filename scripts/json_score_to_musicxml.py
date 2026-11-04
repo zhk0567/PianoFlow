@@ -128,24 +128,17 @@ def write_staff_voice(
         )
         return
 
-    notes = sorted(notes, key=lambda n: float(n["start"]))
+    notes = sorted(notes, key=lambda n: (float(n["start"]), int(n["midi"])))
 
-    # Pass 1: build timed events (rests + note groups) with clipped durations.
+    # Polyphonic JSON often holds long tones under a faster line. Never skip an
+    # onset (old bug: onset <= cursor → continue). Advance by
+    # min(shortest, gap-to-next, remain); <backup> if next onset is earlier.
     events: list[dict] = []
     cursor = 0.0
     i = 0
     while i < len(notes):
         n = notes[i]
         onset = max(0.0, min(measure_beats, float(n["start"]) - measure_start))
-        if onset <= cursor - 0.001:
-            # Overlap / past end — skip
-            i += 1
-            continue
-        if onset > cursor + 0.001:
-            rest_beats = onset - cursor
-            d = max(1, min(9999, int(round(rest_beats * divisions))))
-            events.append({"kind": "rest", "d": d})
-            cursor += d / divisions
 
         group = [n]
         j = i + 1
@@ -153,14 +146,37 @@ def write_staff_voice(
             group.append(notes[j])
             j += 1
 
-        remain = max(0.0, measure_beats - cursor)
-        if remain < 0.05:
+        next_onset = measure_beats
+        if j < len(notes):
+            next_onset = max(
+                0.0, min(measure_beats, float(notes[j]["start"]) - measure_start)
+            )
+
+        if onset > cursor + 0.001:
+            rest_beats = onset - cursor
+            d = int(round(rest_beats * divisions))
+            # Do NOT force d>=1 — sub-division gaps must not become a full unit rest.
+            if d >= 1:
+                events.append({"kind": "rest", "d": min(9999, d)})
+                cursor += d / divisions
+        elif onset < cursor - 0.001:
+            back = int(round((cursor - onset) * divisions))
+            if back >= 1:
+                events.append({"kind": "backup", "d": min(9999, back)})
+                cursor = onset
+
+        write_onset = cursor
+        remain = max(0.0, measure_beats - write_onset)
+        if remain < 0.5 / divisions:
             break
-        dur_beats = max(0.05, min(remain, float(n["duration"])))
+        shortest = min(float(g["duration"]) for g in group)
+        raw_gap = next_onset - write_onset
+        gap = min(remain, raw_gap) if raw_gap > 0 else remain
+        unit = 1.0 / divisions
+        dur_beats = max(unit, min(shortest, gap, remain))
         d = max(1, min(9999, int(round(dur_beats * divisions))))
-        # Keep measure sum exact when near the end.
-        if cursor + d / divisions > measure_beats + 0.001:
-            d = max(1, int(round((measure_beats - cursor) * divisions)))
+        if write_onset + d / divisions > measure_beats + 0.001:
+            d = max(1, int(round((measure_beats - write_onset) * divisions)))
         tname, _ = duration_to_type(d, divisions)
         events.append(
             {
@@ -171,14 +187,17 @@ def write_staff_voice(
                 "beamable": tname in _BEAMABLE,
             }
         )
-        cursor += d / divisions
+        cursor = write_onset + d / divisions
         i = j
-        if cursor >= measure_beats - 0.001:
+        if write_onset >= measure_beats - 0.001:
             break
 
     if cursor < measure_beats - 0.05:
         d = max(1, min(9999, int(round((measure_beats - cursor) * divisions))))
         events.append({"kind": "rest", "d": d})
+    elif cursor > measure_beats + 0.001:
+        back = max(1, min(9999, int(round((cursor - measure_beats) * divisions))))
+        events.append({"kind": "backup", "d": back})
 
     # Pass 2: assign beams for consecutive beamable (non-chord-only) groups.
     beam_vals: dict[int, str] = {}
@@ -209,6 +228,9 @@ def write_staff_voice(
     # Pass 3: emit XML.
     for idx, ev in enumerate(events):
         d = ev["d"]
+        if ev["kind"] == "backup":
+            lines.append(f"<backup><duration>{d}</duration></backup>")
+            continue
         tx = type_xml(d, divisions)
         if ev["kind"] == "rest":
             lines.append(
@@ -233,7 +255,7 @@ def write_staff_voice(
 
 def score_to_musicxml(data: dict) -> str:
     notes = data.get("notes") or []
-    divisions = 4
+    divisions = 16  # match Dart songScoreToMusicXml — finer onset grid
     ts = data.get("timeSignature") or {}
     time_num = int(ts.get("num", 4))
     time_den = int(ts.get("den", 4))

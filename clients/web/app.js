@@ -1,8 +1,10 @@
 import { playMidi, unlockAudio, setMasterVolume, getMasterVolume } from "./audio.js";
 import { initShell, kindLabel } from "./shell.js";
-import { recordSession, toggleFavorite, getFavorites, getVisualFxEnabled, setVisualFxEnabled } from "./storage.js";
+import { recordSession, pushRecent, toggleFavorite, getFavorites, getVisualFxEnabled, setVisualFxEnabled } from "./storage.js";
 import { bindSubPages, setPracticeOpener } from "./pages.js";
-import { initPitchEngine, processPitchPcm16, getPitchEngineLabel } from "./pitch-engine.js";
+import { initPitchEngine, processPitchPcm16, getPitchEngineLabel, setScorePriorMidis, clearScorePriorMidis } from "./pitch-engine.js";
+import { matchNoteOn, isForgivableWrongPitch, priorBins } from "./pitch-match.js";
+import { CueBleedGuard } from "./cue-bleed-guard.js";
 import { PracticeFx } from "./practice-fx.js";
 import { ExamPcmRecorder } from "./exam-pcm.js";
 import {
@@ -23,7 +25,6 @@ import {
   shouldFreeze,
   nudgePast,
   gradeDelta,
-  suggestWeak,
   buildGeo,
   contentWidthFor,
   isMobilePractice,
@@ -45,8 +46,8 @@ const el = {
   handBoth: document.getElementById("btn-hand-both"),
   handLeft: document.getElementById("btn-hand-left"),
   handRight: document.getElementById("btn-hand-right"),
-  guide: document.getElementById("btn-guide"),
-  metro: document.getElementById("btn-metro"),
+  fx: document.getElementById("btn-fx"),
+  practiceSettings: document.getElementById("btn-practice-settings"),
   speed: document.getElementById("speed"),
   speedLabel: document.getElementById("speed-label"),
   seek: document.getElementById("seek"),
@@ -56,6 +57,7 @@ const el = {
   stageScroll: document.getElementById("stage-scroll"),
   stageInner: document.getElementById("stage-inner"),
   staffPanel: document.querySelector(".staff-panel"),
+  staffScrub: document.getElementById("staff-scrub"),
   settleDlg: document.getElementById("settle-dlg"),
   settleMsg: document.getElementById("settle-msg"),
   settleWeak: document.getElementById("settle-weak"),
@@ -100,7 +102,13 @@ const state = {
   metronome: false,
   lastMetroBeat: -1,
   satisfied: new Set(),
+  attackSpent: new Set(),
+  /** midi → performance.now() when consumed (onset refractory). */
+  attackSpentAt: new Map(),
+  /** midi → consecutive quiet hops while spent. */
+  attackQuietHops: new Map(),
   echoUntil: 0,
+  cueBleed: new CueBleedGuard(),
   lastCueChord: -1,
   frozenMissLogged: false,
   missBeats: [],
@@ -115,6 +123,7 @@ const state = {
   weakPending: null,
   sessionStartedAt: 0,
   lastAutoPos: null,
+  recentTimer: 0,
 };
 
 let shellApi = null;
@@ -122,6 +131,23 @@ let shellApi = null;
 function setStatus(msg) {
   el.status.textContent = msg;
   console.log("[PianoFlow/Web]", msg);
+}
+
+const recentPromoteMs = 5 * 60 * 1000;
+
+function armRecentPromote(songId) {
+  if (state.recentTimer) clearTimeout(state.recentTimer);
+  state.recentTimer = setTimeout(() => {
+    state.recentTimer = 0;
+    if (!state.song || state.song.id !== songId) return;
+    pushRecent(songId);
+    console.log("[PianoFlow/Library] recent promote after 5min open:", songId);
+  }, recentPromoteMs);
+}
+
+function cancelRecentPromote() {
+  if (state.recentTimer) clearTimeout(state.recentTimer);
+  state.recentTimer = 0;
 }
 
 function staffWin() {
@@ -191,11 +217,12 @@ function staffLayoutOpts() {
   const w = Math.max(1, frame?.clientWidth || el.staffPanel?.clientWidth || 360);
   const h = Math.max(1, frame?.clientHeight || el.staffPanel?.clientHeight || 280);
   const mobile = isMobilePractice();
+  // Fixed scale=60 for every score (Windows parity). Never vary by song/lane.
   return {
     cssWidth: mobile ? w : Math.max(640, w),
     cssHeight: Math.max(mobile ? 200 : 280, h),
-    scale: mobile ? 58 : 48,
-    pageHeight: mobile ? 720 : 900,
+    scale: 60,
+    pageHeight: 900,
     mobile,
   };
 }
@@ -231,17 +258,40 @@ async function loadScoreIntoVerovio(xmlPath) {
   }
 }
 
-function pushPosition() {
+/** Align Windows VerovioTransportSync.playPushMinIntervalMs = 32 */
+const STAFF_PUSH_MIN_MS = 32;
+const STAFF_POS_MIN_DELTA = 0.01;
+const STAFF_SEEK_SNAP = 0.35;
+let _lastStaffPushAt = 0;
+let _lastStaffPushBeats = NaN;
+
+function pushPosition(force = false) {
   if (!state.staffReady) return;
   const w = staffWin();
   if (!w || typeof w.pfSetPosition !== "function") return;
+  const beats = Math.max(0, state.positionBeats);
+  const now = performance.now();
+  const posDelta = Number.isNaN(_lastStaffPushBeats)
+    ? 1
+    : Math.abs(beats - _lastStaffPushBeats);
+  const forceImmediate = force || !!state.seekDragging;
+  if (
+    !forceImmediate &&
+    posDelta <= STAFF_SEEK_SNAP &&
+    now - _lastStaffPushAt < STAFF_PUSH_MIN_MS &&
+    (state.playing || posDelta <= STAFF_POS_MIN_DELTA)
+  ) {
+    return;
+  }
   let rate = 0;
   if (state.playing && state.mode === "auto") rate = (state.bpm * state.speed) / 60;
   else if (state.playing && state.mode === "follow" && state.waitingFor.size === 0) {
     rate = (state.bpm * state.speed) / 60;
   }
   try {
-    w.pfSetPosition(Math.max(0, state.positionBeats), false, rate);
+    w.pfSetPosition(beats, forceImmediate, rate);
+    _lastStaffPushAt = now;
+    _lastStaffPushBeats = beats;
   } catch (_) {}
 }
 
@@ -316,21 +366,12 @@ function render() {
   el.handBoth.classList.toggle("active", state.hand === "both");
   el.handLeft.classList.toggle("active", state.hand === "left");
   el.handRight.classList.toggle("active", state.hand === "right");
-  if (state.exam) {
-    el.guide.textContent = "示范音";
-    el.guide.disabled = true;
-    el.guide.classList.remove("active");
-  } else {
-    el.guide.disabled = false;
-    el.guide.textContent = "示范音";
-    el.guide.classList.toggle("active", state.guideAudio);
+  el.fx?.classList.toggle("active", practiceVisualEnabled());
+  if (el.speedLabel) {
+    el.speedLabel.textContent = `${Math.round(state.speed * 100)}%`;
   }
-  el.metro.textContent = "节拍器";
-  el.metro.classList.toggle("active", state.metronome);
-  el.speedLabel.textContent = `速度 ${Math.round(state.speed * 100)}%`;
-  el.grade.textContent = state.lastGrade
-    ? `${state.lastGrade === "perfect" ? "完美" : "不错"} · 连击 ${state.combo}`
-    : "";
+  // 段末日常结算不弹窗；命中浮字由 flashHit 负责。
+  el.grade.textContent = "";
   if (!state.seekDragging && state.durationBeats > 0) {
     el.seek.value = String(
       Math.round((Math.max(0, state.positionBeats) / state.durationBeats) * 1000),
@@ -380,6 +421,7 @@ function tickFollow(dt, beatsPerSec) {
       if (toCue.length) {
         toCue.forEach((m) => playMidi(m));
         state.echoUntil = performance.now() + PracticeConsts.echoSuppressGuideMs;
+        state.cueBleed.arm(toCue);
       }
     }
     state.pressed = new Set(state.waitingFor);
@@ -387,6 +429,9 @@ function tickFollow(dt, beatsPerSec) {
     state.positionBeats = Math.min(state.durationBeats, state.positionBeats + dt * beatsPerSec);
     if (expected.size === 0) {
       state.satisfied.clear();
+      state.attackSpent.clear();
+      state.attackSpentAt.clear();
+      state.attackQuietHops.clear();
       state.lastCueChord = -1;
       state.frozenMissLogged = false;
     }
@@ -466,6 +511,10 @@ function restartTransport(clearStats) {
   state.pressed = new Set();
   state.waitingFor = new Set();
   state.satisfied.clear();
+  state.attackSpent.clear();
+  state.attackSpentAt.clear();
+  state.attackQuietHops.clear();
+  state.cueBleed.clear();
   state.frozenMissLogged = false;
   state.lastCueChord = -1;
   if (clearStats) {
@@ -488,10 +537,15 @@ function restart() {
 }
 
 function seek(beats) {
+  // Slider / staff scrub while playing → pause; no auto-resume on release.
+  if (state.playing) pause();
   const b = Math.max(0, Math.min(state.durationBeats, beats));
   state.positionBeats = b <= 0.05 ? -PracticeConsts.playbackLeadInBeats : b;
   state.lastAutoFire = state.positionBeats - 1e-3;
   state.satisfied.clear();
+  state.attackSpent.clear();
+  state.attackSpentAt.clear();
+  state.attackQuietHops.clear();
   state.waitingFor = new Set();
   state.pressed = new Set();
   state.frozenMissLogged = false;
@@ -510,6 +564,18 @@ function flashHit() {
     el.hitFlash.hidden = false;
     el.hitFlash.offsetHeight;
     el.hitFlash.hidden = true;
+  }
+  // Windows HitFeedbackOverlay parity: 完美 / 不错 floating grade.
+  if (el.grade && state.lastGrade) {
+    el.grade.textContent = state.lastGrade === "perfect" ? "完美" : "不错";
+    el.grade.classList.remove("grade-flash");
+    void el.grade.offsetWidth;
+    el.grade.classList.add("grade-flash");
+    clearTimeout(flashHit._gradeT);
+    flashHit._gradeT = setTimeout(() => {
+      el.grade.textContent = "";
+      el.grade.classList.remove("grade-flash");
+    }, 420);
   }
   if (el.comboBadge && state.combo >= 3) {
     el.comboBadge.textContent = `连击 ${state.combo}`;
@@ -535,11 +601,10 @@ function finishRun() {
   if (state.raf) cancelAnimationFrame(state.raf);
   state.raf = 0;
   setStatus("本段结束");
-  const sec = state.sessionStartedAt
-    ? Math.round((performance.now() - state.sessionStartedAt) / 1000)
-    : 0;
-  if (state.song) {
-    recordSession(state.song.id, sec, {
+  const followOrExam = state.mode === "follow" || state.exam;
+  const activity = state.perfects > 0 || state.goods > 0 || state.missBeats.length > 0;
+  if (state.song && followOrExam && activity) {
+    recordSession(state.song.id, {
       exam: state.exam,
       recordExam: state.examRecord,
       perfects: state.perfects,
@@ -549,27 +614,27 @@ function finishRun() {
     shellApi?.refreshProfile();
   }
   render();
-  if (state.settlementArmed && (state.mode === "follow" || state.exam)) {
+  // 平时跟弹：recordSession 已写入；仅考试弹结算（含得分/再考）。
+  if (state.settlementArmed && state.exam) {
     state.settlementArmed = false;
     showSettlement();
+  } else if (state.settlementArmed) {
+    state.settlementArmed = false;
   }
 }
 
 function showSettlement() {
-  const weak = suggestWeak(state.missBeats, state.durationBeats);
-  state.weakPending = weak;
+  // 仅考试调用；不再提供「练薄弱段」入口。
+  state.weakPending = null;
   el.settleMsg.textContent = `完美 ${state.perfects} · 不错 ${state.goods} · 连击 ${state.combo}`;
-  el.settleWeak.hidden = !weak;
-  if (weak) {
-    el.settleWeak.textContent = `练薄弱段（约 ${Math.ceil(weak.start)}–${Math.ceil(weak.end)} 拍）`;
-  }
+  el.settleWeak.hidden = true;
   if (el.settleListen) {
     el.settleListen.hidden = !examPcm.url;
   }
   el.settleDlg.showModal();
 }
 
-function onPitch(midi) {
+function onPitch(midi, onset = false) {
   if (state.mode !== "follow" || !state.playing) return;
   if (performance.now() < state.echoUntil) return;
   const pos = state.positionBeats;
@@ -578,8 +643,30 @@ function onPitch(midi) {
   const chordStart = nextOnset(expected);
   if (chordStart == null) return;
   const remaining = new Set([...expected].filter((m) => !state.satisfied.has(m)));
+  setScorePriorMidis(priorBins(remaining));
+
+  const now = performance.now();
+  const onsetRefractoryMs = 180;
+  if (onset) {
+    for (const s of [...state.attackSpent]) {
+      if (Math.abs(s - midi) > 1 && Math.abs(s - midi) !== 12) continue;
+      const at = state.attackSpentAt.get(s) ?? 0;
+      if (now - at < onsetRefractoryMs) continue; // sustain flux — keep latch
+      state.attackSpent.delete(s);
+      state.attackSpentAt.delete(s);
+      state.attackQuietHops.delete(s);
+    }
+  }
+
+  if (
+    state.cueBleed.isBleed(midi, onset, new Set([midi, ...state.pressed]))
+  ) {
+    console.log("[PianoFlow/Web] cue-bleed block", midi);
+    return;
+  }
+
   const freeze = shouldFreeze(pos, chordStart);
-  if (freeze && remaining.size && ![...remaining].some((m) => Math.abs(m - midi) <= 1)) {
+  if (freeze && remaining.size && !isForgivableWrongPitch(midi, remaining)) {
     if (!state.frozenMissLogged) {
       state.frozenMissLogged = true;
       state.missBeats.push(chordStart);
@@ -588,9 +675,16 @@ function onPitch(midi) {
     }
     return;
   }
-  const hit = [...remaining].find((m) => Math.abs(m - midi) <= 1);
+  const hit = matchNoteOn(midi, remaining);
   if (hit == null) return;
+  if (state.attackSpent.has(hit) || state.attackSpent.has(midi)) return;
   state.satisfied.add(hit);
+  state.attackSpent.add(hit);
+  state.attackSpent.add(midi);
+  state.attackSpentAt.set(hit, now);
+  state.attackSpentAt.set(midi, now);
+  state.attackQuietHops.delete(hit);
+  state.attackQuietHops.delete(midi);
   state.pressed = new Set([hit]);
   const grade = gradeDelta(pos - chordStart);
   state.lastGrade = grade;
@@ -605,15 +699,45 @@ function onPitch(midi) {
   practiceFx.hit(hit, cx, grade, state.combo, hitY, g?.contentWidth);
   const left = new Set([...expected].filter((m) => !state.satisfied.has(m)));
   state.waitingFor = left;
+  setScorePriorMidis(priorBins(left));
   if (!left.size) {
     state.positionBeats = nudgePast(state.notes, chordStart);
     state.satisfied.clear();
+    // Keep attackSpent — same physical strike must not clear the next same pitch.
     state.frozenMissLogged = false;
     state.lastCueChord = -1;
     state.waitingFor = new Set();
+    clearScorePriorMidis();
   }
   updateFocus();
   render();
+}
+
+/** Quiet-release spent pitches (~2 hops ≈ Flutter post-hit bar is longer; use 5). */
+function tickAttackQuiet(heard) {
+  if (!state.attackSpent.size) return;
+  const postHitQuietHops = 5;
+  for (const s of [...state.attackSpent]) {
+    let still = false;
+    for (const m of heard) {
+      if (Math.abs(s - m) <= 1 || Math.abs(s - m) === 12) {
+        still = true;
+        break;
+      }
+    }
+    if (still) {
+      state.attackQuietHops.set(s, 0);
+      continue;
+    }
+    const n = (state.attackQuietHops.get(s) || 0) + 1;
+    if (n >= postHitQuietHops) {
+      state.attackSpent.delete(s);
+      state.attackSpentAt.delete(s);
+      state.attackQuietHops.delete(s);
+    } else {
+      state.attackQuietHops.set(s, n);
+    }
+  }
 }
 
 async function startMic() {
@@ -636,8 +760,9 @@ async function startMic() {
         pcm[i] = (s * 32767) | 0;
       }
       if (examPcm.active) examPcm.addPcm16(pcm);
-      processPitchPcm16(pcm, ac.sampleRate || 22050).then((midis) => {
-        for (const midi of midis) onPitch(midi);
+      processPitchPcm16(pcm, ac.sampleRate || 22050).then(({ midis, onset }) => {
+        tickAttackQuiet(midis);
+        for (const midi of midis) onPitch(midi, onset);
       }).catch((e) => console.error("[PianoFlow/Web/Pitch]", e));
     };
     src.connect(proc);
@@ -665,6 +790,7 @@ async function openPractice(song, opts = {}) {
   pause();
   state.song = song;
   state.hasSessionActivity = true;
+  armRecentPromote(song.id);
   state.exam = !!opts.exam;
   state.examRecord = opts.examRecord !== false;
   state.examRecordAudio = !!opts.examRecordAudio;
@@ -724,6 +850,7 @@ function leavePractice() {
   if (state.hasSessionActivity && state.playing) {
     if (!confirm("练习进行中，确定离开？")) return;
   }
+  cancelRecentPromote();
   pause();
   el.practice.hidden = true;
   el.shell.hidden = false;
@@ -733,7 +860,8 @@ function leavePractice() {
 }
 
 el.back.onclick = () => {
-  if (state.hasSessionActivity && !state.playing) {
+  // 仅考试未播完离开时弹结算；平时练习直接回曲库。
+  if (state.exam && state.hasSessionActivity && !state.playing) {
     showSettlement();
     return;
   }
@@ -767,22 +895,116 @@ el.play.onclick = () => {
     setStatus("已暂停");
   } else play();
 };
+
+/** Space toggles play/pause on desktop keyboards (ignore dialogs / inputs). */
+window.addEventListener("keydown", (ev) => {
+  if (ev.code !== "Space" && ev.key !== " ") return;
+  if (el.practice?.hidden) return;
+  if (document.querySelector("dialog[open]")) return;
+  const t = ev.target;
+  if (
+    t instanceof HTMLElement &&
+    (t.tagName === "INPUT" ||
+      t.tagName === "TEXTAREA" ||
+      t.tagName === "SELECT" ||
+      t.isContentEditable)
+  ) {
+    return;
+  }
+  ev.preventDefault();
+  if (state.playing) {
+    pause();
+    setStatus("已暂停");
+  } else {
+    play();
+  }
+});
+
 el.restart.onclick = () => restart();
 el.handBoth.onclick = () => { state.hand = "both"; recomputeNotes(); restartTransport(false); render(); };
 el.handLeft.onclick = () => { state.hand = "left"; recomputeNotes(); restartTransport(false); render(); };
 el.handRight.onclick = () => { state.hand = "right"; recomputeNotes(); restartTransport(false); render(); };
-el.guide.onclick = () => { state.guideAudio = !state.guideAudio; render(); };
-el.metro.onclick = () => { state.metronome = !state.metronome; render(); };
-el.speed.oninput = () => {
+el.fx?.addEventListener("click", () => {
+  const next = !practiceVisualEnabled();
+  setVisualFxEnabled(next);
+  practiceFx.setEnabled(next);
+  const settingsFx = document.getElementById("settings-visual-fx");
+  if (settingsFx) settingsFx.checked = next;
+  render();
+});
+el.practiceSettings?.addEventListener("click", () => {
+  document.getElementById("settings-dlg")?.showModal();
+});
+el.speed?.addEventListener("input", () => {
   state.speed = Math.max(0.4, Math.min(2, Number(el.speed.value) / 100));
   render();
+});
+el.seek.onmousedown = () => {
+  state.seekDragging = true;
+  // Range input seeks on change (mouseup); pause as soon as drag starts.
+  if (!state.exam && state.playing) pause();
 };
-el.seek.onmousedown = () => { state.seekDragging = true; };
 el.seek.onmouseup = () => { state.seekDragging = false; };
 el.seek.onchange = () => {
   if (state.exam) return;
   seek((Number(el.seek.value) / 1000) * state.durationBeats);
 };
+
+// Staff lane horizontal scrub (same seek path as bottom slider; exam blocked).
+(function bindStaffScrub() {
+  const target = el.staffScrub || el.staffPanel;
+  if (!target) return;
+  let scrubbing = false;
+  let originX = 0;
+  let originBeats = 0;
+  let pxPerBeat = 40;
+
+  function fallbackPx(w) {
+    return Math.max(12, Math.min(200, (w || 360) / 12));
+  }
+
+  function refreshMetrics() {
+    try {
+      const w = el.frame?.contentWindow;
+      const raw = w?.pfScrubMetrics?.();
+      if (!raw) return;
+      const m = typeof raw === "string" ? JSON.parse(raw) : raw;
+      const contentW = Number(m.contentW) || 0;
+      const endQ = Number(m.endQ) || 0;
+      const dur = state.durationBeats > 0.5 ? state.durationBeats : endQ;
+      if (contentW > 32 && dur > 0.5) {
+        pxPerBeat = Math.max(12, Math.min(400, contentW / dur));
+      }
+    } catch (_) { /* keep fallback */ }
+  }
+
+  target.addEventListener("pointerdown", (ev) => {
+    if (state.exam || ev.button !== 0) return;
+    scrubbing = true;
+    state.seekDragging = true;
+    if (state.playing) pause();
+    originX = ev.clientX;
+    originBeats = state.positionBeats;
+    pxPerBeat = fallbackPx(target.clientWidth);
+    refreshMetrics();
+    try { target.setPointerCapture(ev.pointerId); } catch (_) {}
+  });
+  target.addEventListener("pointermove", (ev) => {
+    if (!scrubbing || state.exam) return;
+    const dx = ev.clientX - originX;
+    const next = originBeats - dx / Math.max(1, pxPerBeat);
+    seek(next);
+  });
+  const endScrub = (ev) => {
+    if (!scrubbing) return;
+    scrubbing = false;
+    state.seekDragging = false;
+    try { target.releasePointerCapture(ev.pointerId); } catch (_) {}
+  };
+  target.addEventListener("pointerup", endScrub);
+  target.addEventListener("pointercancel", endScrub);
+})();
+
 el.settleAgain.onclick = () => {
   el.settleDlg.close();
   restart();
@@ -811,14 +1033,16 @@ if (settingsFx) {
   settingsFx.addEventListener("change", () => {
     setVisualFxEnabled(settingsFx.checked);
     practiceFx.setEnabled(practiceVisualEnabled());
+    render();
   });
 }
 
 shellApi = await initShell({ onOpenPractice: openPractice });
 await initPitchEngine();
 const pitchLbl = document.getElementById("settings-pitch-engine");
-if (pitchLbl) pitchLbl.textContent = `音高引擎：${getPitchEngineLabel()}（无模型时自动 Poly-YIN/YIN）`;
+if (pitchLbl) pitchLbl.textContent = `音高引擎：${getPitchEngineLabel()}（主路径 Basic Pitch；无模型时回退 Poly-YIN/YIN）`;
 if (el.volume) el.volume.value = String(Math.round(getMasterVolume() * 100));
+if (el.speed) el.speed.value = String(Math.round(state.speed * 100));
 setPracticeOpener(openPractice);
 bindSubPages({
   onAuthChange: () => shellApi.refreshProfile(),

@@ -27,6 +27,9 @@ Write-Host "Repo:" $RepoRoot
 $work = Join-Path $RepoRoot "third_party\scores_musicxml\_omr_work\$Id"
 $mxl = Join-Path $work "omr_draft.mxl"
 if (-not (Test-Path $mxl)) {
+  $mxl = Join-Path $work "omr_draft.musicxml"
+}
+if (-not (Test-Path $mxl)) {
   $mxl = Join-Path $work "audiveris_out\source.mxl"
 }
 if (-not (Test-Path $mxl)) {

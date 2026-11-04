@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../shared/models/song.dart';
 import '../../shared/piano_flow_log.dart';
+import 'note_voice_pump.dart';
 import 'practice_constants.dart';
 import 'practice_loop_logic.dart';
 import 'silent_warm_wav.dart';
@@ -58,7 +59,7 @@ class ScoreAudioPlayer {
   static String? _silentWarmFile;
   /// Bump when bundled samples, [PracticeConstants.sampleCacheGain], or sustain
   /// shaping constants change.
-  static const _cacheVersion = 'v7-stereo-sustain';
+  static const _cacheVersion = 'v8-longer-sustain';
 
   final Map<int, AudioPlayer> _notePlayers = {};
   final Map<int, AudioPlayer> _clickPlayers = {};
@@ -67,6 +68,15 @@ class ScoreAudioPlayer {
   final Map<int, int> _noteRetriggerGen = {};
   bool _ready = false;
   Future<void>? _readyFuture;
+  DateTime? _lastDeviceWarmAt;
+  Future<void>? _deviceWarmInflight;
+  /// Lives for this player. Looping zero-PCM holds the endpoint open so the
+  /// first piano [AudioPlayer.resume] is not a WASAPI cold start.
+  AudioPlayer? _silentKeeper;
+  bool _silentKeeperReady = false;
+  /// Players that have completed at least one [resume]. The first start is
+  /// already at position 0; seeking there races [Play] on a cold MediaEngine.
+  final Set<AudioPlayer> _resumedOnce = {};
 
   Timer? _clock;
   Timer? _metro;
@@ -87,8 +97,18 @@ class ScoreAudioPlayer {
   final Set<String> _fired = {};
   int _metroBeat = 0;
 
-  /// Bumped on [pause]/[stop] so in-flight [_retrigger] cannot resume after silence.
+  /// Bumped on [pause]/[stop]/[silenceVoices] so in-flight [_retrigger] cannot
+  /// resume after silence.
   int _voiceEpoch = 0;
+
+  /// One platform retrigger at a time, with a yield between notes, so a dense
+  /// chord cannot fill the Windows method channel before pointer events run.
+  final NoteVoicePump _voices = NoteVoicePump();
+  final Set<AudioPlayer> _livePlayers = {};
+  DateTime? _lastQueueDropLog;
+  /// Score-note release timers, keyed by MIDI. A new strike of the same key
+  /// replaces the previous release.
+  final Map<int, Timer> _releaseTimers = {};
 
   final _position = StreamController<double>.broadcast();
   final _playingCtrl = StreamController<bool>.broadcast();
@@ -151,23 +171,26 @@ class ScoreAudioPlayer {
         _clickFiles[accent ? 1 : 0] = file.path;
       }
       final silentFile = File('${toneDir.path}/silent_warm.wav');
+      final silentBytes = _renderSilentWav();
+      // Refuse to cache a warm buffer that could ghost-note on open.
+      if (!SilentWarmWav.isZeroPcm16Mono(silentBytes)) {
+        pianoFlowLog('Audio', 'silent warm WAV is not zero-PCM — abort init');
+        throw StateError('silent warm WAV must be zero-PCM');
+      }
       if (await silentFile.exists()) {
         final existing = await silentFile.readAsBytes();
-        if (!SilentWarmWav.isZeroPcm16Mono(existing)) {
+        final short = existing.length < silentBytes.length;
+        if (short || !SilentWarmWav.isZeroPcm16Mono(existing)) {
           pianoFlowLog(
             'Audio',
-            'cached silent_warm.wav not zero-PCM — rewriting',
+            short
+                ? 'cached silent_warm.wav too short for keeper — rewriting'
+                : 'cached silent_warm.wav not zero-PCM — rewriting',
           );
           await silentFile.delete();
         }
       }
       if (!await silentFile.exists()) {
-        final silentBytes = _renderSilentWav();
-        // Refuse to cache a warm buffer that could ghost-note on open.
-        if (!SilentWarmWav.isZeroPcm16Mono(silentBytes)) {
-          pianoFlowLog('Audio', 'silent warm WAV is not zero-PCM — abort init');
-          throw StateError('silent warm WAV must be zero-PCM');
-        }
         await silentFile.writeAsBytes(silentBytes, flush: true);
       }
       _silentWarmFile = silentFile.path;
@@ -225,11 +248,12 @@ class ScoreAudioPlayer {
       if (_noteFiles.containsKey(m)) needed.add(m);
     }
     if (needed.isEmpty) return;
-    const batchSize = 8;
+    // One bind per turn. A parallel batch posts several setSource calls before
+    // the event loop can deliver pause / back (dense scores prefetch more pitches).
     final list = needed.toList()..sort();
-    for (var i = 0; i < list.length; i += batchSize) {
-      final slice = list.skip(i).take(batchSize);
-      await Future.wait([for (final m in slice) _ensureNotePlayer(m)]);
+    for (final m in list) {
+      await _ensureNotePlayer(m);
+      await Future<void>.delayed(Duration.zero);
     }
     pianoFlowLogVerbose(
       'Audio',
@@ -256,35 +280,79 @@ class ScoreAudioPlayer {
     }
   }
 
-  /// Open WASAPI / MediaPlayer once so the first audible resume() is not cold.
+  /// Keep WASAPI open with the zero-PCM keeper if it is not already playing.
   ///
-  /// Uses a dedicated zero-PCM buffer only. Never resume a real piano/click
-  /// sample: on Windows, [AudioPlayer.setVolume] (0) still often leaks a brief
-  /// audible hit ("ghost note" on app / practice-page open). Per-note warm via
-  /// resume-at-zero was removed for the same reason.
+  /// Call before transport start after idle. Never uses real piano/click
+  /// samples (volume-0 still leaks ghost notes). Does not stop or dispose the
+  /// keeper: that Shutdown raced the first chord and clicked.
+  Future<void> ensureDeviceWarm({
+    Duration maxAge = const Duration(seconds: 3),
+  }) async {
+    await ensureReady();
+    final keeper = _silentKeeper;
+    if (keeper != null && keeper.state == PlayerState.playing) {
+      return;
+    }
+    final last = _lastDeviceWarmAt;
+    // Resume was just issued and the state may not have flipped yet.
+    // A second Play() on that cold start is the click.
+    if (keeper != null &&
+        last != null &&
+        DateTime.now().difference(last) < maxAge) {
+      return;
+    }
+    final inflight = _deviceWarmInflight;
+    if (inflight != null) {
+      await inflight;
+      return;
+    }
+    final future = _warmPipeline();
+    _deviceWarmInflight = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_deviceWarmInflight, future)) {
+        _deviceWarmInflight = null;
+      }
+    }
+  }
+
+  /// Hold the Windows audio endpoint open so the first audible resume() is not
+  /// a cold WASAPI/MediaEngine start.
+  ///
+  /// One dedicated player loops a zero-PCM buffer for the life of this
+  /// [ScoreAudioPlayer]. It is never stopped here: the old path resumed for
+  /// ~30ms, then [AudioPlayer.stop] + [AudioPlayer.dispose] (engine Shutdown).
+  /// [ensureDeviceWarm] runs on the first play after idle, so that shutdown
+  /// landed in the same arming turn as transport start, and the opening chord
+  /// then cold-started a different player.
+  ///
+  /// Never resume a real piano/click sample. On Windows, [AudioPlayer.setVolume]
+  /// (0) still often leaks a brief audible hit ("ghost note" on app /
+  /// practice-page open).
   Future<void> _warmPipeline() async {
     final path = _silentWarmFile;
     if (path == null) return;
-    AudioPlayer? warm;
+    final warm = _silentKeeper ??= AudioPlayer();
     try {
-      warm = AudioPlayer();
-      await warm.setPlayerMode(PlayerMode.lowLatency);
-      await warm.setReleaseMode(ReleaseMode.stop);
-      // Zero PCM stays inaudible even at full fader — avoid volume-0 quirks.
-      await warm.setVolume(1);
-      await warm.setSource(DeviceFileSource(path));
-      await warm.resume();
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-      await warm.stop();
+      if (!_silentKeeperReady) {
+        await warm.setPlayerMode(PlayerMode.lowLatency);
+        await warm.setReleaseMode(ReleaseMode.loop);
+        // Zero PCM stays inaudible even at full fader — avoid volume-0 quirks.
+        await warm.setVolume(1);
+        await warm.setSource(DeviceFileSource(path));
+        _silentKeeperReady = true;
+      }
+      if (warm.state != PlayerState.playing) {
+        await warm.resume();
+        // Endpoint leaves the cold-start state before any piano resume.
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      }
+      _lastDeviceWarmAt = DateTime.now();
+      pianoFlowLog('Audio', 'device warm held (zero-PCM loop, no stop)');
     } catch (e) {
       // Warm failures are non-fatal; still surface so console can diagnose silence.
       pianoFlowLog('Audio', 'device warm skipped or failed: $e');
-    } finally {
-      try {
-        await warm?.dispose();
-      } catch (e) {
-        pianoFlowLog('Audio', 'warm player dispose failed: $e');
-      }
     }
   }
 
@@ -412,8 +480,30 @@ class ScoreAudioPlayer {
     if (!playing) {
       _metro?.cancel();
       _metro = null;
+      // Practice pause / leave / end-rewind only clear this flag. Cut queued
+      // and already-sounding one-shots here so transport stop is also silence.
+      silenceVoices();
     } else {
       _restartMetronome(preserveBeat: true);
+    }
+  }
+
+  /// Drop queued attacks and stop players that already resumed.
+  ///
+  /// Synchronous: bumps the epoch and clears the queue before any await, so
+  /// a pause click is not stuck behind the rest of a chord. Stops themselves
+  /// go through [NoteVoicePump] one at a time.
+  void silenceVoices() {
+    _voiceEpoch++;
+    _voices.clearPending();
+    for (final t in _releaseTimers.values) {
+      t.cancel();
+    }
+    _releaseTimers.clear();
+    final live = List<AudioPlayer>.of(_livePlayers);
+    _livePlayers.clear();
+    for (final player in live.reversed) {
+      _voices.enqueue(() => _pauseQuiet(player), front: true);
     }
   }
 
@@ -448,8 +538,8 @@ class ScoreAudioPlayer {
     _clock = null;
     _metro?.cancel();
     _metro = null;
-    _voiceEpoch++;
-    await _stopAllPlayers();
+    silenceVoices();
+    await _voices.whenIdle;
   }
 
   Future<void> stop() async {
@@ -464,9 +554,9 @@ class ScoreAudioPlayer {
     _startedAt = null;
     _fired.clear();
     _metroBeat = 0;
-    _voiceEpoch++;
     _position.add(_pausedAtBeats);
-    await _stopAllPlayers();
+    silenceVoices();
+    await _voices.whenIdle;
   }
 
   Future<void> seek(double beats) async {
@@ -483,67 +573,145 @@ class ScoreAudioPlayer {
     _armPastNotes(_pausedAtBeats);
     _position.add(_pausedAtBeats);
     if (!_playing) {
-      await _stopAllPlayers();
+      silenceVoices();
+      await _voices.whenIdle;
     } else {
       _restartMetronome();
     }
+  }
+
+  /// Play a score note and release it when its written length is over.
+  ///
+  /// [durationBeats] is the note's own value at [bpm] (already including
+  /// speed). Keyboard taps stay on [playOneShot] and are not cut to a bar.
+  void playScoreNote(
+    int midi, {
+    required double durationBeats,
+    required double bpm,
+    double volume = 1.0,
+    Hand? hand,
+  }) {
+    final m = midi.clamp(PracticeConstants.midiMin, PracticeConstants.midiMax);
+    final gen = _claimStrike(m);
+    final epoch = _voiceEpoch;
+    playOneShot(midi, volume: volume, hand: hand, generation: gen);
+    final safeBpm = bpm < 1 ? 1.0 : bpm;
+    final seconds = (durationBeats * 60.0 / safeBpm).clamp(
+      0.08,
+      PracticeConstants.noteMaxSeconds,
+    );
+    _releaseTimers[m]?.cancel();
+    _releaseTimers[m] = Timer(
+      Duration(milliseconds: (seconds * 1000).round()),
+      () {
+        _releaseTimers.remove(m);
+        // A later strike of this key already owns the player. Pausing now
+        // would cut that new note off ("sound suddenly gone").
+        if (_voiceEpoch != epoch || _noteRetriggerGen[m] != gen) return;
+        final player = _notePlayers[m];
+        if (player == null) return;
+        _livePlayers.remove(player);
+        _voices.enqueue(
+          () => _pauseIfCurrent(player, midi: m, gen: gen, epoch: epoch),
+        );
+      },
+    );
   }
 
   /// Fire-and-forget one-shot. Prefer this for UI key presses (no await chain).
   ///
   /// [volume] is a relative level 0–1, multiplied by [masterVolume].
   /// [hand] drives LH→left / RH→right balance; omit for pitch-only pan.
-  void playOneShot(int midi, {double volume = 1.0, Hand? hand}) {
+  void playOneShot(
+    int midi, {
+    double volume = 1.0,
+    Hand? hand,
+    int? generation,
+  }) {
     final linear = (volume * _masterVolume).clamp(
       0.0,
       PracticeConstants.volumeMax,
     );
     final level = _playerLevel(linear);
     final balance = PracticeConstants.stereoBalanceFor(midi: midi, hand: hand);
+    final m = midi.clamp(PracticeConstants.midiMin, PracticeConstants.midiMax);
+    final gen = generation ?? _claimStrike(m);
     if (!_ready) {
       unawaited(
-        ensureReady().then((_) => _triggerNote(midi, level, balance)),
+        ensureReady().then((_) => _triggerNote(m, level, balance, gen)),
       );
       return;
     }
-    _triggerNote(midi, level, balance);
+    _triggerNote(m, level, balance, gen);
   }
 
   /// Silence one-shot voices (e.g. soft guide cue when echo-suppress ends).
   /// Same MIDI pool as [playOneShot] — next press retriggers normally.
+  /// Stops are queued ahead of note attacks so they are not posted as one burst.
   void stopOneShots(Iterable<int> midis) {
     for (final raw in midis) {
       final midi = raw.clamp(
         PracticeConstants.midiMin,
         PracticeConstants.midiMax,
       );
+      _releaseTimers[midi]?.cancel();
+      _releaseTimers.remove(midi);
+      final stopGen = _claimStrike(midi);
+      final epoch = _voiceEpoch;
       final player = _notePlayers[midi];
       if (player == null) continue;
-      unawaited(() async {
-        try {
-          await player.stop();
-        } catch (e) {
-          pianoFlowLog('Audio', 'stopOneShot midi=$midi failed: $e');
-        }
-      }());
+      _livePlayers.remove(player);
+      _voices.enqueue(
+        () => _pauseIfCurrent(
+          player,
+          midi: midi,
+          gen: stopGen,
+          epoch: epoch,
+        ),
+        front: true,
+      );
     }
   }
 
-  void _triggerNote(int midi, double volume, double balance) {
+  int _claimStrike(int midi) {
+    final gen = (_noteRetriggerGen[midi] ?? 0) + 1;
+    _noteRetriggerGen[midi] = gen;
+    return gen;
+  }
+
+  void _triggerNote(int midi, double volume, double balance, int gen) {
     final m = midi.clamp(
       PracticeConstants.midiMin,
       PracticeConstants.midiMax,
     );
-    final player = _notePlayers[m];
-    if (player != null) {
-      unawaited(_retrigger(player, volume, midi: m, balance: balance));
-      return;
-    }
-    unawaited(() async {
-      final p = await _ensureNotePlayer(m);
-      if (p == null) return;
-      await _retrigger(p, volume, midi: m, balance: balance);
-    }());
+    final accepted = _voices.enqueue(() async {
+      final epoch = _voiceEpoch;
+      var player = _notePlayers[m];
+      if (player == null) {
+        player = await _ensureNotePlayer(m);
+        if (player == null || epoch != _voiceEpoch) return;
+        if (_noteRetriggerGen[m] != gen) return;
+      }
+      await _retrigger(
+        player,
+        volume,
+        midi: m,
+        balance: balance,
+        generation: gen,
+      );
+    });
+    if (!accepted) _logQueueDrop(m);
+  }
+
+  void _logQueueDrop(int midi) {
+    final now = DateTime.now();
+    final last = _lastQueueDropLog;
+    if (last != null && now.difference(last).inMilliseconds < 500) return;
+    _lastQueueDropLog = now;
+    pianoFlowLog(
+      'Audio',
+      'voice queue full, dropped midi=$midi pending=${_voices.pending}',
+    );
   }
 
   void _triggerClick({required bool accent}) {
@@ -556,54 +724,106 @@ class ScoreAudioPlayer {
       PracticeConstants.volumeMax,
     );
     // Metronome stays centered so it does not pull the stereo image.
-    // Key -1: click pool (not a piano MIDI).
-    unawaited(
-      _retrigger(player, _playerLevel(linear), midi: -1, balance: 0),
+    // Key -1: click pool (not a piano MIDI). Same pump as notes so a click
+    // does not add a parallel method-channel call beside a chord.
+    final accepted = _voices.enqueue(
+      () => _retrigger(
+        player,
+        _playerLevel(linear),
+        midi: -1,
+        balance: 0,
+      ),
     );
+    if (!accepted) _logQueueDrop(-1);
+  }
+
+  /// Pause only. [AudioPlayer.stop] cold-starts the next note (a boom).
+  /// [AudioPlayer.setVolume] 0 sticks on Windows and mutes the next strike
+  /// of the same key, so the mix jumps and notes vanish.
+  Future<void> _pauseQuiet(AudioPlayer player) async {
+    try {
+      await player.pause();
+    } catch (e) {
+      pianoFlowLog('Audio', 'voice pause failed: $e');
+    }
+  }
+
+  Future<void> _pauseIfCurrent(
+    AudioPlayer player, {
+    required int midi,
+    required int gen,
+    required int epoch,
+  }) async {
+    if (_voiceEpoch != epoch || _noteRetriggerGen[midi] != gen) return;
+    _livePlayers.remove(player);
+    await _pauseQuiet(player);
   }
 
   /// Replay a preloaded source without calling [AudioPlayer.setSource].
   ///
-  /// Windows `audioplayers`: awaiting [setBalance]/[setVolume] on a burst of
-  /// first-chord notes stalls the method channel while the practice Timer
-  /// keeps advancing → hit line moves, audio feels "stuck". Attack path only
-  /// awaits seek+resume; pan/level are best-effort and non-blocking.
+  /// Windows `audioplayers`: posting setBalance/setVolume/seek/resume for every
+  /// note in a chord on one event-loop turn fills the method channel, so
+  /// pointer events (pause / back / pop) never run. Callers enqueue through
+  /// [NoteVoicePump] — one voice, then a yield. Pan/level stay best-effort.
   Future<void> _retrigger(
     AudioPlayer player,
     double volume, {
     required int midi,
     double balance = 0,
+    int? generation,
   }) async {
     final epoch = _voiceEpoch;
-    final gen = (_noteRetriggerGen[midi] ?? 0) + 1;
-    _noteRetriggerGen[midi] = gen;
-    bool stale() => epoch != _voiceEpoch || _noteRetriggerGen[midi] != gen;
+    final int gen;
+    if (generation != null) {
+      gen = generation;
+    } else {
+      gen = (_noteRetriggerGen[midi] ?? 0) + 1;
+      _noteRetriggerGen[midi] = gen;
+    }
+    bool silenced() => epoch != _voiceEpoch;
+    bool superseded() => _noteRetriggerGen[midi] != gen;
     try {
-      if ((player.balance - balance).abs() > 0.02) {
-        unawaited(player.setBalance(balance));
-      }
-      if ((player.volume - volume).abs() > 0.02) {
-        unawaited(player.setVolume(volume));
-      }
-      if (stale()) return;
-      // seek+resume avoids a full stop() round-trip that often clicks / delays
-      // the very first note after transport start.
-      try {
-        await player.seek(Duration.zero);
-      } catch (e) {
-        pianoFlowLog('Audio', 'tone seek failed, fallback stop: $e');
-        await player.stop();
-        if (stale()) return;
-      }
-      if (stale()) return;
-      await player.resume();
-      // pause/stop may have raced past resume — silence again.
-      if (stale()) {
+      if (silenced() || superseded()) return;
+      // Seek while the previous strike's fader is still in place, then set
+      // this strike's level. Setting volume before seek lets Windows drop it.
+      if (_resumedOnce.contains(player)) {
         try {
-          await player.stop();
+          await player.seek(Duration.zero);
         } catch (e) {
-          pianoFlowLog('Audio', 'tone stop after cancel failed: $e');
+          pianoFlowLog('Audio', 'tone seek failed, fallback pause: $e');
+          if (!superseded()) await _pauseQuiet(player);
+          if (silenced() || superseded()) return;
         }
+      }
+      if (silenced()) {
+        await _pauseQuiet(player);
+        return;
+      }
+      if (superseded()) return;
+      try {
+        if ((player.balance - balance).abs() > 0.02) {
+          await player.setBalance(balance);
+        }
+        await player.setVolume(volume);
+      } catch (e) {
+        pianoFlowLog('Audio', 'tone level failed: $e');
+      }
+      if (silenced()) {
+        await _pauseQuiet(player);
+        return;
+      }
+      if (superseded()) return;
+      await player.resume();
+      _resumedOnce.add(player);
+      if (silenced()) {
+        _livePlayers.remove(player);
+        await _pauseQuiet(player);
+        return;
+      }
+      _livePlayers.add(player);
+      if (silenced()) {
+        _livePlayers.remove(player);
+        await _pauseQuiet(player);
       }
     } catch (e) {
       pianoFlowLog('Audio', 'tone play failed: $e');
@@ -685,26 +905,6 @@ class ScoreAudioPlayer {
 
   String _key(ScoreNote n) => '${n.midi}_${n.start}_${n.hand.name}';
 
-  Future<void> _stopAllPlayers() async {
-    final players = [..._notePlayers.values, ..._clickPlayers.values];
-    var fail = 0;
-    Object? lastErr;
-    await Future.wait([
-      for (final p in players)
-        Future(() async {
-          try {
-            await p.stop();
-          } catch (e) {
-            fail++;
-            lastErr = e;
-          }
-        }),
-    ]);
-    if (fail > 0) {
-      pianoFlowLog('Audio', 'stopAllPlayers: $fail failed (last: $lastErr)');
-    }
-  }
-
   Future<void> dispose() async {
     await stop();
     await _position.close();
@@ -728,6 +928,17 @@ class ScoreAudioPlayer {
     }
     _notePlayers.clear();
     _clickPlayers.clear();
+    _resumedOnce.clear();
+    final keeper = _silentKeeper;
+    _silentKeeper = null;
+    _silentKeeperReady = false;
+    if (keeper != null) {
+      try {
+        await keeper.dispose();
+      } catch (e) {
+        pianoFlowLog('Audio', 'warm keeper dispose failed: $e');
+      }
+    }
     _ready = false;
     _readyFuture = null;
   }

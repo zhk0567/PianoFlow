@@ -3,17 +3,20 @@ import 'package:flutter/material.dart';
 import '../../../shared/models/song.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../keyboard_geometry.dart';
+import '../practice_stage_theme.dart';
 
 /// Display-only 88-key piano (A0–C8). No tap-to-play (avoids speaker→mic echo).
 ///
-/// Highlights are colored by hand ([AppColors.leftHand] / [AppColors.rightHand]),
-/// not by black vs white key type.
+/// FX off: waiting keys use [AppColors.keyWait]. FX on: waiting stays the hand
+/// hue ([PracticeStageTheme.waitingFillForHand]) and lit keys get a hand-colored
+/// edge — no blur shadow.
 class PianoKeyboard extends StatelessWidget {
   const PianoKeyboard({
     super.key,
     required this.geometry,
     required this.highlighted,
     required this.pressed,
+    this.waitingFor = const {},
     this.visualFxEnabled = false,
   });
 
@@ -22,6 +25,9 @@ class PianoKeyboard extends StatelessWidget {
   /// MIDI → hand for active/waiting highlights. Presence means highlighted.
   final Map<int, Hand> highlighted;
   final Set<int> pressed;
+
+  /// Wait-mode targets. FX off uses amber; FX on uses the hand hue.
+  final Set<int> waitingFor;
   final bool visualFxEnabled;
 
   @override
@@ -30,6 +36,7 @@ class PianoKeyboard extends StatelessWidget {
       builder: (context, constraints) {
         final h = constraints.maxHeight;
         return Stack(
+          clipBehavior: Clip.none,
           children: [
             Row(
               children: [
@@ -39,6 +46,7 @@ class PianoKeyboard extends StatelessWidget {
                     width: geometry.whiteKeyWidth(i),
                     height: h,
                     hand: highlighted[geometry.whiteMidis[i]],
+                    waiting: waitingFor.contains(geometry.whiteMidis[i]),
                     pressed: pressed.contains(geometry.whiteMidis[i]),
                     visualFx: visualFxEnabled,
                   ),
@@ -56,6 +64,7 @@ class PianoKeyboard extends StatelessWidget {
                   midi: m,
                   width: geometry.blackWidth,
                   hand: highlighted[m],
+                  waiting: waitingFor.contains(m),
                   pressed: pressed.contains(m),
                   visualFx: visualFxEnabled,
                 ),
@@ -69,12 +78,22 @@ class PianoKeyboard extends StatelessWidget {
 }
 
 Color _handHighlight(Hand hand, {required bool onBlack}) {
-  final base = hand == Hand.left ? AppColors.leftHand : AppColors.rightHand;
+  final base = PracticeStageTheme.colorForHand(hand);
   if (onBlack) {
     return Color.lerp(base, Colors.white, 0.12)!;
   }
   return base.withValues(alpha: 0.82);
 }
+
+Color _waitingFill({required bool onBlack}) {
+  if (onBlack) {
+    return Color.lerp(AppColors.keyWait, Colors.white, 0.22)!;
+  }
+  return AppColors.keyWait;
+}
+
+Color _keyLabel(Color fill) =>
+    fill.computeLuminance() < 0.18 ? AppColors.onAccent : AppColors.textPrimary;
 
 class _WhiteKey extends StatelessWidget {
   const _WhiteKey({
@@ -82,6 +101,7 @@ class _WhiteKey extends StatelessWidget {
     required this.width,
     required this.height,
     required this.hand,
+    required this.waiting,
     required this.pressed,
     this.visualFx = false,
   });
@@ -90,29 +110,46 @@ class _WhiteKey extends StatelessWidget {
   final double width;
   final double height;
   final Hand? hand;
+  final bool waiting;
   final bool pressed;
   final bool visualFx;
 
   @override
   Widget build(BuildContext context) {
     Color fill = AppColors.pianoWhite;
-    if (pressed) {
-      fill = AppColors.accent;
-    } else if (hand != null) {
-      fill = _handHighlight(hand!, onBlack: false);
+    // Waiting target wins over stray mic pressed (avoids lighting C when
+    // waiting for C# — pressed still shows if this key is the target).
+    if (waiting) {
+      fill = visualFx
+          ? PracticeStageTheme.waitingFillForHand(hand ?? Hand.right)
+          : _waitingFill(onBlack: false);
+    } else if (pressed || hand != null) {
+      fill = hand != null
+          ? _handHighlight(hand!, onBlack: false)
+          : AppColors.keyWait;
     }
 
-    final lit = pressed || hand != null;
+    final lit = pressed || waiting || hand != null;
     final fontSize = (width * 0.55).clamp(6.0, 11.0);
+    final identity = hand == null
+        ? null
+        : PracticeStageTheme.colorForHand(hand!);
+    final fxEdge = visualFx && lit && identity != null;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOut,
       width: width,
       height: height,
       decoration: BoxDecoration(
         color: fill,
-        border: Border.all(color: AppColors.border, width: 0.8),
+        border: Border.all(
+          color: fxEdge ? identity : const Color(0xFFC4B5A4),
+          width: fxEdge ? 1.5 : 0.8,
+        ),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
-        boxShadow: null, // FX glow removed — blur shadows stall Windows raster
+        boxShadow:
+            null, // FX edge is a border; blur shadows stall Windows raster
       ),
       alignment: Alignment.bottomCenter,
       padding: EdgeInsets.only(bottom: height * 0.06),
@@ -123,7 +160,7 @@ class _WhiteKey extends StatelessWidget {
               overflow: TextOverflow.clip,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.92),
+                color: _keyLabel(fill),
                 fontSize: fontSize,
                 fontWeight: FontWeight.w600,
                 height: 1,
@@ -140,6 +177,7 @@ class _BlackKey extends StatelessWidget {
     required this.midi,
     required this.width,
     required this.hand,
+    required this.waiting,
     required this.pressed,
     this.visualFx = false,
   });
@@ -147,31 +185,47 @@ class _BlackKey extends StatelessWidget {
   final int midi;
   final double width;
   final Hand? hand;
+  final bool waiting;
   final bool pressed;
   final bool visualFx;
 
   @override
   Widget build(BuildContext context) {
     Color fill = AppColors.pianoBlack;
-    if (pressed) {
-      fill = AppColors.accent;
-    } else if (hand != null) {
-      fill = _handHighlight(hand!, onBlack: true);
+    if (waiting) {
+      fill = visualFx
+          ? PracticeStageTheme.waitingFillForHand(hand ?? Hand.right)
+          : _waitingFill(onBlack: true);
+    } else if (pressed || hand != null) {
+      fill = hand != null
+          ? _handHighlight(hand!, onBlack: true)
+          : AppColors.keyWait;
     }
 
-    final lit = pressed || hand != null;
+    final lit = pressed || waiting || hand != null;
     final fontSize = (width * 0.32).clamp(5.5, 9.0);
+    final identity = hand == null
+        ? null
+        : PracticeStageTheme.colorForHand(hand!);
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOut,
       decoration: BoxDecoration(
         color: fill,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(4)),
+        border: waiting
+            ? Border.all(
+                color: visualFx && identity != null
+                    ? identity
+                    : Colors.white.withValues(alpha: 0.85),
+                width: 1.2,
+              )
+            : (visualFx && lit && identity != null)
+            ? Border.all(color: identity, width: 1.2)
+            : null,
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black54,
-            blurRadius: 2,
-            offset: Offset(0, 1),
-          ),
+          BoxShadow(color: Colors.black54, blurRadius: 2, offset: Offset(0, 1)),
         ],
       ),
       alignment: Alignment.bottomCenter,
@@ -183,7 +237,7 @@ class _BlackKey extends StatelessWidget {
               overflow: TextOverflow.clip,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.95),
+                color: _keyLabel(fill),
                 fontSize: fontSize,
                 fontWeight: FontWeight.w600,
                 height: 1,

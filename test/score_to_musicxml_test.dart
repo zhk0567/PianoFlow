@@ -55,4 +55,30 @@ void main() {
     expect(xml, contains('<octave>2</octave>'));
     expect(xml, isNot(contains('<octave>5</octave>')));
   });
+
+  test('polyphony under held tones keeps later onsets', () {
+    // Long G5+A5 with rapid E6-line — old converter skipped the melody.
+    final score = SongScore(
+      id: 'poly',
+      title: 'Poly',
+      bpm: 46,
+      timeNum: 6,
+      timeDen: 8,
+      notes: const [
+        ScoreNote(midi: 79, start: 1.5, duration: 2.9, hand: Hand.right),
+        ScoreNote(midi: 81, start: 1.5, duration: 2.9, hand: Hand.right),
+        ScoreNote(midi: 88, start: 1.5, duration: 0.25, hand: Hand.right),
+        ScoreNote(midi: 86, start: 1.75, duration: 0.25, hand: Hand.right),
+        ScoreNote(midi: 88, start: 2.0, duration: 0.25, hand: Hand.right),
+        ScoreNote(midi: 93, start: 2.25, duration: 0.25, hand: Hand.right),
+      ],
+    );
+    final xml = songScoreToMusicXml(score);
+    expect(xml, contains('<octave>5</octave>'));
+    expect(xml, contains('<octave>6</octave>'));
+    final e6 = '<step>E</step>'.allMatches(xml).length;
+    final d6 = '<step>D</step>'.allMatches(xml).length;
+    final a6 = '<step>A</step>'.allMatches(xml).length;
+    expect(e6 + d6 + a6, greaterThanOrEqualTo(4));
+  });
 }

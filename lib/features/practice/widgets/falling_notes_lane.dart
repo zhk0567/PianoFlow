@@ -38,7 +38,7 @@ class FallingNotesLane extends StatelessWidget {
       ),
       child: ColoredBox(
         color: visualFxEnabled
-            ? PracticeStageTheme.midnight.waterfallMid
+            ? PracticeStageTheme.decorated.waterfallMid
             : AppColors.surface,
         child: CustomPaint(
           painter: _FallingNotesPainter(
@@ -153,12 +153,16 @@ class _FallingNotesPainter extends CustomPainter {
       final radius = Radius.circular((barW * 0.45).clamp(3.0, 14.0));
       final rrect = RRect.fromRectAndRadius(rect, radius);
 
-      final waiting = waitingFor.contains(n.midi) &&
+      final waiting =
+          waitingFor.contains(n.midi) &&
           (n.start - positionBeats) <= PracticeConstants.waitEarlyHitBeats &&
           (n.start - positionBeats) >= -0.12;
-      final base =
-          n.hand == Hand.left ? AppColors.leftHand : AppColors.rightHand;
-      final fillColor = waiting ? stage.accent : base;
+      // Hand identity only (LH orange / RH teal) — never voice/staff/layer,
+      // and never swap wait targets to accent (that looked like a 3rd color).
+      final base = PracticeStageTheme.colorForHand(n.hand);
+      final fillColor = waiting
+          ? PracticeStageTheme.waitingFillForHand(n.hand)
+          : base;
 
       // FX path: solid fill (no top sheen).
       if (visualFxEnabled && waiting) {
@@ -186,7 +190,6 @@ class _FallingNotesPainter extends CustomPainter {
               ? (visualFxEnabled ? 1.35 : 1.8)
               : (visualFxEnabled ? 0.9 : 1.0),
       );
-
     }
 
     if (ghostHits.isNotEmpty) {

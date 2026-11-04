@@ -13,9 +13,6 @@ abstract final class PracticeFxBudget {
   /// Fixed ambient wash strength (no ticking controller).
   static const ambientT = 0.4;
 
-  /// Min beats between autoplay onset flashes (same midi).
-  static const autoplayFlashCooldownBeats = 0.25;
-
-  /// Max simultaneous autoplay flashes considered per frame.
-  static const autoplayOnsetsPerFrame = 1;
+  /// Live rings. A chord needs one per sounding pitch; oldest drops first.
+  static const maxLiveRipples = 24;
 }

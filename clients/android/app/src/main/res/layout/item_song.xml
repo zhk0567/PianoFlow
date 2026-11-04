@@ -17,12 +17,26 @@
             android:id="@+id/songKind"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="#66000000"
+            android:background="#E6DCE8C8"
             android:paddingHorizontal="8dp"
             android:paddingVertical="3dp"
-            android:textColor="#FFFFFF"
+            android:textColor="#4A6B4C"
             android:textSize="11sp"
             android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/songFavBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="#EB4A6B4C"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="2dp"
+            android:text="已收藏"
+            android:textColor="#FFF9F0"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <View
             android:layout_width="1dp"
@@ -35,7 +49,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="2"
-            android:textColor="#F5F2EB"
+            android:textColor="#1F1A16"
             android:textSize="15sp"
             android:textStyle="bold" />
 
@@ -46,7 +60,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:paddingTop="2dp"
-            android:textColor="#B3F5F2EB"
+            android:textColor="#4A433C"
             android:textSize="12sp" />
 
         <TextView
@@ -54,7 +68,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingTop="6dp"
-            android:textColor="#99E8A849"
+            android:textColor="#6B6258"
             android:textSize="11sp" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/songFav"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:background="#E6FAF6EE"
+        android:gravity="center"
+        android:text="☆"
+        android:textColor="#6B6258"
+        android:textSize="18sp" />
 </FrameLayout>

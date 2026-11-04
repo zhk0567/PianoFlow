@@ -84,20 +84,20 @@ class KeyboardGeometry {
   }
 
   /// Pitch-class label for on-key marking.
-  /// White: C D E F G A B. Black: flats (Db Eb Gb Ab Bb) — common piano key marks.
+  /// Sharps on black keys — matches practice「请弹：C#2」status labels.
   static String midiKeyLabel(int midi) {
     const names = [
       'C',
-      'Db',
+      'C#',
       'D',
-      'Eb',
+      'D#',
       'E',
       'F',
-      'Gb',
+      'F#',
       'G',
-      'Ab',
+      'G#',
       'A',
-      'Bb',
+      'A#',
       'B',
     ];
     return names[midi % 12];

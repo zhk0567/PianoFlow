@@ -72,7 +72,7 @@
             android:layout_height="wrap_content"
             android:background="@drawable/bg_home_card"
             android:padding="16dp"
-            android:text="暂无 · 曲库长按收藏"
+            android:text="暂无 · 曲库点星标收藏"
             android:textColor="#9AA3B2" />
 
         <TextView

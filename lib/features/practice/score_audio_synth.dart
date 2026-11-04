@@ -3,7 +3,9 @@ part of 'score_audio_player.dart';
 /// Metronome click synthesis (piano tones come from bundled Acoustic Grand samples).
 
 /// Zero-PCM one-shot for audio-device warmup (never audible).
-Uint8List _renderSilentWav({double duration = 0.05}) {
+Uint8List _renderSilentWav({
+  double duration = SilentWarmWav.keeperDurationSeconds,
+}) {
   return SilentWarmWav.render(
     sampleRate: ScoreAudioPlayer._sampleRate,
     durationSeconds: duration,

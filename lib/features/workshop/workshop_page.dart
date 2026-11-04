@@ -54,9 +54,9 @@ class WorkshopPage extends ConsumerWidget {
               children: [
               Text(
                 '谱面工坊',
-                style: AppTheme.display(
-                  fontSize: wide ? 40 : 32,
-                  letterSpacing: -0.6,
+                style: AppTheme.body(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),

@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ui_bits.dart';
 import '../auth/auth_controller.dart';
-import '../practice/practice_constants.dart';
 import '../practice/practice_stats_store.dart';
 
 class ProfileTab extends ConsumerWidget {
@@ -17,10 +16,6 @@ class ProfileTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final stats = ref.watch(practiceStatsProvider);
-    final minutes = (stats.totalSeconds / 60).floor();
-    final todayMin = (stats.todaySeconds() / 60).floor();
-    final todayProgress = stats.todayProgress01();
-    final goal = PracticeConstants.dailyPracticeGoalMinutes;
     final name = auth.displayName ?? '访客';
     final email = auth.email ?? '';
     final initial =
@@ -33,7 +28,10 @@ class ProfileTab extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 48),
           children: [
-            Text('我的', style: AppTheme.display(fontSize: 32)),
+            Text(
+              '我的',
+              style: AppTheme.body(fontSize: 22, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 28),
             // User block — custom layout, not ListTile (avoids subtitle clip).
             Container(
@@ -88,52 +86,6 @@ class ProfileTab extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 28),
-            const SectionTitle('今日练习'),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(AppRadii.lg),
-                border: Border.all(color: AppColors.borderSubtle),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        '今日 $todayMin / $goal 分钟',
-                        style: AppTheme.body(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${(todayProgress * 100).round()}%',
-                        style: AppTheme.body(
-                          fontSize: 13,
-                          color: AppColors.accent,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: todayProgress,
-                      minHeight: 8,
-                      backgroundColor: AppColors.surfaceAlt,
-                      color: AppColors.accent,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
             const SectionTitle('练习概览'),
             const SizedBox(height: 12),
             Container(
@@ -146,7 +98,6 @@ class ProfileTab extends ConsumerWidget {
               child: Row(
                 children: [
                   _Stat(label: '练习次数', value: '${stats.totalSessions}'),
-                  _Stat(label: '累计分钟', value: '$minutes'),
                   _Stat(label: '曲目数', value: '${stats.bySong.length}'),
                 ],
               ),

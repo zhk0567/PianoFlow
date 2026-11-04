@@ -111,45 +111,30 @@ if (-not $exe) {
 }
 
 Write-Host "Audiveris:" $exe
-Write-Host "Running batch OMR (this can take several minutes) ..."
+Write-Host "Running enterprise OMR pipeline (preprocess + Audiveris + sheet-merge) ..."
 
-# Audiveris batch: -batch -export -output <dir> <input.pdf>
-# See handbook: headless/batch processing.
-$argList = @(
-  "-batch",
-  "-export",
-  "-output", $OutDir,
-  $PdfCopy
-)
-
-$proc = Start-Process -FilePath $exe -ArgumentList $argList -Wait -PassThru -NoNewWindow
-Write-Host "Audiveris exit code:" $proc.ExitCode
-
-$xmls = @()
-$xmls += Get-ChildItem -Path $OutDir -Recurse -Include *.musicxml,*.xml,*.mxl -ErrorAction SilentlyContinue
-$xmls += Get-ChildItem -Path $Work -Recurse -Include *.musicxml,*.xml,*.mxl -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -like "*audiveris*" -or $_.DirectoryName -like "*audiveris_out*" }
-
-$xmls = $xmls | Sort-Object FullName -Unique
-if ($xmls.Count -eq 0) {
+# Same semantics as scripts/omr_pipeline.py / omr-batch-import.ps1 (workshop one-shot aligned).
+python ".\scripts\omr_pipeline.py" --id $Id --pdf $PdfCopy --audiveris $exe
+if ($LASTEXITCODE -ne 0) {
   Write-Host ""
-  Write-Host "No MusicXML exported yet. Open Audiveris GUI on:"
+  Write-Host "OMR pipeline failed (exit=$LASTEXITCODE). Open Audiveris GUI on:"
   Write-Host "  $PdfCopy"
-  Write-Host "Then File → Export → MusicXML into:"
-  Write-Host "  $OutDir"
-  Write-Host "Docs: docs\曲谱导入SOP.md"
+  Write-Host "Or cleaned feed if present:"
+  Write-Host "  $(Join-Path $Work 'source_staff300.pdf')"
+  Write-Host "Docs: docs\曲谱导入SOP.md  /  docs\战役-企业级验收勾选.md"
   exit 2
 }
 
-Write-Host ""
-Write-Host "OMR draft(s):"
-foreach ($x in $xmls) { Write-Host " -" $x.FullName }
+$canonicalMxl = Join-Path $Work "omr_draft.mxl"
+$canonicalXml = Join-Path $Work "omr_draft.musicxml"
+if (Test-Path $canonicalMxl) {
+  $canonical = $canonicalMxl
+} elseif (Test-Path $canonicalXml) {
+  $canonical = $canonicalXml
+} else {
+  Write-Error "Pipeline reported OK but no omr_draft under $Work"
+}
 
-$best = $xmls | Select-Object -First 1
-$ext = $best.Extension
-if (-not $ext) { $ext = ".musicxml" }
-$canonical = Join-Path $Work ("omr_draft" + $ext)
-Copy-Item -Force $best.FullName $canonical
 Write-Host ""
 Write-Host "Canonical draft:" $canonical
 Write-Host ""
@@ -157,6 +142,7 @@ Write-Host "NEXT (required for formal accuracy):"
 Write-Host "  1. Proofread in MuseScore / Audiveris GUI against $PdfCopy"
 Write-Host "  2. Save corrected file as $Work\corrected.musicxml"
 Write-Host "  3. .\scripts\import-score.ps1 -Id $Id -Source $Work\corrected.musicxml -Title '...' -Artist '...'"
+Write-Host "  Or draft import: .\scripts\omr-finish-import.ps1 -Id $Id -ForceOmr ..."
 Write-Host ""
 Write-Host "Do NOT import the raw OMR draft as formal without proofreading."
 exit 0

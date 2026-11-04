@@ -18,9 +18,16 @@ class _HomePanel extends StatelessWidget {
       width: double.infinity,
       height: fill ? double.infinity : null,
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.92),
+        color: AppColors.paper,
         borderRadius: BorderRadius.circular(AppRadii.lg),
         border: Border.all(color: AppColors.borderSubtle),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
       child: child,
@@ -121,6 +128,142 @@ class HomeRecentList extends StatelessWidget {
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: AppColors.accent,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppColors.textSecondary,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+/// 首页「我的收藏」：空态引导；有收藏可点进曲库并打开收藏筛选。
+class HomeFavoritesList extends StatelessWidget {
+  const HomeFavoritesList({
+    super.key,
+    required this.songs,
+    required this.onOpenLibraryFavorites,
+    this.fill = false,
+  });
+
+  final List<SongSummary> songs;
+  final VoidCallback onOpenLibraryFavorites;
+  final bool fill;
+
+  @override
+  Widget build(BuildContext context) {
+    if (songs.isEmpty) {
+      return _HomePanel(
+        fill: fill,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionTitle(
+              '我的收藏',
+              trailing: TextButton(
+                onPressed: onOpenLibraryFavorites,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  '去收藏',
+                  style: AppTheme.body(
+                    fontSize: 13,
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '暂无收藏。曲库封面点右上角星标即可收藏。',
+              style: AppTheme.body(fontSize: 14, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final items = songs.take(3).toList();
+    return _HomePanel(
+      fill: fill,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionTitle(
+            '我的收藏',
+            trailing: TextButton(
+              onPressed: onOpenLibraryFavorites,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                '全部',
+                style: AppTheme.body(
+                  fontSize: 13,
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          ...List.generate(items.length, (i) {
+            final s = items[i];
+            return Column(
+              children: [
+                if (i > 0) const Divider(height: 1, color: AppColors.border),
+                InkWell(
+                  onTap: () => context.push('/practice/${s.id}'),
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: AppColors.accent,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                s.title,
+                                style: AppTheme.body(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                s.homeRecentMetaLine,
+                                style: AppTheme.body(
+                                  fontSize: 13,
+                                  color: s.isOmrDraft
+                                      ? AppColors.accent
+                                      : AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const Icon(

@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../shared/piano_flow_log.dart';
-import 'practice_constants.dart';
 
 class SongPracticeStats {
   const SongPracticeStats({
@@ -96,19 +95,6 @@ class PracticeStatsState {
   int get totalSessions =>
       bySong.values.fold(0, (a, b) => a + b.sessions);
 
-  int get totalSeconds => bySong.values.fold(0, (a, b) => a + b.seconds);
-
-  int todaySeconds([DateTime? now]) {
-    final key = dayKey(now ?? DateTime.now());
-    return dailySeconds[key] ?? 0;
-  }
-
-  double todayProgress01([DateTime? now]) {
-    final goal = PracticeConstants.dailyPracticeGoalMinutes * 60;
-    if (goal <= 0) return 0;
-    return (todaySeconds(now) / goal).clamp(0.0, 1.0);
-  }
-
   static String dayKey(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
@@ -195,7 +181,6 @@ class PracticeStatsController extends Notifier<PracticeStatsState> {
 
   Future<void> recordSession({
     required String songId,
-    required int seconds,
     int hits = 0,
     int misses = 0,
     int perfects = 0,
@@ -209,7 +194,6 @@ class PracticeStatsController extends Notifier<PracticeStatsState> {
     final prev = state.bySong[songId] ?? const SongPracticeStats();
     final next = prev.copyWith(
       sessions: prev.sessions + 1,
-      seconds: prev.seconds + seconds,
       hits: prev.hits + hits,
       misses: prev.misses + misses,
       perfects: prev.perfects + perfects,
@@ -219,11 +203,8 @@ class PracticeStatsController extends Notifier<PracticeStatsState> {
       examSessions: prev.examSessions + (isExam ? 1 : 0),
       lastPracticedDay: day,
     );
-    final daily = Map<String, int>.from(state.dailySeconds);
-    daily[day] = (daily[day] ?? 0) + seconds;
     state = state.copyWith(
       bySong: {...state.bySong, songId: next},
-      dailySeconds: daily,
       ready: true,
     );
     await _persist();

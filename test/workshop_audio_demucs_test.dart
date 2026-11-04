@@ -5,7 +5,8 @@ import 'package:piano_flow/features/workshop/workshop_tools.dart';
 void main() {
   test('audio honesty mentions optional demucs', () {
     expect(WorkshopAudioImporter.honestyDescription, contains('Demucs'));
-    expect(WorkshopAudioImporter.honestyDescription, contains('非正式'));
+    expect(WorkshopAudioImporter.honestyDescription, contains('正式谱'));
+    expect(WorkshopAudioImporter.honestyDescription, contains('自导入'));
   });
 
   test('importAudio tool subtitle mentions demucs path', () {

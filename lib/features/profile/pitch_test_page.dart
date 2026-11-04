@@ -101,7 +101,9 @@ class _PitchTestPageState extends ConsumerState<PitchTestPage> {
       _lit.add(midi);
       _noteHits++;
     });
-    _clearTimers[midi] = Timer(const Duration(milliseconds: 650), () {
+    // Short linger — long tails stacked with sensing bins looked like
+    // "played 2, lit 3" even when the live lock was already 1–2 notes.
+    _clearTimers[midi] = Timer(const Duration(milliseconds: 320), () {
       if (!mounted) return;
       setState(() => _lit.remove(midi));
     });
@@ -124,7 +126,8 @@ class _PitchTestPageState extends ConsumerState<PitchTestPage> {
             children: [
               Text(
                 '主引擎 Basic Pitch（多音 ONNX）；失败时回退 SwiftF0 / YIN。'
-                '可同时弹多个键；先确认音量条过黄线。',
+                '可同时弹多个键；先确认音量条过黄线。'
+                '琴键亮起 = 当前锁定音；短闪为刚触发的 noteOn（不含未锁定候选）。',
                 style: AppTheme.body(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -194,7 +197,9 @@ class _PitchTestPageState extends ConsumerState<PitchTestPage> {
                                       ? '${frame.midis.length} 音'
                                           ' · ${_engineLabel(frame.engine)}'
                                           '${frame.clarity != null ? " · 置信 ${(frame.clarity! * 100).round()}%" : ""}'
-                                      : '锁定中…',
+                                      : frame.sensingMidis.isNotEmpty
+                                          ? '锁定中…'
+                                          : '有声 · 未识别到稳定音高',
                       textAlign: TextAlign.center,
                       style: AppTheme.body(
                         fontSize: 14,
@@ -238,10 +243,14 @@ class _PitchTestPageState extends ConsumerState<PitchTestPage> {
                         width: constraints.maxWidth,
                         child: PianoKeyboard(
                           geometry: geo,
+                          // Confirmed lock only for solid highlight.
                           highlighted: {
-                            for (final m in {...?frame?.midis, ..._lit})
+                            for (final m in {...?frame?.midis})
                               m: Hand.right,
                           },
+                          // Pressed = live lock ∪ brief noteOn flash.
+                          // Do NOT union sensingMidis — unlocked BP bins
+                          // (partial/subharmonic flicker) inflated "多音".
                           pressed: {
                             ...?frame?.midis,
                             ..._lit,

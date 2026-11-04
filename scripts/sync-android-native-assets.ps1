@@ -26,5 +26,8 @@ Sync-Tree "assets\scores" "scores"
 Sync-Tree "assets\audio\piano" "audio\piano"
 Sync-Tree "assets\verovio" "verovio"
 
+# Basic Pitch ONNX (Android follow mic)
+& (Join-Path $PSScriptRoot "sync-basic-pitch-model.ps1")
+
 # Keep contracts sample folder if present (optional legacy)
 Write-Host "[PianoFlow/Android] asset sync done"

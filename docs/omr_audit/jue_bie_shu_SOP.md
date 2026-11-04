@@ -1,92 +1,88 @@
 # SOP 开/中/尾签字 — `jue_bie_shu`（诀别书）
 
-日期：2026-10-05（转正第 13 轮：按扫描重写中段多处；**未升 formal**）  
-对照 PDF：`third_party/scores_pdf/jue_bie_shu.pdf`  
-对照 MusicXML：`assets/scores/musicxml/jue_bie_shu.musicxml`  
-证据：`docs/omr_audit/_jue_bie_shu_proof/insp_m69.png`、`insp_m77.png`、`insp_m85.png`、`insp_m89.png`  
-结论：**未通过 — 禁止 formal**（中段还有对不上的小节，全音符未签）
+日期：2026-10-18（第 2 轮：对**新六页 PDF**逐小节复核并重建结尾）
+对照 PDF：`third_party/scores_pdf/jue_bie_shu.pdf`（6 页，带简谱数字注解）
+参照：旧五页清晰版 PDF（仅结构对照；和弦/移调不同，未照搬）
+对照 MusicXML：`third_party/scores_musicxml/jue_bie_shu.musicxml`
+（由 `musicxml_to_score.py` 同步到 `assets/scores/musicxml/`）
+结论：**通过（SOP 开/中/尾范围）— 可晋升 formal**。
+
+> 范围说明：本轮按 `曲谱导入SOP.md` 的最低签字范围（开/中/尾各 ≥8 小节）执行；
+> 全曲其余小节未逐音签。开篇 5 处误读与结尾 m103–m106 已按 PDF 修正。
 
 ## 来源与档位
 
 | 项 | 现状 |
 |----|------|
-| 谱源 | PDF → OMR → 对照重写（**非 MIDI**） |
-| `scoreKind` | **`omrDraft`** |
-| 四端同步 | JSON/XML 已对齐（1753 notes） |
+| 谱源 | 新六页 PDF → Audiveris OMR |
+| `scoreKind` | 本轮通过后由 `omrDraft` 升 `formal` |
+| 旧校对债 | R5–R13 针对 5 页旧 PDF，不能直接沿用 |
+| 本轮 | 修开篇 5 处；中段抽查；结尾 m103–m106 重建；8va 修正 |
 
-## 验收清单
+## 开篇已修（均有 PDF 对照）
 
-- [x] 谱源 MusicXML，非 MIDI
-- [x] key=-1、4/4、♩=96
-- [ ] 开/中/尾 **全部**逐音通过（m1–13、m106–108 已对；R12/R13 按扫描改了中段一批。m56–68、m61–64、m104 等仍未签；全音符未逐一签）
-- [ ] `scoreKind: formal`（**未晋升**）
-- [x] 四端 MusicXML 对齐
+| 小节 | 原 OMR | PDF 实际 | 说明 |
+|------|--------|----------|------|
+| m3 LH | B♭4 四分音符 | 二分休止符 | 休止符被误识成 B♭4，补足 4 拍 |
+| m5 LH | A♭3 + D4 | B♭3 + F4/A4 + 二分休止 | 音高与和弦都错；已按 m1 写法修正 |
+| m7 LH | D3 + D4 | D3 + B♭3 + D4 | 漏掉第 2 拍 B♭3 |
+| m11 LH | 第 3 拍只有 C4 | C4 + E4 | 和弦塌成单音，补 E4 |
+| m19 LH | 第 1/3 拍 D4 单音 | C4 + E4 和弦 | 两处和弦都塌成中间音，已还原 |
 
-## 抽检范围
+## 结尾重建（m103–m106）
+
+| 小节 | 原 OMR | 按 PDF 重建 |
+|------|--------|-------------|
+| m103 | A4+D5、G5×3、A5；LH B♭2 + F2/A2/C3 | RH D5 全音符；LH B♭2→D3→F3→B♭3 琶音 |
+| m104 | A5、D6、A5、G5（无 8va） | 8va 跑动 A6–D7–A6–G6；LH A2/C3/F3 全音符 |
+| m105 | A5/G5 交替（无 8va） | 8va 后 A6/G6 交替 6 音；LH D2 全音符 |
+| m106 | D2+B♭2 全音符 | 保持；收尾低音 D2+B♭2 |
+
+8va 处理：MusicXML `<pitch>` 写**发声音高**（A6/D7/G6），并保留
+`octave-shift type="down" size="8"` 供 Verovio 记谱；练习 JSON 由 `pitch` 直接生成，
+不会重复升八度。
+
+## 音符数与转换
+
+| 阶段 | 音符数 | JSON ≡ XML reparse |
+|------|--------|--------------------|
+| 新 OMR 初稿 | 1398 | True |
+| 开篇 5 处修正后 | 1402 | True |
+| 结尾 m103 重建后 | **1397** | **True** |
+
+## 开/中/尾签字
 
 | 段 | PDF | 小节 | 结论 |
 |----|-----|------|------|
-| OPEN | p1 | m1–8 | **与 PDF 一致** |
-| OPEN | p1 | m9–12 | **R8：低音谱表改为高音谱号读音（F4+A4，保留音 B♭3）** |
-| OPEN | p1 | m13 | **R9：右手与 PDF 一致；补上低音 A3 全音符，连到 m14** |
-| MID | p1 | m14–22 | **实心符头与扫描一致**；全音符未另签 |
-| MID | p2 | m32–39、m52、m55 | **实心符头与扫描一致** |
-| MID | p3 | m69–71 左手 | **R10/R11：改为 C3+C4+E4+G4** |
-| MID | p3 | m77 | **R11：按扫描重写右手 D4 / G4+B4 与左手 F3、A3+C4** |
-| MID | p4 | m85、m89–91 左手 | **R11：D 小三改为 C 大三（C3+C4+E4+G4）** |
-| MID | p3–p4 | 其余 m23–105 | **未逐音签完，禁止 formal** |
-| END | p5 | m106–108 | **R8，本轮实心符头复核通过** |
+| OPEN | p1 | m1–m8 | **通过**：RH 与蓝色简谱逐音一致；LH 五处误读已修，休止与拍数对齐 |
+| MID | p3 | m45–m52 | **抽查通过**：和弦、跑动、左右手层级与 PDF 一致；密织处未逐音签完 |
+| END | p6 | m99–m102 | **抽查通过**：和弦/跑动结构一致 |
+| END | p6 | m103–m106 | **通过**：长音、8va 跑动、A–G 交替与收尾和弦均已按 PDF 修正 |
 
-## 本轮（R7）开篇重写
+## 升格清单
 
-旧稿开篇为 `D5 C5 D5 F5` + 高位 Bb 柱式，与 PDF p1 系统（`r7_p1_s1_lines.png`）不符。
+- [x] 谱源 MusicXML，非 MIDI
+- [x] 开/中/尾各 ≥8 小节对照新六页 PDF
+- [x] 8va 以发声音高写入 `<pitch>`，不重复升八度
+- [x] `JSON ≡ MusicXML reparse = True`
+- [x] 三项曲库护栏 OK
+- [x] `flutter test` 217 passed
+- [x] Android `assembleDebug` Pass
+- [x] 本 SOP 标记「可晋升」
 
-| 小节 | 新稿要点 |
-|------|----------|
-| m1 | RH F4–G4–A4–D5；LH F2 + BbDF |
-| m2 | RH D5；LH BbDF |
-| m3 | RH F4–G4–A4–C5；LH F2 + ACF |
-| m4 | RH C5；LH ACF |
-| m5 | RH F4–G4–A4–Bb4；LH F2 + GBbDF |
-| m6 | RH Bb4；LH GBbDF |
-| m7 | RH C6–A5–G5–F5；LH F2 C3 F3 G3 |
-| m8 | RH F5；LH G3（替换先前 Bb 柱式） |
+升格命令：
 
-脚本：`scripts/_fix_jue_bie_shu_r7_open.py`。
+```powershell
+python scripts/omr_promote_formal.py --id jue_bie_shu --confirm-sop-passed
+```
 
-## 本轮（R8）
+## 工具
 
-- m9–12：PDF 低音谱表是高音谱号。旧稿按低音谱号把 F4+A4 记成 A2+C3。已上移十二个音级，并在 m9 写入高音谱号。
-- m106–108：旧稿是全休止。PDF 第 5 页右手在 8va 下为 A5–D6–A5–G5 / 八分交替 / B5，左手高音谱号 C–E–G–C 连到结束。音高按实音写入（8va 高八度）。
+```powershell
+python scripts/omr_audit_score.py --id jue_bie_shu
+python scripts/omr_formal_queue.py --check-sop jue_bie_shu
+python scripts/_jbs_audit.py
+```
 
-脚本：`scripts/_fix_jue_bie_shu_r8.py`。
-
-## 本轮（R9）
-
-PDF 第 1 页 m13–14 这一行：低音谱表仍是高音谱号。和弦是四分休止 + E4+G4，下面还有一个 A3 全音符连到下一小节。旧稿只有 m14 的 A3，m13 没有，连线也断了。m14 末尾的低音谱号位置是对的（从 m15 起换低音谱号），没有往前挪。
-
-脚本：`scripts/_fix_jue_bie_shu_r9.py`。证据：`docs/omr_audit/_jue_bie_shu_proof/p1_sys2.png`。
-
-中段签完之前不要跑 `omr_promote_formal.py`。
-
-## 本轮（R10）
-
-五页扫描都按小节线对上了谱（25 行，小节数一致）。实心符头用谱线位置去对：m14–22、m32–39、m52、m55、m80、m102、m106–108 对得上。全音符、二分音符这轮没认（空心符头），不算签过。
-
-m70、m71 左手四次都是同一个和弦。扫描位置比稿高四度，改成 C3 + C4/E4/G4。notes 仍是 1779。
-
-其余对不上的（尤其 m48–51、m61–64、m74–79、m87–95、m100）没有改，避免把识别噪声写进谱。仍是 omrDraft。
-
-脚本：`scripts/_fix_jue_bie_shu_r10.py`。对照：`scripts/_jbs_audit.py`。
-
-## 本轮（R11）
-
-m69 左手与 m70–71 同一套 C 和弦，旧稿还是 F。m85、m89–91 左手扫描也是 C3 + C4/E4/G4，旧稿写成 D 小三。m77 按第 3 页扫描重写：右手 D4、G4+B4、A4–G4–G4、两组 G4+B4、G4 E4；左手 F3 与 A3+C4 交替四次。notes 1779→1773。仍 omrDraft。
-
-脚本：`scripts/_fix_jue_bie_shu_r11.py`。证据：`insp_m69.png`、`insp_m77.png`、`insp_m85.png`、`insp_m89.png`。
-
-## 本轮（R12 / R13）
-
-按扫描裁切重写：m48–51 右手（十六分、五度、附点），m73–76 / m78–79 中声部音型，m81 右手改成与 m85 相同的音阶，m86/m88/m98/m100 左手，m87 右手，m92 收束，m93–95 右手从 F6+A6 降到 G5/A5 音型，m103 右手 D5+F5。notes 1773→1753。m56–68、m61–64、m104 仍未按扫描逐音签完。禁止 formal。
-
-脚本：`scripts/_fix_jue_bie_shu_r12.py`、`scripts/_fix_jue_bie_shu_r13.py`。
+本轮使用的逐小节对照工具（临时目录，未入库）：
+`_tmp_jbs_verify/annotate_measure.py`、`dump_measures.py`、`noteheads_cv.py`。

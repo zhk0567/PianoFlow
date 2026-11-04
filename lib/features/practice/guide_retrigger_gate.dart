@@ -46,12 +46,13 @@ class GuideRetriggerGate {
   }
 
   /// True while we still need a quiet gap before this MIDI can count as a hit.
-  /// Neighbor bins (±1) of an awaiting pitch are blocked the same way — the
-  /// estimator often lands there on guide bleed.
+  /// Neighbor bins (±1) and octave relatives of an awaiting pitch are blocked
+  /// the same way — the estimator often lands there on guide bleed.
   bool blocks(int midi) {
     for (final m in _awaitingGap) {
       if (_gapSeen.contains(m)) continue;
       if (PracticePitchMatch.isNear(m, midi)) return true;
+      if (PracticePitchMatch.isOctaveRelative(m, midi)) return true;
     }
     return false;
   }

@@ -8,9 +8,12 @@ abstract final class LibraryCatalogFilter {
     int? difficulty,
     String? genre,
     ScoreKind? scoreKind,
+    bool favoritesOnly = false,
+    Set<String> favoriteIds = const {},
   }) {
     final q = query.trim().toLowerCase();
     return songs.where((s) {
+      if (favoritesOnly && !favoriteIds.contains(s.id)) return false;
       if (scoreKind != null && s.scoreKind != scoreKind) return false;
       if (difficulty != null && s.difficulty != difficulty) return false;
       if (genre != null && s.genre != genre) return false;

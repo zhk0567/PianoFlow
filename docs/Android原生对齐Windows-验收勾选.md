@@ -40,7 +40,7 @@
 
 - Oboe 级低延迟；Compose UI；像素级桌面布局  
 - Windows 全套视觉特效 / 音量 200% 头房  
-- 跟弹模型（Basic Pitch / SwiftF0）；现为 YIN  
+- ~~跟弹模型（Basic Pitch / SwiftF0）；现为 YIN~~ → 2026-09-20 已接 BP ONNX（见 [战役-跟弹可测与Android-BP.md](./战役-跟弹可测与Android-BP.md)；真机待勾）  
 
 ## 怎么测
 

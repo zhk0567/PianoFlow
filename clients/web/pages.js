@@ -122,6 +122,9 @@ function startPitchTest() {
   label.textContent = "初始化音高引擎…";
   initPitchEngine().then((engine) => {
     label.textContent = `对着麦克风演奏（${getPitchEngineLabel()}）`;
+    if (engine !== "basicPitch") {
+      console.warn("[PianoFlow/Web/Pitch] prefer Basic Pitch; fallback:", engine);
+    }
     return navigator.mediaDevices.getUserMedia({ audio: true });
   }).then((stream) => {
     const ac = new AudioContext({ sampleRate: 22050 });
@@ -134,7 +137,7 @@ function startPitchTest() {
         const s = Math.max(-1, Math.min(1, f32[i]));
         pcm[i] = (s * 32767) | 0;
       }
-      processPitchPcm16(pcm, ac.sampleRate || 22050).then((midis) => {
+      processPitchPcm16(pcm, ac.sampleRate || 22050).then(({ midis }) => {
         if (midis.size) label.textContent = `识别 MIDI: ${[...midis].join(", ")}`;
       }).catch(() => {});
     };

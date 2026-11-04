@@ -63,10 +63,13 @@ function roundRect(ctx, x, y, rw, rh, r) {
   ctx.closePath();
 }
 
-function noteColor(n, waiting, fx) {
+function noteColor(n, waiting) {
+  // Hand identity only — wait lightens same hue (no accent / voice 3rd color).
   const base = n.hand === "left" ? STAGE.leftHand : STAGE.rightHand;
-  if (waiting && fx) return STAGE.accent;
-  return base;
+  if (!waiting) return base;
+  const c = parseHex(base);
+  const mix = (ch) => ch + (255 - ch) * 0.28;
+  return rgb(mix(c.r), mix(c.g), mix(c.b));
 }
 
 export function hitLineY(h) {
@@ -120,22 +123,21 @@ export function drawWaterfallLane(ctx, p) {
     const waiting = waitingFor.has(n.midi) && beatDist <= 0.35 && beatDist >= -0.12;
 
     if (visualFx && waiting) {
+      const base = n.hand === "left" ? STAGE.leftHand : STAGE.rightHand;
+      const c = parseHex(base);
       ctx.save();
-      ctx.shadowColor = STAGE.accent;
+      ctx.shadowColor = base;
       ctx.shadowBlur = 14 + 6 * phase;
       roundRect(ctx, cx - nw / 2 - 2, y - nh - 2, nw + 4, nh + 4, 6);
-      ctx.fillStyle = `rgba(255,208,120,${0.18 + 0.08 * phase})`;
+      ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${0.18 + 0.08 * phase})`;
       ctx.fill();
       ctx.restore();
     }
 
-    const fill = noteColor(n, waiting, visualFx);
-    const grad = ctx.createLinearGradient(cx, y - nh, cx, y);
-    grad.addColorStop(0, lighten(fill, 0.22));
-    grad.addColorStop(0.45, fill);
-    grad.addColorStop(1, darken(fill, 0.18));
+    // Solid hand fill — no lighten/darken gradient (dark end looked like 3rd hue).
+    const fill = noteColor(n, waiting);
     roundRect(ctx, cx - nw / 2, y - nh, nw, nh, Math.min(12, nw * 0.45));
-    ctx.fillStyle = grad;
+    ctx.fillStyle = fill;
     if (visualFx) {
       ctx.shadowColor = fill;
       ctx.shadowBlur = waiting ? 10 : 4;
@@ -176,20 +178,6 @@ export function drawWaterfallLane(ctx, p) {
   ctx.moveTo(0, hitY);
   ctx.lineTo(w, hitY);
   ctx.stroke();
-}
-
-function lighten(hex, amt) {
-  const c = parseHex(hex);
-  return rgb(
-    c.r + (255 - c.r) * amt,
-    c.g + (255 - c.g) * amt,
-    c.b + (255 - c.b) * amt,
-  );
-}
-
-function darken(hex, amt) {
-  const c = parseHex(hex);
-  return rgb(c.r * (1 - amt), c.g * (1 - amt), c.b * (1 - amt));
 }
 
 function parseHex(hex) {

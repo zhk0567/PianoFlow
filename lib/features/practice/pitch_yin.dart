@@ -152,6 +152,8 @@ class YinPitch {
     return second < 0.45 && second < best * 1.35;
   }
 
+  /// Prefer the lower octave when 2τ is competitive — critical for piano bass
+  /// where the 2nd partial often wins the first CMNDF trough.
   static int _octaveCorrect(
     Float64List cmndf,
     int tau,
@@ -162,8 +164,8 @@ class YinPitch {
     if (doubleTau > maxTau) return tau;
     final at = cmndf[tau];
     final at2 = cmndf[doubleTau];
-    // Only drop an octave when 2τ is clearly as good or better.
-    if (at2 <= at * 1.05 && at2 < 0.22) {
+    // Bass-friendly: accept 2τ when nearly as deep (was 1.05 / 0.22).
+    if (at2 <= at * 1.12 && at2 < 0.26) {
       return doubleTau;
     }
     return tau;

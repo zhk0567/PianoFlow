@@ -7,6 +7,12 @@ import 'dart:typed_data';
 abstract final class SilentWarmWav {
   static const defaultSampleRate = 22050;
   static const defaultDurationSeconds = 0.05;
+
+  /// Long zero buffer for the process-lifetime device keeper.
+  ///
+  /// A ~50ms loop point buzzes if Media Foundation inserts a gap. Several
+  /// seconds of zeros keeps that boundary rare; the body stays digital silence.
+  static const keeperDurationSeconds = 4.0;
   static const headerBytes = 44;
 
   /// Render a mono 16-bit PCM WAV with every sample at 0.
@@ -16,7 +22,9 @@ abstract final class SilentWarmWav {
   }) {
     final n = durationSeconds <= 0
         ? 1
-        : (sampleRate * durationSeconds).round().clamp(1, sampleRate * 2);
+        // Cap keeps a mistaken huge duration from allocating a giant buffer.
+        // Keeper is several seconds; 8s at 22.05 kHz mono is still small.
+        : (sampleRate * durationSeconds).round().clamp(1, sampleRate * 8);
     final data = ByteData(headerBytes + n * 2);
     _writeMonoPcm16Header(data, frames: n, sampleRate: sampleRate);
     // PCM body left as zeros (ByteData default).

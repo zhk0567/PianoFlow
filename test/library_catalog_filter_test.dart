@@ -29,6 +29,34 @@ void main() {
     _s(id: 'j', kind: ScoreKind.simplified, difficulty: 2, title: '简编示例'),
   ];
 
+  test('favoritesOnly filters by favoriteIds', () {
+    expect(
+      LibraryCatalogFilter.apply(
+        songs,
+        favoritesOnly: true,
+        favoriteIds: {'f', 'missing'},
+      ).map((s) => s.id),
+      ['f'],
+    );
+    expect(
+      LibraryCatalogFilter.apply(
+        songs,
+        favoritesOnly: true,
+        favoriteIds: {},
+      ),
+      isEmpty,
+    );
+    expect(
+      LibraryCatalogFilter.apply(
+        songs,
+        favoritesOnly: true,
+        favoriteIds: {'f'},
+        scoreKind: ScoreKind.omrDraft,
+      ),
+      isEmpty,
+    );
+  });
+
   test('null scoreKind keeps all', () {
     expect(LibraryCatalogFilter.apply(songs).length, 3);
   });

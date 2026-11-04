@@ -44,15 +44,16 @@ abstract final class PracticeConstants {
   static double get sampleCacheGain => sampleGain * volumeMax;
 
   /// Max one-shot length after cache shaping (bundled samples are ~3s).
-  /// Kept under ~2s so polyphony / echo-suppress stay manageable, but long
-  /// enough that chords retain piano body instead of a dry 0.5s pluck.
-  static const noteMaxSeconds = 1.65;
+  /// Long enough for half and dotted notes to keep a piano body; the tail
+  /// still fades before the raw sample ends.
+  static const noteMaxSeconds = 2.6;
 
   /// Fade-out window at the end of the shaped one-shot.
-  static const noteFadeSeconds = 0.28;
+  static const noteFadeSeconds = 0.4;
 
-  /// Extra exponential decay so the tail dies before [noteMaxSeconds].
-  static const noteDecayTau = 0.58;
+  /// Exponential decay time constant. 0.58s made most notes die as a short
+  /// pluck; ~1.6s keeps the body while the end still fades out.
+  static const noteDecayTau = 1.6;
 
   /// Pitch-based stereo width (−1…+1 scale factor). Real piano: bass left,
   /// treble right. Combined with [handBalanceLeft]/[handBalanceRight].
@@ -103,32 +104,39 @@ abstract final class PracticeConstants {
   static const keyboardHComfort = 128.0;
 
   /// Vertical flex split in the practice stage (falling notes vs staff).
-  /// Staff gets the larger share so grand-staff notation stays Flowkey-readable;
-  /// waterfall keeps a floor via [fallingMinHeight*] so notes still approach.
-  static const fallingNotesFlex = 2;
-  static const staffFlex = 5;
+  /// Staff stays readable; waterfall keeps approach distance via
+  /// [fallingMinHeight*] and a soft staff cap (avoid a tall empty cream box).
+  /// When FX is off, the falling lane collapses to 0 — leftover height is
+  /// absorbed below the staff (not a black empty waterfall slot above keys).
+  static const fallingNotesFlex = 3;
+  static const staffFlex = 4;
 
   /// When「视觉特效」is on, give the waterfall/FX stage a larger share.
   static const fallingNotesFlexFx = 4;
   static const staffFlexFx = 4;
 
   /// Minimum staff lane height (px). Must fit Verovio grand staff at [verovioScale]
-  /// (~316–340 CSS px); shorter lanes + vertical centering clipped the clef
-  /// under the keyboard (looked like occlusion).
-  static const staffMinHeightCompact = 200.0;
-  static const staffMinHeightComfort = 340.0;
+  /// (~300–340 CSS px + bottom pad). Floor ≈ ink height — not a tall empty frame.
+  static const staffMinHeightCompact = 220.0;
+  static const staffMinHeightComfort = 310.0;
 
-  /// Soft cap so ultra-tall windows still leave room for the waterfall.
-  static const staffMaxHeightCompact = 260.0;
-  static const staffMaxHeightComfort = 440.0;
+  /// Soft cap so tall windows leave room for waterfall/keyboard; do not grow
+  /// far past engraved ink (viewer shrinks if still taller — never crop bass).
+  static const staffMaxHeightCompact = 280.0;
+  static const staffMaxHeightComfort = 350.0;
+
+  /// One grand-staff line before the viewer reports cropped ink height.
+  /// Not a tall cream well — [stageColumn] hugs [staffInk] once it arrives.
+  static const staffInkFallbackCompact = 200.0;
+  static const staffInkFallbackComfort = 240.0;
 
   /// Slightly tighter staff caps when FX stage is boosted.
-  static const staffMaxHeightCompactFx = 230.0;
-  static const staffMaxHeightComfortFx = 360.0;
+  static const staffMaxHeightCompactFx = 250.0;
+  static const staffMaxHeightComfortFx = 330.0;
 
   /// Minimum falling-notes lane height (px) so the waterfall is not crushed.
   static const fallingMinHeightCompact = 80.0;
-  static const fallingMinHeightComfort = 110.0;
+  static const fallingMinHeightComfort = 140.0;
   static const fallingMinHeightCompactFx = 120.0;
   static const fallingMinHeightComfortFx = 160.0;
 
@@ -140,7 +148,71 @@ abstract final class PracticeConstants {
   /// Hit line sits this many px above the falling-lane bottom (≈ half stroke).
   static const fallingHitLineInset = 3.0;
 
+  /// Soft staff height cap for the current layout density.
+  static double staffMaxHeight({
+    required bool compact,
+    bool boostFalling = false,
+  }) {
+    if (compact) {
+      return boostFalling ? staffMaxHeightCompactFx : staffMaxHeightCompact;
+    }
+    return boostFalling ? staffMaxHeightComfortFx : staffMaxHeightComfort;
+  }
+
+  /// Practice column:
+  /// - FX on: staff hugs one engraved line; leftover → waterfall.
+  /// - FX off: keyboard and staff each take ~half the column (no giant keys).
+  ///
+  /// [stageHeight] is the full column (waterfall + keyboard + gap + staff).
+  /// [staffInk] is the cropped system height from the viewer, when known.
+  static ({double falling, double keyboard, double staff}) stageColumn({
+    required double stageHeight,
+    required bool compact,
+    required bool showFalling,
+    double? staffInk,
+  }) {
+    const gap = stageLaneGap;
+    final baseKeys = compact ? keyboardHCompact : keyboardHComfort;
+    final fallback =
+        compact ? staffInkFallbackCompact : staffInkFallbackComfort;
+    final ink = (staffInk ?? fallback).clamp(140.0, 400.0);
+    final room = (stageHeight - gap).clamp(0.0, double.infinity);
+    if (room <= 0) {
+      return (falling: 0, keyboard: 0, staff: 0);
+    }
+
+    if (!showFalling) {
+      // Equal split — leftover must not all pile onto the keyboard.
+      final minKeys = compact ? 88.0 : 104.0;
+      var staff = room * 0.5;
+      var keys = room - staff;
+      if (keys < minKeys) {
+        keys = minKeys.clamp(0.0, room);
+        staff = (room - keys).clamp(0.0, room);
+      } else if (staff < ink && room - minKeys >= ink) {
+        // Prefer at least one engraved line when half would crush the staff.
+        staff = ink;
+        keys = room - staff;
+      }
+      return (falling: 0, keyboard: keys, staff: staff);
+    }
+
+    var staff = ink;
+    var keys = baseKeys;
+    var fall = room - staff - keys;
+    if (fall < 0) {
+      // Ink + keys do not fit. Keep a usable keyboard; the viewer scales the
+      // staff down instead of clipping the bass. Waterfall takes whatever remains.
+      final minKeys = compact ? 72.0 : 88.0;
+      keys = minKeys.clamp(0.0, room);
+      staff = (room - keys).clamp(0.0, ink);
+      fall = (room - staff - keys).clamp(0.0, double.infinity);
+    }
+    return (falling: fall, keyboard: keys, staff: staff);
+  }
+
   /// Split usable stage height (excluding keyboard + gaps) between lanes.
+  /// Used when the waterfall lane is visible (decorative FX on).
   ///
   /// [boostFalling]: larger waterfall share (avoid for FX — staff readability
   /// first; FX glamour comes from paint quality, not stealing staff height).
@@ -153,9 +225,7 @@ abstract final class PracticeConstants {
     if (usable <= 0) return (falling: 0.0, staff: 0.0);
 
     final minStaff = compact ? staffMinHeightCompact : staffMinHeightComfort;
-    final maxStaff = compact
-        ? (boostFalling ? staffMaxHeightCompactFx : staffMaxHeightCompact)
-        : (boostFalling ? staffMaxHeightComfortFx : staffMaxHeightComfort);
+    final maxStaff = staffMaxHeight(compact: compact, boostFalling: boostFalling);
     final minFalling = compact
         ? (boostFalling ? fallingMinHeightCompactFx : fallingMinHeightCompact)
         : (boostFalling ? fallingMinHeightComfortFx : fallingMinHeightComfort);
@@ -205,8 +275,8 @@ abstract final class PracticeConstants {
 
   /// Verovio engraver scale (percent). Outer SVG viewBox units map 1:1 to CSS
   /// px in the viewer — do not stretch-to-lane. Tuned so a piano grand staff
-  /// is ~300–340 CSS px tall and fits [staffMinHeightComfort]–[staffMaxHeightComfort]
-  /// when top-aligned (taller scores clip at the bottom via the WebView wrap).
+  /// is the cropped system height (viewer reports it). The lane hugs that
+  /// line — see [stageColumn] — and does not keep a tall empty page.
   static const verovioScale = 60;
 
   /// Pre-roll before the first note when starting/seeking near beat 0.
@@ -251,7 +321,4 @@ abstract final class PracticeConstants {
 
   /// Hands-dialogue arc: both hands graded within this window.
   static const handsDialogueMs = 220;
-
-  /// Flowkey-style daily practice goal (minutes).
-  static const dailyPracticeGoalMinutes = 20;
 }

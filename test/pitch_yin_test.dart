@@ -62,6 +62,25 @@ void main() {
     expect(YinPitch.hzToMidi(estimated!.hz), 60);
   });
 
+  test('YIN detects piano-like C#2 (Moonlight bass) in 0.25s window', () {
+    // PitchService window = 11025 @44.1k; C#2 ≈ 69.3 Hz (MIDI 37).
+    const sr = 44100;
+    const hz = 69.29565774421802; // MIDI 37 exact
+    final yin = YinPitch(sampleRate: sr, threshold: 0.15);
+    final estimated = yin.estimate(_pianoish(hz, n: 11025, sr: sr));
+    expect(estimated, isNotNull);
+    expect(YinPitch.hzToMidi(estimated!.hz, maxCents: 40), 37);
+  });
+
+  test('YIN detects piano-like C2 in practice window', () {
+    const sr = 44100;
+    const hz = 65.40639132514966; // MIDI 36
+    final yin = YinPitch(sampleRate: sr, threshold: 0.15);
+    final estimated = yin.estimate(_pianoish(hz, n: 11025, sr: sr));
+    expect(estimated, isNotNull);
+    expect(YinPitch.hzToMidi(estimated!.hz, maxCents: 40), 36);
+  });
+
   test('YIN rejects noise-like signal', () {
     final yin = YinPitch(sampleRate: 44100);
     final rng = math.Random(1);

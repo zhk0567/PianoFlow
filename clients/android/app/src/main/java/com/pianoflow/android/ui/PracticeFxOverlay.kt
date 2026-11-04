@@ -45,10 +45,20 @@ class PracticeFxOverlay @JvmOverloads constructor(
         }
     }
 
-    fun hit(cx: Float, perfect: Boolean, combo: Int) {
-        if (!fxEnabled) return
+    private var gradeLabel: String? = null
+    private var gradeBorn: Long = 0L
+
+    fun hit(cx: Float, perfect: Boolean, combo: Int, label: String? = null) {
         val hue = if (perfect) Color.parseColor("#FFD078") else Color.parseColor("#8FD4FF")
-        bursts.add(Burst(cx, hue, combo, System.currentTimeMillis()))
+        if (fxEnabled) {
+            bursts.add(Burst(cx, hue, combo, System.currentTimeMillis()))
+        }
+        if (label != null) {
+            gradeLabel = label
+            gradeBorn = System.currentTimeMillis()
+        } else if (!fxEnabled) {
+            return
+        }
         invalidate()
     }
 
@@ -59,25 +69,39 @@ class PracticeFxOverlay @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (!fxEnabled) return
         prune()
         val now = System.currentTimeMillis()
-        val y = height * 0.92f
-        for (b in bursts) {
-            val t = ((now - b.born) / 980f).coerceIn(0f, 1f)
-            val a = 1f - t
-            val r = 18f + t * 48f + if (b.combo >= 5) 12f else 0f
-            ringPaint.color = b.hue
-            ringPaint.alpha = (a * 220).toInt()
-            ringPaint.strokeWidth = 3f - t * 1.5f
-            canvas.drawCircle(b.cx, y, r, ringPaint)
-            pillarPaint.color = b.hue
-            pillarPaint.alpha = (a * 90).toInt()
-            val pw = 10f + t * 6f
-            canvas.drawRect(b.cx - pw / 2f, y - height * 0.55f, b.cx + pw / 2f, y, pillarPaint)
-            if (b.combo >= 3 && t < 0.35f) {
-                textPaint.alpha = (a * 255).toInt()
-                canvas.drawText("${b.combo}", b.cx, y - 28f, textPaint)
+        val y = height * 0.86f
+        if (fxEnabled) {
+            for (b in bursts) {
+                val t = ((now - b.born) / 980f).coerceIn(0f, 1f)
+                val a = 1f - t
+                val r = 18f + t * 48f + if (b.combo >= 5) 12f else 0f
+                ringPaint.color = b.hue
+                ringPaint.alpha = (a * 220).toInt()
+                ringPaint.strokeWidth = 3f - t * 1.5f
+                canvas.drawCircle(b.cx, y, r, ringPaint)
+                pillarPaint.color = b.hue
+                pillarPaint.alpha = (a * 90).toInt()
+                val pw = 10f + t * 6f
+                canvas.drawRect(b.cx - pw / 2f, y - height * 0.55f, b.cx + pw / 2f, y, pillarPaint)
+                if (b.combo >= 3 && t < 0.35f) {
+                    textPaint.alpha = (a * 255).toInt()
+                    canvas.drawText("${b.combo}", b.cx, y - 28f, textPaint)
+                }
+            }
+        }
+        val gl = gradeLabel
+        if (gl != null) {
+            val t = ((now - gradeBorn) / 420f).coerceIn(0f, 1f)
+            if (t >= 1f) {
+                gradeLabel = null
+            } else {
+                textPaint.textSize = 48f
+                textPaint.alpha = ((1f - t) * 230).toInt()
+                textPaint.color = Color.parseColor("#FFD078")
+                canvas.drawText(gl, width / 2f, height * 0.48f, textPaint)
+                textPaint.textSize = 36f
             }
         }
     }

@@ -54,6 +54,15 @@
         </LinearLayout>
 
         <Button
+            android:id="@+id/btnSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
+            android:text="设置"
+            android:textSize="12sp" />
+
+        <Button
             android:id="@+id/btnFav"
             android:layout_width="36dp"
             android:layout_height="36dp"
@@ -165,10 +174,15 @@
 
             <SeekBar
                 android:id="@+id/seekBar"
-                android:layout_width="140dp"
-                android:layout_height="wrap_content"
+                android:layout_width="240dp"
+                android:layout_height="44dp"
                 android:layout_marginEnd="8dp"
-                android:max="1000" />
+                android:max="1000"
+                android:minHeight="44dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:progressTint="#E8A849"
+                android:thumbTint="#E8A849" />
 
             <Button
                 android:id="@+id/btnAuto"
@@ -201,49 +215,10 @@
                 android:text="右手" />
 
             <Button
-                android:id="@+id/btnGuide"
+                android:id="@+id/btnFx"
                 style="@style/PfChip"
                 android:layout_marginEnd="4dp"
-                android:text="示范音" />
-
-            <Button
-                android:id="@+id/btnMetro"
-                style="@style/PfChip"
-                android:layout_marginEnd="8dp"
-                android:text="节拍器" />
-
-            <TextView
-                android:id="@+id/speedLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp"
-                android:text="速度"
-                android:textColor="#C5D0DC"
-                android:textSize="12sp" />
-
-            <SeekBar
-                android:id="@+id/speedBar"
-                android:layout_width="100dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:max="160"
-                android:progress="60" />
-
-            <TextView
-                android:id="@+id/volumeLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="4dp"
-                android:text="音量"
-                android:textColor="#C5D0DC"
-                android:textSize="12sp" />
-
-            <SeekBar
-                android:id="@+id/volumeBar"
-                android:layout_width="80dp"
-                android:layout_height="wrap_content"
-                android:max="100"
-                android:progress="85" />
+                android:text="装饰特效" />
         </LinearLayout>
     </HorizontalScrollView>
 </LinearLayout>

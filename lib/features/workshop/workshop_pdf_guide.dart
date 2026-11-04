@@ -10,9 +10,9 @@ import 'workshop_import_common.dart';
 abstract final class WorkshopPdfGuide {
   static const chineseSteps = [
     '① 选择 PDF（一键：暂存 → 启动本机 OMR → 自动扫描导入 → 进练习）',
-    '② 依赖仓库 scripts/omr-from-pdf.ps1 与本机 Audiveris',
+    '② 企业级流水线：omr-from-pdf.ps1 → omr_pipeline（预处理/像素上限/逐页合并）+ Audiveris',
     '③ 可跟弹入库（自导入/OMR 质量档）；未校对不会标成正式谱',
-    '④ 也可分步：暂存 → 启动 OMR → 扫描 → 导入',
+    '④ 也可分步：暂存 → 启动 OMR → 扫描 → 导入；批量用 omr-batch-import.ps1',
   ];
 
   static const defaultPollTimeout = Duration(minutes: 4);

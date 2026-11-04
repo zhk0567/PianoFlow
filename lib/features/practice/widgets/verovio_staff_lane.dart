@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -16,15 +17,35 @@ import '../verovio_web_host_factory.dart';
 ///
 /// Relies on [VerovioRuntime] singleton — does not recreate WebView/WASM per visit.
 /// Transport follows [clock] so the parent scaffold is not rebuilt at ~60 Hz.
+///
+/// Horizontal drag on the staff scrubs [onSeek] (same path as the bottom SeekBar).
+/// WebView pointer input is ignored so Flutter owns the gesture without fighting
+/// programmatic follow-scroll inside the viewer.
 class VerovioStaffLane extends StatefulWidget {
   const VerovioStaffLane({
     super.key,
     required this.score,
     required this.clock,
+    required this.durationBeats,
+    this.onSeek,
+    this.allowsSeek = true,
+    this.onInkHeight,
   });
 
   final SongScore score;
   final PracticeClock clock;
+
+  /// Score length for clamp / fallback px-per-beat when JS metrics are unavailable.
+  final double durationBeats;
+
+  /// Same callback as bottom progress slider (`PracticeEngine.seek`).
+  final ValueChanged<double>? onSeek;
+
+  /// False in exam mode — drag is a no-op (matches SeekBar disabled).
+  final bool allowsSeek;
+
+  /// Cropped grand-staff height in CSS px (one engraved line, before lane fit).
+  final ValueChanged<double>? onInkHeight;
 
   @override
   State<VerovioStaffLane> createState() => _VerovioStaffLaneState();
@@ -48,8 +69,19 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
   /// Set when resize arrives during [_pushing]; flushed after the busy op ends.
   bool _pendingResize = false;
 
+  /// Staff scrub: accumulate from drag-start position; do not fight play follow-scroll
+  /// (user drag → intentional seek / seekEpoch snap only).
+  bool _scrubbing = false;
+  double _scrubOriginBeats = 0;
+  double _scrubAccumDx = 0;
+  double _scrubPxPerBeat = 40;
+  bool _scrubMetricsLoading = false;
+
   static const _resizeSlop = 16.0;
   static const _resizeDebounceMs = 450;
+  /// One viewport ≈ this many beats when engraved width is unknown.
+  static const _fallbackVisibleBeats = 12.0;
+  static const _minPxPerBeat = 12.0;
   /// Shared clock with waterfall/audio: push only from PracticeClock.
   /// Runtime already coalesces in-flight pushes — no Timer gate here.
 
@@ -105,6 +137,13 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       previousRate: _lastClockRate,
       currentRate: rate,
     );
+    // Freeze (rate→0): snap so wait-line does not ease with a stale sample.
+    // Play / unfreeze (rate→positive): viewer already hard-tracks when
+    // beatsPerSec>0 — avoid an extra forceSnap on every play press.
+    final snapForFreeze = VerovioTransportSync.shouldSnapForFreezeRateCrossing(
+      previousRate: _lastClockRate,
+      currentRate: rate,
+    );
     final posDelta = VerovioTransportSync.positionDelta(_lastClockPos, pos);
     final playChanged = playing != _lastClockPlaying;
     final rateDelta = VerovioTransportSync.rateDelta(_lastClockRate, rate);
@@ -113,8 +152,8 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     _lastClockRate = rate;
     _lastSeekEpoch = epoch;
 
-    if (!seek &&
-        !rateZeroCross &&
+    final forceImmediate = seek || snapForFreeze || rateZeroCross;
+    if (!forceImmediate &&
         VerovioTransportSync.shouldSkipPush(
           posDelta: posDelta,
           playChanged: playChanged,
@@ -123,13 +162,28 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
       return;
     }
 
-    _schedulePosition(pos, snap: seek || rateZeroCross, rate: rate);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final sincePush =
+        _lastPushMs == 0 ? VerovioTransportSync.playPushMinIntervalMs : nowMs - _lastPushMs;
+    if (VerovioTransportSync.shouldThrottlePlayPush(
+      beatsPerSec: rate,
+      msSinceLastPush: sincePush,
+      posDelta: posDelta,
+      playChanged: playChanged,
+      forceImmediate: forceImmediate,
+    )) {
+      return;
+    }
+    _lastPushMs = nowMs;
+
+    _schedulePosition(pos, snap: seek || snapForFreeze, rate: rate);
   }
 
   double _lastClockPos = 0;
   bool _lastClockPlaying = false;
   double _lastClockRate = 0;
   int _lastSeekEpoch = 0;
+  int _lastPushMs = 0;
 
   void _onController() {
     if (mounted) setState(() {});
@@ -208,6 +262,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
             _error = null;
           });
         }
+        await _publishInk();
       } while (_pendingScorePush != null && !_disposed);
     } catch (e, st) {
       pianoFlowLog('Verovio', '加载乐谱失败: $e\n$st');
@@ -248,6 +303,7 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
         snap: true,
         beatsPerSec: _transportRate,
       );
+      await _publishInk();
     } catch (e, st) {
       // Viewer without pfResize (stale cache) — full push as fallback.
       pianoFlowLog(
@@ -271,6 +327,14 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
 
   Size _quantize(Size s) =>
       Size(s.width.roundToDouble(), s.height.roundToDouble());
+
+  Future<void> _publishInk() async {
+    if (_disposed) return;
+    final h = await _runtime.stripInkHeight();
+    if (_disposed || !mounted || h == null) return;
+    if (h < 80 || h > 480) return;
+    widget.onInkHeight?.call(h);
+  }
 
   void _onViewport(Size raw) {
     final next = _quantize(raw);
@@ -352,6 +416,80 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
     );
   }
 
+  double _fallbackPxPerBeat() {
+    final w = _viewport.width;
+    if (!(w > 8)) return 40;
+    return (w / _fallbackVisibleBeats).clamp(_minPxPerBeat, 200.0);
+  }
+
+  Future<void> _refreshScrubMetrics() async {
+    if (_scrubMetricsLoading || !_runtime.isToolkitReady || !_runtime.scoreLoaded) {
+      return;
+    }
+    _scrubMetricsLoading = true;
+    try {
+      final raw = await _runtime.host.runJs('window.pfScrubMetrics()');
+      if (raw == null || _disposed) return;
+      var s = raw is String ? raw : raw.toString();
+      if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+        s = jsonDecode(s) as String;
+      }
+      final decoded = jsonDecode(s);
+      if (decoded is! Map) return;
+      final contentW = (decoded['contentW'] as num?)?.toDouble() ?? 0;
+      final endQ = (decoded['endQ'] as num?)?.toDouble() ?? 0;
+      final dur = widget.durationBeats > 0.5
+          ? widget.durationBeats
+          : (endQ > 0.5 ? endQ : 0.0);
+      if (contentW > 32 && dur > 0.5) {
+        final next = (contentW / dur).clamp(_minPxPerBeat, 400.0);
+        // Avoid mid-drag sensitivity jumps once the finger has moved.
+        if (!_scrubbing || _scrubAccumDx.abs() < 2) {
+          _scrubPxPerBeat = next;
+        }
+      }
+    } catch (e) {
+      pianoFlowLogVerbose('Verovio', 'pfScrubMetrics: $e');
+    } finally {
+      _scrubMetricsLoading = false;
+    }
+  }
+
+  void _onScrubStart(DragStartDetails _) {
+    if (!widget.allowsSeek || widget.onSeek == null) return;
+    _scrubbing = true;
+    _scrubOriginBeats = widget.clock.positionBeats;
+    _scrubAccumDx = 0;
+    _scrubPxPerBeat = _fallbackPxPerBeat();
+    // Pause immediately on grab (same as bottom slider onChangeStart).
+    if (widget.clock.isPlaying) {
+      widget.onSeek!(_scrubOriginBeats);
+    }
+    unawaited(_refreshScrubMetrics());
+  }
+
+  void _onScrubUpdate(DragUpdateDetails details) {
+    if (!_scrubbing || !widget.allowsSeek) return;
+    final onSeek = widget.onSeek;
+    if (onSeek == null) return;
+    _scrubAccumDx += details.delta.dx;
+    // Finger right → earlier music (grab score); matches timeline scrub feel.
+    final px = _scrubPxPerBeat > 1 ? _scrubPxPerBeat : _fallbackPxPerBeat();
+    final next = (_scrubOriginBeats - _scrubAccumDx / px)
+        .clamp(0.0, widget.durationBeats <= 0 ? 1.0 : widget.durationBeats);
+    onSeek(next);
+  }
+
+  void _onScrubEnd(DragEndDetails _) {
+    if (!_scrubbing) return;
+    _scrubbing = false;
+    // Final snap already applied via last onSeek → seekEpoch.
+  }
+
+  void _onScrubCancel() {
+    _scrubbing = false;
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -411,8 +549,32 @@ class _VerovioStaffLaneState extends State<VerovioStaffLane> {
               children: [
                 if (_runtime.host.isInitialized)
                   Positioned.fill(
-                    child: _runtime.host.buildView(),
+                    // Staff SVG is display-only; Flutter owns horizontal scrub.
+                    child: IgnorePointer(
+                      child: _runtime.host.buildView(),
+                    ),
                   ),
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragStart:
+                        widget.allowsSeek && widget.onSeek != null
+                            ? _onScrubStart
+                            : null,
+                    onHorizontalDragUpdate:
+                        widget.allowsSeek && widget.onSeek != null
+                            ? _onScrubUpdate
+                            : null,
+                    onHorizontalDragEnd:
+                        widget.allowsSeek && widget.onSeek != null
+                            ? _onScrubEnd
+                            : null,
+                    onHorizontalDragCancel:
+                        widget.allowsSeek && widget.onSeek != null
+                            ? _onScrubCancel
+                            : null,
+                  ),
+                ),
                 if (showSpinner)
                   const Center(
                     child: SizedBox(

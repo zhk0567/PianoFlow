@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,17 +48,35 @@ class _SandboxPageState extends ConsumerState<SandboxPage> {
   Future<void> _ensureAudio() async {
     try {
       await _audio.ensureReady();
+      // Wake WASAPI before first key — same hitch practice page avoids.
+      await _audio.ensureDeviceWarm();
       if (!mounted) return;
       setState(() {
         _audioReady = true;
         _hint = null;
       });
+      // Bind samples in background; do not block UI. Center first, then rest.
+      unawaited(_prefetchAuditionKeys());
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _hint = '音色初始化失败（详见控制台 [PianoFlow/Audio]）';
       });
     }
+  }
+
+  /// Lazy-bind is the main audition lag: first press paid setSource (~100–500ms).
+  Future<void> _prefetchAuditionKeys() async {
+    final center = <int>[
+      for (var m = 48; m <= 72; m++) m,
+    ];
+    final rest = <int>[
+      for (var m = PracticeConstants.midiMin; m <= PracticeConstants.midiMax; m++)
+        if (m < 48 || m > 72) m,
+    ];
+    await _audio.prefetchMidis(center);
+    if (!mounted) return;
+    await _audio.prefetchMidis(rest);
   }
 
   void _setMetro(bool on) {
@@ -71,10 +91,11 @@ class _SandboxPageState extends ConsumerState<SandboxPage> {
     _audio.setMetronomeBpm(v);
   }
 
-  Future<void> _tapKey(int midi) async {
-    if (!_audioReady) await _ensureAudio();
-    setState(() => _pressed.add(midi));
+  void _tapKey(int midi) {
+    // Fire audio first — do not await ensureReady on the tap path.
+    if (!_audioReady) unawaited(_ensureAudio());
     _audio.playOneShot(midi, hand: Hand.both);
+    setState(() => _pressed.add(midi));
     Future<void>.delayed(const Duration(milliseconds: 120), () {
       if (!mounted) return;
       setState(() => _pressed.remove(midi));
@@ -207,17 +228,28 @@ class _SandboxPageState extends ConsumerState<SandboxPage> {
                       child: SizedBox(
                         height: keyH,
                         width: geo.width,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTapDown: (details) {
-                            final midi = _midiAt(geo, details.localPosition, keyH);
-                            if (midi != null) _tapKey(midi);
+                        // Listener = pointer-down（比 GestureDetector.onTapDown 更跟手）。
+                        // Builder 用键盘区域自己的 RenderBox 做命中，避免用到 Expanded 坐标。
+                        child: Builder(
+                          builder: (keyCtx) {
+                            return Listener(
+                              behavior: HitTestBehavior.opaque,
+                              onPointerDown: (event) {
+                                final box =
+                                    keyCtx.findRenderObject() as RenderBox?;
+                                if (box == null) return;
+                                final local =
+                                    box.globalToLocal(event.position);
+                                final midi = _midiAt(geo, local, keyH);
+                                if (midi != null) _tapKey(midi);
+                              },
+                              child: PianoKeyboard(
+                                geometry: geo,
+                                highlighted: const {},
+                                pressed: _pressed,
+                              ),
+                            );
                           },
-                          child: PianoKeyboard(
-                            geometry: geo,
-                            highlighted: const {},
-                            pressed: _pressed,
-                          ),
                         ),
                       ),
                     );

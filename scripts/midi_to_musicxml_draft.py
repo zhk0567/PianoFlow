@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import struct
 import sys
 from dataclasses import dataclass
@@ -98,7 +99,12 @@ def _parse_track(data: bytes) -> tuple[list[NoteEvent], int | None, tuple[int, i
                         start, vel = active.pop(key)
                         notes.append(NoteEvent(start, abs_tick, a, vel))
                 else:
-                    active[(ch, a)] = (abs_tick, b)
+                    key = (ch, a)
+                    # Retrigger: close prior sounding note before opening a new one.
+                    if key in active:
+                        start, vel = active.pop(key)
+                        notes.append(NoteEvent(start, abs_tick, a, vel))
+                    active[key] = (abs_tick, b)
             elif msg == 0x80:
                 key = (ch, a)
                 if key in active:
@@ -159,6 +165,75 @@ def midi_to_pitch(midi: int) -> tuple[str, int, int]:
     octave = (midi // 12) - 1
     pc = midi % 12
     return STEP_NAMES[pc], ALTERS[pc], octave
+
+
+def _emit_staff_voice(
+    lines: list[str],
+    notes: list[NoteEvent],
+    *,
+    staff: int,
+    m_start: int,
+    m_end: int,
+) -> None:
+    """Emit one staff/voice for a measure, always spanning m_start..m_end."""
+    span = m_end - m_start
+    if not notes:
+        lines.extend(
+            [
+                "      <note>",
+                "        <rest/>",
+                f"        <duration>{span}</duration>",
+                f"        <voice>{staff}</voice>",
+                f"        <staff>{staff}</staff>",
+                "      </note>",
+            ]
+        )
+        return
+
+    notes = sorted(notes, key=lambda n: (n.start, n.midi))
+    cursor = m_start
+    i = 0
+    while i < len(notes):
+        start = notes[i].start
+        chord: list[NoteEvent] = []
+        while i < len(notes) and notes[i].start == start:
+            chord.append(notes[i])
+            i += 1
+        next_start = m_end
+        if i < len(notes):
+            next_start = min(m_end, notes[i].start)
+        if start > cursor:
+            lines.append(f"      <forward><duration>{start - cursor}</duration></forward>")
+        elif start < cursor:
+            lines.append(f"      <backup><duration>{cursor - start}</duration></backup>")
+        cursor = start
+        # Chord duration = min(shortest member, gap to next onset) so overlapping
+        # melody under held tones is not dropped by a long cursor advance.
+        shortest = max(1, min(n.end - n.start for n in chord))
+        gap = max(1, next_start - start)
+        dur = max(1, min(shortest, gap, m_end - start))
+        for j, n in enumerate(chord):
+            step, alter, octave = midi_to_pitch(n.midi)
+            lines.append("      <note>")
+            if j > 0:
+                lines.append("        <chord/>")
+            lines.append("        <pitch>")
+            lines.append(f"          <step>{step}</step>")
+            if alter:
+                lines.append(f"          <alter>{alter}</alter>")
+            lines.append(f"          <octave>{octave}</octave>")
+            lines.append("        </pitch>")
+            lines.append(f"        <duration>{dur}</duration>")
+            lines.append(f"        <voice>{staff}</voice>")
+            lines.append("        <type>quarter</type>")
+            lines.append(f"        <staff>{staff}</staff>")
+            lines.append("      </note>")
+        cursor = start + dur
+    if cursor < m_end:
+        lines.append(f"      <forward><duration>{m_end - cursor}</duration></forward>")
+    elif cursor > m_end:
+        # Keep stream on the barline so the following staff backup is exact.
+        lines.append(f"      <backup><duration>{cursor - m_end}</duration></backup>")
 
 
 def write_musicxml(
@@ -236,15 +311,16 @@ def write_musicxml(
                 ]
             )
 
-        # Notes that start in this measure (clip duration into measure for simplicity:
-        # use full duration; backup/forward for chords).
+        # Notes that start in this measure. MusicXML has ONE stream cursor:
+        # write RH (staff 1) fully, backup to measure start, then write LH.
+        # (Previously per-staff cursors were interleaved without stream backup,
+        # which desynchronized LH/RH when re-parsed by musicxml_to_score.)
         in_m = [n for n in cleaned if m_start <= n.start < m_end]
         if not in_m:
-            # Whole-measure rest on both staves via one rest spanning measure.
             lines.extend(
                 [
                     "      <note>",
-                    "        <rest measure=\"yes\"/>",
+                    '        <rest measure="yes"/>',
                     f"        <duration>{ticks_per_measure}</duration>",
                     "        <voice>1</voice>",
                     "        <staff>1</staff>",
@@ -254,62 +330,11 @@ def write_musicxml(
             lines.append("    </measure>")
             continue
 
-        # Cursor for voice 1 (RH) and voice 2 (LH)
-        cursor = {1: m_start, 2: m_start}
-        # Sort by start then high pitch first for chord grouping
-        in_m.sort(key=lambda n: (n.start, -n.midi))
-        i = 0
-        while i < len(in_m):
-            start = in_m[i].start
-            # Group chord at same start
-            chord: list[NoteEvent] = []
-            while i < len(in_m) and in_m[i].start == start:
-                chord.append(in_m[i])
-                i += 1
-            # Split chord into staffs by pitch (middle C = 60)
-            for staff in (1, 2):
-                group = [n for n in chord if (n.midi >= 60) == (staff == 1)]
-                if not group and staff == 2:
-                    # all RH — skip LH
-                    continue
-                if not group and staff == 1:
-                    continue
-                # Forward from cursor
-                if start > cursor[staff]:
-                    fwd = start - cursor[staff]
-                    lines.append(f"      <forward><duration>{fwd}</duration></forward>")
-                    cursor[staff] = start
-                elif start < cursor[staff]:
-                    # Overlap — still emit (draft); backup
-                    back = cursor[staff] - start
-                    lines.append(f"      <backup><duration>{back}</duration></backup>")
-                    cursor[staff] = start
-                for j, n in enumerate(sorted(group, key=lambda x: x.midi)):
-                    dur = max(1, n.end - n.start)
-                    step, alter, octave = midi_to_pitch(n.midi)
-                    lines.append("      <note>")
-                    if j > 0:
-                        lines.append("        <chord/>")
-                    lines.append("        <pitch>")
-                    lines.append(f"          <step>{step}</step>")
-                    if alter:
-                        lines.append(f"          <alter>{alter}</alter>")
-                    lines.append(f"          <octave>{octave}</octave>")
-                    lines.append("        </pitch>")
-                    lines.append(f"        <duration>{dur}</duration>")
-                    lines.append(f"        <voice>{staff}</voice>")
-                    lines.append("        <type>quarter</type>")
-                    lines.append(f"        <staff>{staff}</staff>")
-                    lines.append("      </note>")
-                cursor[staff] = start + max(1, group[0].end - group[0].start)
-
-        # Pad to end of measure for each staff that was used
-        for staff in (1, 2):
-            if cursor[staff] < m_end and cursor[staff] > m_start:
-                rem = m_end - cursor[staff]
-                if rem > 0:
-                    lines.append(f"      <forward><duration>{rem}</duration></forward>")
-                    cursor[staff] = m_end
+        rh = [n for n in in_m if n.midi >= 60]
+        lh = [n for n in in_m if n.midi < 60]
+        _emit_staff_voice(lines, rh, staff=1, m_start=m_start, m_end=m_end)
+        lines.append(f"      <backup><duration>{ticks_per_measure}</duration></backup>")
+        _emit_staff_voice(lines, lh, staff=2, m_start=m_start, m_end=m_end)
 
         lines.append("    </measure>")
 
@@ -326,12 +351,54 @@ def _xml(s: str) -> str:
     )
 
 
+def write_score_json(
+    notes: list[NoteEvent],
+    ppq: int,
+    bpm: int,
+    time_sig: tuple[int, int],
+    out: Path,
+    *,
+    score_id: str,
+    title: str,
+) -> None:
+    """Practice JSON directly from MIDI ticks — avoids MusicXML RH/LH cursor drift."""
+    beats, beat_type = time_sig
+    out_notes: list[dict] = []
+    for n in sorted(notes, key=lambda x: (x.start, x.midi)):
+        dur_ticks = max(1, n.end - n.start)
+        out_notes.append(
+            {
+                "midi": int(n.midi),
+                "start": round(n.start / float(ppq), 6),
+                "duration": round(dur_ticks / float(ppq), 6),
+                "hand": "right" if n.midi >= 60 else "left",
+            }
+        )
+    payload = {
+        "id": score_id,
+        "title": title,
+        "bpm": int(bpm),
+        "timeSignature": {"num": int(beats), "den": int(beat_type)},
+        "keySignature": 0,
+        "notes": out_notes,
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="MIDI → MusicXML draft (NOT formal; workshop userImport only)"
     )
     ap.add_argument("--input", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument(
+        "--json-output",
+        type=Path,
+        default=None,
+        help="Also write PianoFlow practice JSON directly from MIDI (preferred for playback)",
+    )
+    ap.add_argument("--id", default="", help="Score id for --json-output")
     ap.add_argument("--title", default="")
     args = ap.parse_args()
     if not args.input.is_file():
@@ -349,6 +416,15 @@ def main() -> int:
         f"[PianoFlow/midi-draft] wrote {args.output} notes={len(notes)} "
         f"bpm={bpm} ppq={ppq} DRAFT_ONLY"
     )
+    if args.json_output is not None:
+        sid = (args.id or args.json_output.stem).strip()
+        write_score_json(
+            notes, ppq, bpm, ts, args.json_output, score_id=sid, title=title
+        )
+        print(
+            f"[PianoFlow/midi-draft] wrote {args.json_output} notes={len(notes)} "
+            f"DIRECT_FROM_MIDI (playback timing)"
+        )
     return 0
 
 

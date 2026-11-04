@@ -95,7 +95,10 @@ class _ExamTabState extends ConsumerState<ExamTab> {
                   children: [
                     Text(
                       '考试',
-                      style: AppTheme.display(fontSize: wide ? 40 : 32),
+                      style: AppTheme.body(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -184,7 +187,7 @@ class _ExamTabState extends ConsumerState<ExamTab> {
                       ),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.accent,
-                        foregroundColor: Colors.black,
+                        foregroundColor: AppColors.onAccent,
                         minimumSize: const Size.fromHeight(48),
                       ),
                     );

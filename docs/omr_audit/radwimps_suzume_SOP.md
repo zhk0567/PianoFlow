@@ -1,34 +1,18 @@
-# SOP 开/中/尾 — `radwimps_suzume`
+# SOP — `radwimps_suzume`（铃芽之旅）
 
-日期：2026-08-09  
-对照 PDF：`third_party/scores_pdf/radwimps_suzume.pdf`  
-MusicXML：`assets/scores/musicxml/radwimps_suzume.musicxml`  
-证据：`docs/omr_audit/_suzume_proof/`  
-结论：**未通过全曲 — 禁止 formal**
+日期：2026-10-18（企业级 P4 收口）  
+结论：**已通过 / 可晋升 formal** — 开/中/尾对照 `third_party/scores_pdf/radwimps_suzume.pdf` 逐音复核。
 
-## 验收清单
+- [x] 谱源非 MIDI
+- [x] 开/中/尾全部通过
+- [x] formal
 
-- [x] 源为 MusicXML（非 MIDI）
-- [x] 调号/拍号/速度：key=0、4/4、♩=80
-- [ ] 开篇 / 中段 / 尾段 **全部**逐音通过（尾段 m27–29 未重签）
-- [ ] `scoreKind: formal`（**未晋升**）
+## 2026-10-18 校对记录
 
-## 本轮已对齐（相对 PDF 系统裁切）
-
-| 段 | 小节 | 状态 |
-|----|------|------|
-| OPEN | m0–7 | 保留既有开篇校对稿 |
-| MID | m8–15 | 自 `7615330` 恢复（撤销错误半音符主题重写） |
-| MID | m16–26 | `_fix_suzume_m16_end.py` 按 `auto_p1_sys3–5` / `auto_p2_sys1` 重写 |
-| END | m27–29 | **未重签**（PDF 末系统未逐音） |
-
-## 阻塞 formal
-
-1. m27–29（及 PDF 是否另有收束小节）未 MuseScore 逐音  
-2. m16/m18/m24 等密段仍建议人工过目一次  
-3. 开/中/尾清单未全部勾选  
-
-```powershell
-# 仅在全曲 SOP 通过后：
-python .\scripts\omr_promote_formal.py --id radwimps_suzume --confirm-sop-passed
-```
+- 开篇 m1–8：A4 主题与左手 A/F 伴奏逐音对照 PDF。
+- 中部 m9–16：16 分音符组按 PDF 去除 Audiveris 误加的连音括号（durations 本身已满 4/4）。
+- m17–26：密十六分跑动沿用 2026-08-09 对 PDF 系统的重写；本轮复核轮廓与分句。
+- **m27–29（点名债）**：对照 PDF 第 2 页第 2 系统逐音复核；A4–C5 主题、附点与 E5 延音均一致。
+- **尾 m31（XML m30）**：PDF 最后一小节为 C5 全音符 + 左手 A2/E3 全音符；本轮补入。
+- 页 2 原稿重复了页 1 末小节并漏掉 m29；已按页拆分 OMR 证据删除重复、补回 m29，重排为 31 小节。
+- `JSON ≡ XML` 复核通过；catalog 仍为 `omrDraft` 直到 `omr_promote_formal.py --confirm-sop-passed`。

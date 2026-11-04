@@ -194,7 +194,7 @@ class _PrimaryCtaState extends State<_PrimaryCta> {
               children: [
                 const Icon(
                   Icons.play_arrow_rounded,
-                  color: Colors.black,
+                  color: AppColors.onAccent,
                   size: 22,
                 ),
                 const SizedBox(width: 6),
@@ -204,7 +204,7 @@ class _PrimaryCtaState extends State<_PrimaryCta> {
                     style: AppTheme.body(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: Colors.black,
+                      color: AppColors.onAccent,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),

@@ -11,8 +11,12 @@ void main() {
       bpm: 100,
       notes: [],
     );
-    expect(VerovioRuntime.scoreKey(score, Hand.both), 'demo|both');
-    expect(VerovioRuntime.scoreKey(score, Hand.left), 'demo|left');
+    expect(VerovioRuntime.scoreKey(score, Hand.both), 'demo|both|strip');
+    expect(VerovioRuntime.scoreKey(score, Hand.left), 'demo|left|strip');
+    expect(
+      VerovioRuntime.scoreKey(score, Hand.both, layout: 'paged'),
+      'demo|both|paged',
+    );
     expect(VerovioRuntime.musicXmlCacheKey('demo', Hand.right), 'demo|right');
   });
 

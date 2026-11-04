@@ -29,12 +29,13 @@ export class PracticeFx {
 
   hit(midi, cx, grade, combo, hitY, width) {
     if (!this.enabled || cx == null || hitY == null) return;
+    // 平时练习不闪「完美/不错」文案；环/光柱仍可开。
     this._spawn({
       cx,
       hitY,
       grade: grade || "good",
       combo: combo || 0,
-      showLabel: true,
+      showLabel: false,
       width: width || 800,
     });
   }

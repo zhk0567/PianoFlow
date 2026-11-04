@@ -157,14 +157,14 @@ Future<void> showPracticeSettlementSheet({
                   },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.accent,
-                    foregroundColor: AppColors.heroDeep,
+                    foregroundColor: AppColors.onAccent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: Text(
                     snap.settings.mode.isExam ? '再考一次' : '再练一次',
                     style: AppTheme.body(
                       fontWeight: FontWeight.w700,
-                      color: AppColors.heroDeep,
+                      color: AppColors.onAccent,
                     ),
                   ),
                 ),

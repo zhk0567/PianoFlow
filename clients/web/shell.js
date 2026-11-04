@@ -16,12 +16,15 @@ import { refreshAuthUi } from "./pages.js";
 
 const CATALOG_URL = "./scores/catalog.json";
 const INK = [
-  ["#e8a849", "#2a2118"],
-  ["#6db3f2", "#152030"],
-  ["#f2a06d", "#2a1a12"],
-  ["#5cbf8a", "#122018"],
-  ["#b08cff", "#1a1528"],
-  ["#e26a6a", "#281414"],
+  // [topWash, bottom] — Echo warm paper, deep enough to separate from page bg
+  ["#b5cfa0", "#e8f0dc"],
+  ["#d4b090", "#f0e4d4"],
+  ["#e0b090", "#f2e2d4"],
+  ["#9cbcbc", "#dce8e8"],
+  ["#c0c890", "#e8ead8"],
+  ["#d0a890", "#f0e0d4"],
+  ["#d0bc90", "#f0e8d4"],
+  ["#a0bc9c", "#dce8d8"],
 ];
 
 export function kindLabel(k) {
@@ -111,13 +114,32 @@ export async function initShell({ onOpenPractice }) {
         .map((id) => state.songs.find((s) => s.id === id))
         .filter(Boolean);
       favUl.innerHTML = "";
-      if (!favSongs.length) favUl.innerHTML = "<li class='page-sub'>暂无 · 曲库点 ☆ 收藏</li>";
-      else favSongs.slice(0, 6).forEach((s) => {
+      const openFavLibrary = () => {
+        state.favoritesOnly = favSongs.length > 0;
+        showTab("library");
+      };
+      const favBox = favUl.closest(".surface-box");
+      const favTitle = favBox?.querySelector("h3");
+      if (favTitle) {
+        favTitle.style.cursor = "pointer";
+        favTitle.title = "查看曲库收藏";
+        favTitle.onclick = openFavLibrary;
+      }
+      if (!favSongs.length) {
         const li = document.createElement("li");
-        li.textContent = `${s.title} · ${s.artist || ""}`;
-        li.onclick = () => openSong(s);
+        li.className = "page-sub";
+        li.textContent = "暂无 · 曲库点 ☆ 收藏";
+        li.style.cursor = "pointer";
+        li.onclick = openFavLibrary;
         favUl.appendChild(li);
-      });
+      } else {
+        favSongs.slice(0, 6).forEach((s) => {
+          const li = document.createElement("li");
+          li.textContent = `★ ${s.title} · ${s.artist || ""}`;
+          li.onclick = () => openSong(s);
+          favUl.appendChild(li);
+        });
+      }
     }
     const practiced = new Set(Object.keys(getStats().bySong || {}));
     const today = state.songs.find((s) => !practiced.has(s.id)) || state.songs[0];
@@ -162,9 +184,9 @@ export async function initShell({ onOpenPractice }) {
       state.genre = null;
       state.favoritesOnly = false;
     });
-    if (favs.size) {
-      add("★ 收藏", state.favoritesOnly, () => { state.favoritesOnly = !state.favoritesOnly; });
-    }
+    add(favs.size ? `★ 收藏 (${favs.size})` : "★ 收藏", state.favoritesOnly, () => {
+      state.favoritesOnly = !state.favoritesOnly;
+    });
     for (const k of ["formal", "omrDraft", "simplified", "userImport"]) {
       if (!state.songs.some((s) => s.scoreKind === k)) continue;
       add(kindLabel(k), state.scoreKind === k, () => { state.scoreKind = k; });
@@ -175,7 +197,14 @@ export async function initShell({ onOpenPractice }) {
     for (const g of genres) add(g, state.genre === g, () => { state.genre = state.genre === g ? null : g; });
 
     const list = filtered();
-    document.getElementById("lib-count").textContent = list.length ? `${list.length} 张唱片` : "无匹配曲目";
+    const countEl = document.getElementById("lib-count");
+    if (!list.length) {
+      countEl.textContent = state.favoritesOnly ? "暂无收藏" : "无匹配曲目";
+    } else {
+      countEl.textContent = state.favoritesOnly
+        ? `${list.length} 首收藏`
+        : `${list.length} 张唱片`;
+    }
     if (state.scoreKind === "omrDraft") {
       document.getElementById("omr-hint").hidden = false;
     } else {
@@ -183,18 +212,26 @@ export async function initShell({ onOpenPractice }) {
     }
     const grid = document.getElementById("song-grid");
     grid.innerHTML = "";
+    if (!list.length && state.favoritesOnly) {
+      const empty = document.createElement("p");
+      empty.className = "page-sub";
+      empty.textContent = "还没有收藏。点封面右上角 ☆ 即可收藏。";
+      grid.appendChild(empty);
+      return;
+    }
     for (const s of list) {
       const [hue, deep] = inkFor(s.id);
       const card = document.createElement("div");
       card.className = "album-card-wrap";
       const fav = favs.has(s.id);
       card.innerHTML = `
-        <button type="button" class="album-card" style="background:linear-gradient(135deg,${hue}55,${deep} 55%,#000c)">
+        <button type="button" class="album-card${fav ? " is-fav" : ""}" style="background:linear-gradient(135deg,${hue},${deep} 50%,#fff9f0)">
           <span class="kind">${kindLabel(s.scoreKind)}</span>
+          ${fav ? '<span class="fav-badge">已收藏</span>' : ""}
           <strong>${s.title}</strong>
           <small>${s.artist || ""}</small>
         </button>
-        <button type="button" class="fav-btn" title="收藏">${fav ? "★" : "☆"}</button>
+        <button type="button" class="fav-btn${fav ? " is-on" : ""}" title="${fav ? "取消收藏" : "收藏"}">${fav ? "★" : "☆"}</button>
         ${s.scoreKind === "userImport" ? '<button type="button" class="del-btn" title="删除">删</button>' : ""}
       `;
       card.querySelector(".album-card").onclick = () => openSong(s);
@@ -202,6 +239,7 @@ export async function initShell({ onOpenPractice }) {
         e.stopPropagation();
         toggleFavorite(s.id);
         renderLibrary();
+        renderHome();
       };
       const del = card.querySelector(".del-btn");
       if (del) del.onclick = async (e) => {
@@ -300,16 +338,7 @@ export async function initShell({ onOpenPractice }) {
 
   function refreshProfile() {
     const s = getStats();
-    const goal = 20;
-    const day = new Date().toISOString().slice(0, 10);
-    const todaySec = s.today?.day === day ? s.today.seconds || 0 : 0;
-    const todayMin = Math.floor(todaySec / 60);
-    const pct = Math.min(100, Math.round((todayMin / goal) * 100));
-    document.getElementById("today-label").textContent = `今日 ${todayMin} / ${goal} 分钟`;
-    document.getElementById("today-pct").textContent = `${pct}%`;
-    document.getElementById("today-bar").style.width = `${pct}%`;
     document.getElementById("stat-sessions").textContent = String(s.totalSessions || 0);
-    document.getElementById("stat-minutes").textContent = String(Math.floor((s.totalSeconds || 0) / 60));
     document.getElementById("stat-songs").textContent = String(Object.keys(s.bySong || {}).length);
     refreshAuthUi();
   }
@@ -329,6 +358,7 @@ export async function initShell({ onOpenPractice }) {
       b.classList.toggle("active", b.dataset.tab === tab);
     });
     location.hash = tab;
+    if (tab === "home") renderHome();
     if (tab === "library") renderLibrary();
     if (tab === "exam") renderExam();
     if (tab === "workshop") renderWorkshop();

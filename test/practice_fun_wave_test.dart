@@ -54,9 +54,9 @@ void main() {
     expect(e.improves.join().contains('失误'), isFalse);
   });
 
-  test('decorative visual FX default off', () {
+  test('decorative visual FX default on', () {
     const s = PracticeSettings();
-    expect(s.visualFxEnabled, isFalse);
+    expect(s.visualFxEnabled, isTrue);
     expect(s.showGhost, isFalse);
   });
 

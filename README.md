@@ -6,6 +6,28 @@
 现行练习页：对着屏幕跟弹，用麦克风听你弹得对不对；下落 + 88 键 + 五线谱。不绑课、不收费墙。  
 工程取舍：谱面诚实标注 > 识别/跟弹体验 ≈ Flowkey > 可观测性 > 其它。
 
+## 界面一览
+
+<p align="center">
+  <img src="docs/media/01_home_practice.jpg" alt="练习首页" width="48%" />
+  <img src="docs/media/02_library.jpg" alt="曲库" width="48%" />
+</p>
+<p align="center">
+  <img src="docs/media/03_practice_follow.jpg" alt="跟弹练习" width="48%" />
+  <img src="docs/media/04_autoplay.jpg" alt="自动示范" width="48%" />
+</p>
+<p align="center">
+  <img src="docs/media/05_pitch_test.jpg" alt="音高识别测试" width="72%" />
+</p>
+
+| 图 | 说明 |
+|----|------|
+| 练习首页 | 最近练习 / 收藏 / 今日一首，一键继续练 |
+| 曲库 | 难度·风格筛选，正式谱与 OMR 草稿诚实标注 |
+| 跟弹练习 | 下落音符 + 88 键 + Verovio 谱；麦克风判定 |
+| 自动示范 | 钢琴采样示范，可切换左右手 |
+| 音高识别测试 | Basic Pitch 多音，音量门限与命中可视化 |
+
 ## 能做什么
 
 - **练习（跟弹）/ 自动播放**：下落音符对准琴键；可慢速、循环、单手练习
